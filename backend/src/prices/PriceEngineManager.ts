@@ -227,7 +227,7 @@ export class PriceEngineManager {
   }
 
   /**
-   * Get current price for instrument (id = BTCUSD, EURUSD, EURUSD_REAL, …)
+   * Get current price for instrument (id = EURUSD_OTC, EURUSD_REAL, …)
    */
   async getCurrentPrice(instrumentId: string): Promise<PriceTick | null> {
     const eng = this.engines.get(instrumentId);

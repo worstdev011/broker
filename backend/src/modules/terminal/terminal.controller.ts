@@ -1,6 +1,6 @@
 /**
  * Terminal controller - handles HTTP requests
- * FLOW P4: instrument query param (default BTCUSD), snapshot includes instrument
+ * FLOW P4: instrument query param (default EURUSD_OTC), snapshot includes instrument
  */
 
 import type { FastifyRequest, FastifyReply } from 'fastify';

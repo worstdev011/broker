@@ -10,6 +10,7 @@ export interface UpdateProfileData {
   nickname?: string | null;
   phone?: string | null;
   country?: string | null;
+  currency?: string | null; // 🔥 Валюта — устанавливается один раз, не меняется
   dateOfBirth?: Date | null; // 🔥 FLOW U1.1: Date объект, не string
   avatarUrl?: string | null;
 }
@@ -17,7 +18,8 @@ export interface UpdateProfileData {
 export interface UserRepository {
   findByEmail(email: string): Promise<User | null>;
   findById(id: string): Promise<User | null>;
-  create(user: Omit<User, 'id' | 'createdAt' | 'updatedAt'>): Promise<User>;
+  existsById(id: string): Promise<boolean>;
+  create(user: Omit<User, 'createdAt' | 'updatedAt'>): Promise<User>;
   updateProfile(userId: string, data: UpdateProfileData): Promise<User>;
   findByNickname(nickname: string): Promise<User | null>;
   findByPhone(phone: string): Promise<User | null>;

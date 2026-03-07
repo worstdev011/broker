@@ -53,8 +53,15 @@
   * {
     @apply border-border;
   }
+  html {
+    background-color: #061230;
+    color-scheme: dark;
+    min-height: 100dvh;
+  }
   body {
-    @apply bg-background text-foreground;
+    background-color: #061230;
+    min-height: 100dvh;
+    @apply text-foreground;
   }
 }
 

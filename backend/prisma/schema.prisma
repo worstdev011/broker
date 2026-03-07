@@ -11,7 +11,8 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(uuid())
+  // FLOW U-USER-ID: 8 цифр, уникальный, присваивается при регистрации навсегда
+  id        String   @id
   email     String   @unique
   password  String
   createdAt DateTime @default(now())
@@ -23,6 +24,7 @@ model User {
   nickname    String?   @unique
   phone       String?   @unique
   country     String?
+  currency    String?   // 🔥 Валюта аккаунта — устанавливается один раз, не меняется
   dateOfBirth DateTime?
   avatarUrl   String?
 
@@ -96,7 +98,7 @@ model Trade {
   userId     String
   accountId  String
   direction  TradeDirection
-  instrument String // Trading instrument (e.g., 'AUDCHF', 'BTCUSD')
+  instrument String // Trading instrument (e.g., 'EURUSD_OTC', 'AUDCHF_REAL')
   amount     Decimal
   entryPrice Decimal
   exitPrice  Decimal?
@@ -202,7 +204,7 @@ model Transaction {
 
 // 🔥 FLOW I-PAYOUT: Instrument model для хранения доходности
 model Instrument {
-  id           String   @id // 'EURUSD', 'GBPUSD', 'AUDCHF_REAL', etc.
+  id           String   @id // 'EURUSD_OTC', 'GBPUSD_REAL', etc.
   name         String   // Display name: 'EUR / USD', 'GBP / USD'
   base         String   // 'EUR', 'GBP', 'USD'
   quote        String   // 'USD', 'JPY', 'CHF'

@@ -21,7 +21,7 @@ export class PrismaTradeRepository implements TradeRepository {
         entryPrice: new Prisma.Decimal(tradeData.entryPrice),
         exitPrice: tradeData.exitPrice !== null ? new Prisma.Decimal(tradeData.exitPrice) : null,
         payout: new Prisma.Decimal(tradeData.payout),
-        status: tradeData.status as 'OPEN' | 'WIN' | 'LOSS',
+        status: tradeData.status as 'OPEN' | 'WIN' | 'LOSS' | 'TIE',
         expiresAt: tradeData.expiresAt,
         closedAt: tradeData.closedAt,
       },
@@ -153,7 +153,7 @@ export class PrismaTradeRepository implements TradeRepository {
       where: { id },
       data: {
         exitPrice: new Prisma.Decimal(exitPrice),
-        status: status as 'OPEN' | 'WIN' | 'LOSS',
+        status: status as 'OPEN' | 'WIN' | 'LOSS' | 'TIE',
         closedAt,
       },
     });
@@ -173,7 +173,11 @@ export class PrismaTradeRepository implements TradeRepository {
     const prisma = getPrismaClient();
 
     const result = await prisma.$transaction(async (tx) => {
-      // 1. Списываем баланс (atomic increment внутри транзакции)
+      const account = await tx.account.findUniqueOrThrow({ where: { id: accountId }, select: { balance: true } });
+      if (Number(account.balance) < amount) {
+        throw new Error('INSUFFICIENT_BALANCE');
+      }
+
       await tx.account.update({
         where: { id: accountId },
         data: {
@@ -183,7 +187,6 @@ export class PrismaTradeRepository implements TradeRepository {
         },
       });
 
-      // 2. Создаём сделку
       const trade = await tx.trade.create({
         data: {
           userId: tradeData.userId,
@@ -194,7 +197,7 @@ export class PrismaTradeRepository implements TradeRepository {
           entryPrice: new Prisma.Decimal(tradeData.entryPrice),
           exitPrice: tradeData.exitPrice !== null ? new Prisma.Decimal(tradeData.exitPrice) : null,
           payout: new Prisma.Decimal(tradeData.payout),
-          status: tradeData.status as 'OPEN' | 'WIN' | 'LOSS',
+          status: tradeData.status as 'OPEN' | 'WIN' | 'LOSS' | 'TIE',
           expiresAt: tradeData.expiresAt,
           closedAt: tradeData.closedAt,
         },
@@ -226,7 +229,7 @@ export class PrismaTradeRepository implements TradeRepository {
         where: { id: tradeId },
         data: {
           exitPrice: new Prisma.Decimal(exitPrice),
-          status: status as 'OPEN' | 'WIN' | 'LOSS',
+          status: status as 'OPEN' | 'WIN' | 'LOSS' | 'TIE',
           closedAt,
         },
       });

@@ -1,30 +1,22 @@
 /**
- * FLOW LP-4: WebSocket Integration для линейного графика
- * 
- * ✅ ПРАВИЛЬНАЯ АРХИТЕКТУРА:
- * - История (immutable) - никогда не мутируется
- * - Live сегмент (ephemeral) - существует отдельно, не сохраняется
- * 
- * Ответственность:
- * - Подписка ТОЛЬКО на price:update (не на candle:close!)
- * - Live сегмент для отображения (каждый тик)
- * - Запись price point раз в секунду (не каждый тик!)
- * - Обновление viewport (auto-follow)
+ * WebSocket Integration для линейного графика
+ *
+ * Каждый тик записывается как точка (tick-level, как Pocket Option).
+ * Live сегмент — продолжение линии от последнего тика к текущему моменту.
  */
 
 import { useCallback, useRef, useEffect } from 'react';
 import type { PricePoint } from './useLinePointStore';
 
 /**
- * Live сегмент — плавная интерполяция от последней точки к текущей позиции.
- * X плавно движется от fromTime к toTime (конец секунды).
- * Y анимируется к текущей цене через useLinePriceAnimator.
+ * Live сегмент — плоское продолжение от последнего тика до «сейчас».
+ * X = wallNow (вычисляется в render loop), Y = последний тик (snap).
  */
 export type LiveSegment = {
-  fromTime: number;   // время последней исторической точки
-  toTime: number;     // цель: fromTime + 1000 (конец секунды)
-  fromPrice: number;  // цена последней точки
-  startedAt: number;  // performance.now() при создании
+  fromTime: number;
+  toTime: number;
+  fromPrice: number;
+  startedAt: number;
 } | null;
 
 interface UseLineDataParams {
@@ -34,18 +26,14 @@ interface UseLineDataParams {
     getAll: () => PricePoint[];
   };
   viewport: {
-    followNow: (now: number) => void;
+    calibrateTime: (serverTimestamp: number) => void;
   };
   enabled?: boolean;
-  /** Callback для установки live сегмента (для рендеринга) */
   setLiveSegment?: (segment: LiveSegment) => void;
 }
 
 export function useLineData({ pointStore, viewport, enabled = true, setLiveSegment }: UseLineDataParams) {
   const enabledRef = useRef(enabled);
-  // FLOW LP-4: Отслеживаем последнюю секунду для записи точки
-  const lastSecondRef = useRef<number | null>(null);
-  /** Live-сегмент: X интерполируется к концу секунды, Y анимируется */
   const liveSegmentRef = useRef<LiveSegment>(null);
 
   useEffect(() => {
@@ -53,52 +41,23 @@ export function useLineData({ pointStore, viewport, enabled = true, setLiveSegme
   }, [enabled]);
 
   /**
-   * Обработчик обновления цены из WebSocket.
-   * Live-сегмент создаётся один раз на секунду: X плавно едет к концу секунды, Y анимируется.
+   * Каждый тик → точка в store + live сегмент обновляется.
    */
   const onPriceUpdate = useCallback(
-    (price: number, timestamp: number) => {
+    (price: number, timestamp: number): void => {
       if (!enabledRef.current) return;
 
-      const second = Math.floor(timestamp / 1000) * 1000;
-      const lastSecond = lastSecondRef.current;
+      pointStore.push({ time: timestamp, price });
+      viewport.calibrateTime(timestamp);
 
-      // Запись точки в историю раз в секунду
-      if (lastSecond !== second) {
-        pointStore.push({ time: second, price });
-        lastSecondRef.current = second;
-
-        // Сбрасываем live сегмент — секунда закрылась
-        liveSegmentRef.current = null;
-        setLiveSegment?.(null);
-
-        // 🔥 Вызываем followNow только если уже есть исторические данные (snapshot загружен)
-        // До загрузки snapshot у нас будет только 1 точка (текущий тик)
-        // После snapshot будет много точек
-        if (pointStore.getAll().length > 1) {
-          viewport.followNow(second);
-        }
-      }
-
-      // Берём последнюю точку ПОСЛЕ возможной записи
-      const lastHistoryPoint = pointStore.getLast();
-
-      // Live-сегмент: линия от последней точки к текущей позиции (X интерполируется, Y анимируется)
-      if (lastHistoryPoint) {
-        if (!liveSegmentRef.current) {
-          const seg: LiveSegment = {
-            fromTime: lastHistoryPoint.time,
-            toTime: lastHistoryPoint.time + 1000, // Цель: конец секунды
-            fromPrice: lastHistoryPoint.price,
-            startedAt: performance.now(),
-          };
-          liveSegmentRef.current = seg;
-          setLiveSegment?.({ ...seg });
-        }
-      } else {
-        liveSegmentRef.current = null;
-        setLiveSegment?.(null);
-      }
+      const seg: LiveSegment = {
+        fromTime: timestamp,
+        toTime: timestamp + 500,
+        fromPrice: price,
+        startedAt: liveSegmentRef.current?.startedAt ?? performance.now(),
+      };
+      liveSegmentRef.current = seg;
+      setLiveSegment?.(seg);
     },
     [pointStore, viewport, setLiveSegment]
   );

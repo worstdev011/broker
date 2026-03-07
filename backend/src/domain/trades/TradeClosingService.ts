@@ -37,13 +37,20 @@ export class TradeClosingService {
     logger.info(`Closing ${expiredTrades.length} expired trade(s)`);
 
     // Close each trade with its own instrument price
+    const STALE_THRESHOLD_MS = 60_000;
+
     for (const tradeData of expiredTrades) {
       try {
-        // ✅ КРИТИЧНО: Используем instrument из сделки, а не хардкод
         const priceData = await this.priceProvider.getCurrentPrice(tradeData.instrument);
         if (!priceData) {
-          logger.error(`Price service unavailable for instrument ${tradeData.instrument}, skipping trade ${tradeData.id}`);
-          continue; // Пропускаем эту сделку, продолжаем с другими
+          const staleSinceMs = now.getTime() - tradeData.expiresAt.getTime();
+          if (staleSinceMs > STALE_THRESHOLD_MS) {
+            logger.warn(`Force-closing stale trade ${tradeData.id} as TIE (no price for ${tradeData.instrument} after ${Math.round(staleSinceMs / 1000)}s)`);
+            await this.closeTrade(tradeData, tradeData.entryPrice, now);
+          } else {
+            logger.error(`Price service unavailable for instrument ${tradeData.instrument}, skipping trade ${tradeData.id}`);
+          }
+          continue;
         }
 
         const exitPrice = priceData.price;
@@ -135,17 +142,13 @@ export class TradeClosingService {
         emitAccountSnapshot(trade.userId, snapshot);
       }
       
-      // Unregister trade from countdown updates
-      unregisterTradeFromCountdown(trade.id);
     } catch (error) {
       logger.error('Failed to emit WebSocket events:', error);
-      // Don't fail the closing if WS fails
     }
     
-    // Always unregister from countdown, even if WS fails
     try {
       unregisterTradeFromCountdown(trade.id);
-    } catch (error) {
+    } catch {
       // Ignore errors in cleanup
     }
   }

@@ -1,7 +1,7 @@
 /**
  * Candle store — per instrument (instrumentId):
  * - active candle — in-memory key candle:active:${instrumentId}
- * - closed candles — PostgreSQL, symbol = instrumentId (e.g. "EURUSD", "EURUSD_REAL")
+ * - closed candles — PostgreSQL, symbol = instrumentId (e.g. "EURUSD_OTC", "EURUSD_REAL")
  * FLOW FIX-AGGREGATION: Используем instrumentId для разделения OTC и REAL источников
  */
 

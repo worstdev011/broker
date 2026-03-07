@@ -16,7 +16,7 @@ import { useAuth } from './useAuth';
 /** FLOW WS-1.2: WebSocket состояния */
 type WSState = 'idle' | 'connecting' | 'ready' | 'subscribed' | 'closed';
 
-/** FLOW P5: price/candle events include instrument (BTCUSD, EURUSD, …) */
+/** FLOW P5: price/candle events include instrument (EURUSD_OTC, EURUSD_REAL, …) */
 type WsEvent =
   | { instrument?: string; type: 'price:update'; data: { asset: string; price: number; timestamp: number } }
   | { instrument?: string; type: 'candle:update'; data: { timeframe: string; candle: any } }
@@ -135,9 +135,6 @@ export function useWebSocket({ activeInstrumentRef, activeTimeframeRef, onPriceU
     const currentState = wsStateRef.current; // Используем ref вместо state
     
     if (!ws || currentState !== 'ready') {
-      if (instrument === 'AUDCHF') {
-        console.warn(`[AUDCHF] [WebSocket] Cannot subscribe - state: ${currentState}, readyState: ${ws?.readyState}`);
-      }
       return;
     }
 
@@ -162,10 +159,6 @@ export function useWebSocket({ activeInstrumentRef, activeTimeframeRef, onPriceU
         instrument: subscribedInstrumentRef.current 
       });
       ws.send(unsubscribeMsg);
-      
-      if (instrument === 'AUDCHF' || subscribedInstrumentRef.current === 'AUDCHF') {
-        console.log(`[AUDCHF] [WebSocket] Unsubscribing from:`, subscribedInstrumentRef.current);
-      }
     }
 
     // Подписываемся на новый инструмент (или переподписываемся с новым таймфреймом)
@@ -175,10 +168,6 @@ export function useWebSocket({ activeInstrumentRef, activeTimeframeRef, onPriceU
       instrument,
       ...(currentTimeframe ? { timeframe: currentTimeframe } : {}),
     });
-    
-    if (instrument === 'AUDCHF') {
-      console.log(`[AUDCHF] [WebSocket] Subscribing to:`, instrument, 'tf:', currentTimeframe);
-    }
     
     ws.send(subscribeMsg);
     // 🔥 FIX: Не ставим subscribedRef сразу — ждём подтверждение 'subscribed' от сервера
@@ -227,22 +216,13 @@ export function useWebSocket({ activeInstrumentRef, activeTimeframeRef, onPriceU
       : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001').replace(/\/api\/?$/, '');
     const wsUrl = wsBase.replace(/^http/, 'ws') + '/ws';
 
-    const activeId = activeInstrumentRefRef.current?.current;
-    if (activeId === 'AUDCHF') {
-      console.log('[AUDCHF] [WebSocket] Connecting to:', wsUrl);
-    }
-
     try {
       const ws = new WebSocket(wsUrl);
-      ws.binaryType = 'arraybuffer'; // 🔥 FLOW WS-BINARY: binary frames → ArrayBuffer (not Blob)
+      ws.binaryType = 'arraybuffer';
       wsRef.current = ws;
 
       ws.onopen = () => {
-        isConnectingRef.current = false; // Подключение установлено
-        const activeId = activeInstrumentRefRef.current?.current;
-        if (activeId === 'AUDCHF') {
-          console.log('[AUDCHF] [WebSocket] Connected, waiting for ws:ready...');
-        }
+        isConnectingRef.current = false;
         reconnectAttemptsRef.current = 0;
         // НЕ подписываемся здесь - ждём ws:ready
 
@@ -287,10 +267,6 @@ export function useWebSocket({ activeInstrumentRef, activeTimeframeRef, onPriceU
             setWsState('ready');
             
             const activeId = activeInstrumentRefRef.current?.current;
-            if (activeId === 'AUDCHF') {
-              console.log(`[AUDCHF] [WebSocket] Received ws:ready, sessionId: ${message.sessionId}`);
-            }
-            
             // FLOW WS-1.4: Теперь можно подписываться
             if (activeId && subscribeToInstrumentRef.current) {
               subscribeToInstrumentRef.current(activeId);
@@ -308,9 +284,6 @@ export function useWebSocket({ activeInstrumentRef, activeTimeframeRef, onPriceU
               pendingSubscribeRef.current = null;
             }
             setWsState('subscribed');
-            if (message.instrument === 'AUDCHF') {
-              console.log(`[AUDCHF] [WebSocket] Subscribed confirmed for:`, message.instrument);
-            }
             return;
           }
 
@@ -319,19 +292,9 @@ export function useWebSocket({ activeInstrumentRef, activeTimeframeRef, onPriceU
               subscribedInstrumentRef.current = null;
               subscribedTimeframeRef.current = null; // 🔥 FIX: Очищаем таймфрейм вместе с инструментом
               pendingSubscribeRef.current = null; // Очищаем pending тоже
-              setWsState('ready'); // Возвращаемся в ready после отписки
-            }
-            if (message.instrument === 'AUDCHF') {
-              console.log(`[AUDCHF] [WebSocket] Unsubscribed confirmed for:`, message.instrument);
+              setWsState('ready');
             }
             return;
-          }
-
-          // Логирование только для AUDCHF
-          if ('instrument' in message && message.instrument === 'AUDCHF') {
-            if (message.type === 'price:update' || message.type === 'candle:close') {
-              console.log(`[AUDCHF] [WebSocket] Received ${message.type}:`, message.data);
-            }
           }
 
           // BACKEND уже фильтрует по instrument, но оставляем защиту:
@@ -455,22 +418,13 @@ export function useWebSocket({ activeInstrumentRef, activeTimeframeRef, onPriceU
         }
       };
 
-      ws.onerror = (error) => {
-        isConnectingRef.current = false; // Ошибка подключения
-        const activeId = activeInstrumentRefRef.current?.current;
-        if (activeId === 'AUDCHF') {
-          console.error('[AUDCHF] [WebSocket] Error:', error);
-        }
+      ws.onerror = () => {
+        isConnectingRef.current = false;
         setWsState('closed');
       };
 
       ws.onclose = (event) => {
-        isConnectingRef.current = false; // Соединение закрыто
-        const activeId = activeInstrumentRefRef.current?.current;
-        if (activeId === 'AUDCHF') {
-          console.log('[AUDCHF] [WebSocket] Disconnected. Code:', event.code, 'Reason:', event.reason);
-        }
-        
+        isConnectingRef.current = false;
         setWsState('closed');
         wsRef.current = null;
         subscribedInstrumentRef.current = null;
@@ -520,9 +474,6 @@ export function useWebSocket({ activeInstrumentRef, activeTimeframeRef, onPriceU
 
         // Не переподключаемся если уже идет подключение
         if (!isConnectingRef.current && currentState !== 'connecting' && currentState !== 'closed') {
-          if (currentInstrument === 'AUDCHF') {
-            console.log('[AUDCHF] [WebSocket] Polling: WebSocket not ready, reconnecting...');
-          }
           connect();
         }
         return;

@@ -76,11 +76,12 @@ export function renderCountdown({
   // X позиция: справа от свечи + отступ
   const textX = candleRightX + PADDING;
 
-  // Проверяем, что текст не выходит за границы canvas
-  if (textX > width - 50) {
-    // Если не помещается справа, рисуем слева от свечи
+  ctx.font = `${TEXT_SIZE}px sans-serif`;
+  const textW = Math.max(ctx.measureText(timeframeLabel).width, ctx.measureText(remainingTime).width);
+
+  if (textX > width - textW - 8) {
     const candleLeftX = candleCenterX - candleWidth / 2;
-    const adjustedTextX = candleLeftX - PADDING - 50; // Примерная ширина текста
+    const adjustedTextX = candleLeftX - PADDING - textW;
     if (adjustedTextX >= 0) {
       // Метка таймфрейма выше линии текущей цены
       const timeframeY = currentPriceY - LINE_HEIGHT - 4;

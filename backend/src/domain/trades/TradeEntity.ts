@@ -11,7 +11,7 @@ export class TradeEntity {
     public readonly userId: string,
     public readonly accountId: string,
     public readonly direction: TradeDirection,
-    public readonly instrument: string, // Trading instrument (e.g., 'AUDCHF', 'BTCUSD')
+    public readonly instrument: string, // Trading instrument (e.g., 'EURUSD_OTC', 'AUDCHF_REAL')
     public readonly amount: number,
     public readonly entryPrice: number,
     public exitPrice: number | null,

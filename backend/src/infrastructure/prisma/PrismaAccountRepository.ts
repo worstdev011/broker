@@ -152,6 +152,17 @@ export class PrismaAccountRepository implements AccountRepository {
   }
 
   /**
+   * 🔥 Синхрон валюты: обновить валюту у всех счетов пользователя (при выборе в модалке)
+   */
+  async updateCurrencyByUserId(userId: string, currency: string): Promise<void> {
+    const prisma = getPrismaClient();
+    await prisma.account.updateMany({
+      where: { userId },
+      data: { currency },
+    });
+  }
+
+  /**
    * 🔥 FLOW D-RESET-DEMO: Set absolute balance (not delta)
    */
   async setBalance(accountId: string, balance: number): Promise<Account> {

@@ -17,23 +17,7 @@ export class PrismaUserRepository implements UserRepository {
       return null;
     }
 
-    return {
-      id: user.id,
-      email: user.email,
-      password: user.password,
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      nickname: user.nickname,
-      phone: user.phone,
-      country: user.country,
-      dateOfBirth: user.dateOfBirth,
-      avatarUrl: user.avatarUrl,
-      twoFactorSecret: user.twoFactorSecret,
-      twoFactorEnabled: user.twoFactorEnabled,
-      twoFactorBackupCodes: user.twoFactorBackupCodes,
-    };
+    return this.mapUser(user);
   }
 
   async findById(id: string): Promise<User | null> {
@@ -46,6 +30,33 @@ export class PrismaUserRepository implements UserRepository {
       return null;
     }
 
+    return this.mapUser(user);
+  }
+
+  async existsById(id: string): Promise<boolean> {
+    const prisma = getPrismaClient();
+    const count = await prisma.user.count({ where: { id } });
+    return count > 0;
+  }
+
+  private mapUser(user: {
+    id: string;
+    email: string;
+    password: string;
+    createdAt: Date;
+    updatedAt: Date;
+    firstName: string | null;
+    lastName: string | null;
+    nickname: string | null;
+    phone: string | null;
+    country: string | null;
+    currency: string | null;
+    dateOfBirth: Date | null;
+    avatarUrl: string | null;
+    twoFactorSecret: string | null;
+    twoFactorEnabled: boolean;
+    twoFactorBackupCodes: string[];
+  }): User {
     return {
       id: user.id,
       email: user.email,
@@ -57,6 +68,7 @@ export class PrismaUserRepository implements UserRepository {
       nickname: user.nickname,
       phone: user.phone,
       country: user.country,
+      currency: user.currency,
       dateOfBirth: user.dateOfBirth,
       avatarUrl: user.avatarUrl,
       twoFactorSecret: user.twoFactorSecret,
@@ -65,32 +77,17 @@ export class PrismaUserRepository implements UserRepository {
     };
   }
 
-  async create(userData: Omit<User, 'id' | 'createdAt' | 'updatedAt'>): Promise<User> {
+  async create(userData: Omit<User, 'createdAt' | 'updatedAt'>): Promise<User> {
     const prisma = getPrismaClient();
     const user = await prisma.user.create({
       data: {
+        id: userData.id,
         email: userData.email,
         password: userData.password,
       },
     });
 
-    return {
-      id: user.id,
-      email: user.email,
-      password: user.password,
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      nickname: user.nickname,
-      phone: user.phone,
-      country: user.country,
-      dateOfBirth: user.dateOfBirth,
-      avatarUrl: user.avatarUrl,
-      twoFactorSecret: user.twoFactorSecret,
-      twoFactorEnabled: user.twoFactorEnabled,
-      twoFactorBackupCodes: user.twoFactorBackupCodes,
-    };
+    return this.mapUser(user);
   }
 
   async updateProfile(userId: string, data: UpdateProfileData): Promise<User> {
@@ -104,6 +101,7 @@ export class PrismaUserRepository implements UserRepository {
     if (data.nickname !== undefined) updateData.nickname = data.nickname;
     if (data.phone !== undefined) updateData.phone = data.phone;
     if (data.country !== undefined) updateData.country = data.country;
+    if (data.currency !== undefined) updateData.currency = data.currency;
     if (data.dateOfBirth !== undefined) {
       // Передаем Date или null, но не undefined
       updateData.dateOfBirth = data.dateOfBirth ?? null;
@@ -115,23 +113,7 @@ export class PrismaUserRepository implements UserRepository {
       data: updateData,
     });
 
-    return {
-      id: user.id,
-      email: user.email,
-      password: user.password,
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      nickname: user.nickname,
-      phone: user.phone,
-      country: user.country,
-      dateOfBirth: user.dateOfBirth,
-      avatarUrl: user.avatarUrl,
-      twoFactorSecret: user.twoFactorSecret,
-      twoFactorEnabled: user.twoFactorEnabled,
-      twoFactorBackupCodes: user.twoFactorBackupCodes,
-    };
+    return this.mapUser(user);
   }
 
   async findByNickname(nickname: string): Promise<User | null> {
@@ -144,23 +126,7 @@ export class PrismaUserRepository implements UserRepository {
       return null;
     }
 
-    return {
-      id: user.id,
-      email: user.email,
-      password: user.password,
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      nickname: user.nickname,
-      phone: user.phone,
-      country: user.country,
-      dateOfBirth: user.dateOfBirth,
-      avatarUrl: user.avatarUrl,
-      twoFactorSecret: user.twoFactorSecret,
-      twoFactorEnabled: user.twoFactorEnabled,
-      twoFactorBackupCodes: user.twoFactorBackupCodes,
-    };
+    return this.mapUser(user);
   }
 
   async findByPhone(phone: string): Promise<User | null> {
@@ -173,23 +139,7 @@ export class PrismaUserRepository implements UserRepository {
       return null;
     }
 
-    return {
-      id: user.id,
-      email: user.email,
-      password: user.password,
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      nickname: user.nickname,
-      phone: user.phone,
-      country: user.country,
-      dateOfBirth: user.dateOfBirth,
-      avatarUrl: user.avatarUrl,
-      twoFactorSecret: user.twoFactorSecret,
-      twoFactorEnabled: user.twoFactorEnabled,
-      twoFactorBackupCodes: user.twoFactorBackupCodes,
-    };
+    return this.mapUser(user);
   }
 
   // 🔥 FLOW S3: Two-Factor Authentication methods

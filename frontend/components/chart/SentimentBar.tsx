@@ -1,8 +1,9 @@
 /**
  * SentimentBar - полоса распределения CALL/PUT (вертикальная или горизонтальная)
- * 🔥 FLOW S1: Market Sentiment / Traders Distribution Bar
+ * FLOW S1: Market Sentiment / Traders Distribution Bar
  * 
- * Отдельный canvas, не связанный с основным графиком
+ * Отдельный canvas, не связанный с основным графиком.
+ * Accepts externalBuyRatio (0..1) from real data; defaults to 0.5.
  */
 
 'use client';
@@ -13,33 +14,27 @@ interface SentimentBarProps {
   height?: number;
   width?: number;
   orientation?: 'vertical' | 'horizontal';
+  /** Real buy ratio 0..1; defaults to 0.5 when no data. */
+  externalBuyRatio?: number;
   onPercentagesChange?: (buy: number, sell: number) => void;
 }
 
-export function SentimentBar({ height = 600, width = 12, orientation = 'vertical', onPercentagesChange }: SentimentBarProps) {
+export function SentimentBar({ height = 600, width = 12, orientation = 'vertical', externalBuyRatio = 0.5, onPercentagesChange }: SentimentBarProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const targetBuyRef = useRef(0.5);
-  const currentBuyRef = useRef(0.5);
+  const currentBuyRef = useRef(externalBuyRatio);
   const rafIdRef = useRef<number | null>(null);
-  const lastUpdateRef = useRef<number>(Date.now());
-  const [buyPercentage, setBuyPercentage] = useState(50);
-  const [sellPercentage, setSellPercentage] = useState(50);
-  const lastBuyPctRef = useRef<number>(50);
+  const [buyPercentage, setBuyPercentage] = useState(Math.round(externalBuyRatio * 100));
+  const [sellPercentage, setSellPercentage] = useState(100 - Math.round(externalBuyRatio * 100));
+  const lastBuyPctRef = useRef<number>(Math.round(externalBuyRatio * 100));
+  const targetBuyRef = useRef(externalBuyRatio);
   const [actualWidth, setActualWidth] = useState(orientation === 'horizontal' ? 400 : width);
   const [actualHeight, setActualHeight] = useState(orientation === 'horizontal' ? 12 : height);
 
-  // Функция для ограничения значения
-  const clamp = (value: number, min: number, max: number) => {
-    return Math.max(min, Math.min(max, value));
-  };
+  useEffect(() => {
+    targetBuyRef.current = externalBuyRatio;
+  }, [externalBuyRatio]);
 
-  // Функция для генерации случайного числа в диапазоне
-  const random = (min: number, max: number) => {
-    return Math.random() * (max - min) + min;
-  };
-
-  // Функция отрисовки
   const render = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -49,24 +44,13 @@ export function SentimentBar({ height = 600, width = 12, orientation = 'vertical
 
     ctx.save();
 
-    const now = Date.now();
-
-    if (now - lastUpdateRef.current > 1500) {
-      targetBuyRef.current = clamp(
-        targetBuyRef.current + random(-0.08, 0.08),
-        0.15,
-        0.85
-      );
-      lastUpdateRef.current = now;
-    }
-
     currentBuyRef.current += (targetBuyRef.current - currentBuyRef.current) * 0.05;
 
     const buyRatio = currentBuyRef.current;
-    const sellRatio = 1 - buyRatio;
 
     const newBuyPct = Math.round(buyRatio * 100);
-    const newSellPct = Math.round(sellRatio * 100);
+    const newSellPct = 100 - newBuyPct;
+
     if (Math.abs(newBuyPct - lastBuyPctRef.current) >= 1) {
       setBuyPercentage(newBuyPct);
       setSellPercentage(newSellPct);
@@ -93,18 +77,15 @@ export function SentimentBar({ height = 600, width = 12, orientation = 'vertical
       ctx.roundRect(0, 0, w, h, borderRadius);
       ctx.clip();
 
-      // BUY (зелёный) — слева
       ctx.fillStyle = '#45b833';
       ctx.fillRect(0, innerY, buyWidth, innerHeight);
 
-      // SELL (красный) — справа
       ctx.fillStyle = '#ff3d1f';
       ctx.fillRect(buyWidth, innerY, sellWidth, innerHeight);
 
       ctx.restore();
       ctx.save();
 
-      // Разделитель — вертикальный ромб (только если есть оба сегмента)
       const diamondWidth = 4;
       const dividerX = Math.max(diamondWidth, Math.min(w - diamondWidth, buyWidth));
       ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
@@ -181,7 +162,7 @@ export function SentimentBar({ height = 600, width = 12, orientation = 'vertical
 
     const dpr = window.devicePixelRatio || 1;
     const w = orientation === 'horizontal' ? actualWidth : width;
-    const h = orientation === 'horizontal' ? actualHeight : actualHeight;
+    const h = actualHeight;
 
     canvas.width = w * dpr;
     canvas.height = h * dpr;

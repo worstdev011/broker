@@ -1,6 +1,6 @@
 /**
  * useTerminalSnapshot hook - fetches terminal snapshot
- * FLOW P4: instrument = instrumentId (BTCUSD, EURUSD, …), default BTCUSD
+ * FLOW P4: instrument = instrumentId (EURUSD_OTC, EURUSD_REAL, …), default EURUSD_OTC
  */
 
 'use client';
@@ -13,7 +13,6 @@ import { DEFAULT_INSTRUMENT_ID } from '@/lib/instruments';
 export function useTerminalSnapshot(
   instrument: string = DEFAULT_INSTRUMENT_ID,
   timeframe: string = '5s',
-  chartType?: 'candles' | 'line', // 🔥 FLOW C-CHART-TYPE-RESET: Добавляем chartType для принудительной перезагрузки
 ) {
   const [data, setData] = useState<TerminalSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
@@ -44,7 +43,7 @@ export function useTerminalSnapshot(
     return () => {
       cancelled = true;
     };
-  }, [instrument, timeframe, chartType]); // 🔥 FLOW C-CHART-TYPE-RESET: Добавляем chartType в зависимости
+  }, [instrument, timeframe]);
 
   return { data, loading, error };
 }

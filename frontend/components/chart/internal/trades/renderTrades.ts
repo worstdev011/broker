@@ -167,10 +167,9 @@ export function renderTrades({
     // Вычисляем Y координату
     const entryY = priceToY(entryPrice, viewport, height);
     
-    // Обрезаем координаты по границам canvas
     const drawStartX = Math.max(0, Math.min(openX, width));
     const drawEndX = Math.max(0, Math.min(expireX, width));
-    const drawY = Math.max(5, Math.min(entryY, height - 5));
+    const drawY = Math.round(Math.max(5, Math.min(entryY, height - 5))) + 0.5;
 
     // Проверяем видимость
     const isValidX = !isNaN(drawStartX) && !isNaN(drawEndX) && isFinite(drawStartX) && isFinite(drawEndX);

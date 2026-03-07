@@ -56,6 +56,16 @@ const FAVORITES_STORAGE_KEY = 'instrument-menu-favorites';
 
 type SortOrder = 'asc' | 'desc' | null;
 
+/** REAL-пары закрыты в выходные (суббота, воскресенье). OTC работают 24/7. */
+function isInstrumentClosed(inst: { id: string }): boolean {
+  if (inst.id.endsWith('_OTC')) return false;
+  if (inst.id.endsWith('_REAL')) {
+    const day = new Date().getDay(); // 0 = воскресенье, 6 = суббота
+    return day === 0 || day === 6;
+  }
+  return false;
+}
+
 export function InstrumentMenu({ instrument, onInstrumentChange }: InstrumentMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -130,18 +140,17 @@ export function InstrumentMenu({ instrument, onInstrumentChange }: InstrumentMen
     };
   }, [isOpen]);
 
-  // Определяем категорию инструмента
+  // Определяем категорию инструмента по ID (суффиксы _OTC, _REAL)
   const getInstrumentCategory = (inst: { id: string; label: string }): Category => {
-    const label = inst.label.toUpperCase();
-    // Криптовалюты
-    if (label.includes('BTC') || label.includes('ETH') || label.includes('SOL') || label.includes('BNB')) {
+    if (inst.id.includes('BTC') || inst.id.includes('ETH') || inst.id.includes('SOL') || inst.id.includes('BNB')) {
       return 'crypto';
     }
-    // OTC
-    if (label.includes('OTC')) {
+    if (inst.id.endsWith('_OTC')) {
       return 'otc';
     }
-    // Форекс (все остальные валютные пары)
+    if (inst.id.endsWith('_REAL')) {
+      return 'forex';
+    }
     return 'forex';
   };
 
@@ -157,8 +166,7 @@ export function InstrumentMenu({ instrument, onInstrumentChange }: InstrumentMen
       }
     }
     // Фильтр по поисковому запросу
-    const displayName = inst.label.replace(/\s+Real$/, '');
-    return displayName.toLowerCase().includes(searchQuery.toLowerCase());
+    return inst.label.toLowerCase().includes(searchQuery.toLowerCase());
   });
 
   // Сортируем по доходности если выбрана сортировка
@@ -169,6 +177,13 @@ export function InstrumentMenu({ instrument, onInstrumentChange }: InstrumentMen
       return sortOrder === 'asc' ? payoutA - payoutB : payoutB - payoutA;
     });
   }
+  // Закрытые пары — в самый низ списка
+  filteredInstruments = [...filteredInstruments].sort((a, b) => {
+    const closedA = isInstrumentClosed(a);
+    const closedB = isInstrumentClosed(b);
+    if (closedA === closedB) return 0;
+    return closedA ? 1 : -1;
+  });
 
   // Обработка скролла для показа скроллбара
   useEffect(() => {
@@ -199,8 +214,7 @@ export function InstrumentMenu({ instrument, onInstrumentChange }: InstrumentMen
   }, [isOpen]);
 
   const currentInstrument = getInstrumentOrDefault(instrument);
-  // Форматируем название: убираем "Real", оставляем "OTC" как есть
-  const displayLabel = currentInstrument.label.replace(/\s+Real$/, ''); // Убираем " Real" в конце
+  const displayLabel = currentInstrument.label;
   // 🔥 FLOW I-PAYOUT: Получаем payoutPercent для текущего инструмента
   const currentPayout = instrumentsData.find((inst) => inst.id === instrument)?.payoutPercent ?? 75;
 
@@ -214,7 +228,7 @@ export function InstrumentMenu({ instrument, onInstrumentChange }: InstrumentMen
         {/* Флаги валют */}
         <div className="flex items-center">
           {(() => {
-            const [country1, country2] = getCurrencyCountryCodes(displayLabel.split(' ')[0]); // Берем только валютную пару без "OTC" или "Real"
+            const [country1, country2] = getCurrencyCountryCodes(displayLabel.split(' ')[0]); // BASE/QUOTE часть без "OTC"/"Real"
             return (
               <>
                 {country1 && (
@@ -259,7 +273,7 @@ export function InstrumentMenu({ instrument, onInstrumentChange }: InstrumentMen
       </button>
 
       {isOpen && (
-        <div className="absolute top-full left-0 mt-2 rounded-lg shadow-xl w-[380px] max-h-[500px] flex flex-col z-50 overflow-hidden bg-[#1a2438] border border-white/5">
+        <div className="absolute top-full left-0 mt-2 rounded-lg shadow-xl w-[380px] max-h-[500px] flex flex-col z-50 overflow-hidden bg-[#091C56] border border-white/5">
           {/* Фильтры по категориям */}
           <div className="border-b border-white/10 px-4 py-2.5 flex items-center gap-2 flex-wrap">
             <button
@@ -373,24 +387,29 @@ export function InstrumentMenu({ instrument, onInstrumentChange }: InstrumentMen
             ) : (
               filteredInstruments.map((inst) => {
               const isActive = instrument === inst.id;
-              // Форматируем название: убираем "Real", оставляем "OTC" как есть
-              const displayName = inst.label.replace(/\s+Real$/, ''); // Убираем " Real" в конце
+              const displayName = inst.label;
+              const isDisabled = isInstrumentClosed(inst);
               // 🔥 FLOW I-PAYOUT: Получаем payoutPercent для этого инструмента
               const payout = instrumentsData.find((data) => data.id === inst.id)?.payoutPercent ?? 75;
               return (
                 <button
                   key={inst.id}
                   type="button"
+                  aria-disabled={isDisabled}
+                  tabIndex={isDisabled ? -1 : 0}
                   onClick={() => {
+                    if (isDisabled) return;
                     onInstrumentChange(inst.id);
                     setIsOpen(false);
                   }}
                   className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-left text-sm transition-colors ${
-                    isActive
-                      ? 'bg-[#3347ff]/25 text-white'
-                      : 'text-gray-300 md:hover:bg-white/10 md:hover:text-white'
+                    isDisabled
+                      ? 'opacity-50 cursor-not-allowed text-gray-500'
+                      : isActive
+                        ? 'bg-[#3347FF] text-white'
+                        : 'text-gray-300 md:hover:bg-white/10 md:hover:text-white'
                   }`}
-                  title={inst.label}
+                  title={isDisabled ? `${inst.label} — закрыто на выходных` : inst.label}
                 >
                   <div className="flex items-center gap-2.5">
                     {/* Иконка избранного */}
@@ -438,7 +457,7 @@ export function InstrumentMenu({ instrument, onInstrumentChange }: InstrumentMen
                     {/* Флаги валют */}
                     <div className="flex items-center">
                       {(() => {
-                        const [country1, country2] = getCurrencyCountryCodes(displayName.split(' ')[0]); // Берем только валютную пару без "OTC" или "Real"
+                        const [country1, country2] = getCurrencyCountryCodes(displayName.split(' ')[0]); // BASE/QUOTE часть
                         return (
                           <>
                             {country1 && (
@@ -478,7 +497,9 @@ export function InstrumentMenu({ instrument, onInstrumentChange }: InstrumentMen
                     <span className="font-medium">{displayName}</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-medium text-gray-400 text-right">+{payout}%</span>
+                    <span className="text-xs font-medium text-gray-400 text-right">
+                      {isDisabled ? 'N/A' : `+${payout}%`}
+                    </span>
                   </div>
                 </button>
               );

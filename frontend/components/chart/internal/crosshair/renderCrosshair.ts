@@ -119,18 +119,16 @@ export function renderCrosshair({
 
   ctx.save();
 
-  // Рисуем вертикальную линию
+  const sx = Math.round(crosshair.x) + 0.5;
+  const sy = Math.round(crosshair.y) + 0.5;
+
   ctx.strokeStyle = LINE_COLOR;
   ctx.lineWidth = LINE_WIDTH;
   ctx.beginPath();
-  ctx.moveTo(crosshair.x, 0);
-  ctx.lineTo(crosshair.x, height);
-  ctx.stroke();
-
-  // Рисуем горизонтальную линию
-  ctx.beginPath();
-  ctx.moveTo(0, crosshair.y);
-  ctx.lineTo(width, crosshair.y);
+  ctx.moveTo(sx, 0);
+  ctx.lineTo(sx, height);
+  ctx.moveTo(0, sy);
+  ctx.lineTo(width, sy);
   ctx.stroke();
 
   // Метка времени внизу рисуется отдельно в конце кадра (renderCrosshairTimeLabel),

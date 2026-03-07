@@ -134,7 +134,7 @@ export function DrawingMenu({ drawingMode, onDrawingModeChange }: DrawingMenuPro
       </button>
 
       {isOpen && (
-        <div className="absolute top-full left-1/2 -translate-x-[calc(50%+90px)] md:-translate-x-1/2 mt-2 rounded-lg shadow-xl min-w-[220px] z-50 overflow-hidden bg-[#1a2438] border border-white/5">
+        <div className="absolute top-full left-1/2 -translate-x-[calc(50%+90px)] md:-translate-x-1/2 mt-2 rounded-lg shadow-xl min-w-[220px] z-50 overflow-hidden bg-[#091C56] border border-white/5">
           <div className="p-2">
             {favoriteOptions.length > 0 && (
               <>

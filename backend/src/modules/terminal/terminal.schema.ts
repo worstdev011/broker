@@ -8,8 +8,8 @@ export const getSnapshotSchema = {
     properties: {
       instrument: {
         type: 'string',
-        default: 'BTCUSD',
-        description: 'Instrument id: BTCUSD, EURUSD, AUDCAD',
+        default: 'EURUSD_OTC',
+        description: 'Instrument id: EURUSD_OTC, EURUSD_REAL, AUDCAD_OTC, …',
       },
       timeframe: {
         type: 'string',

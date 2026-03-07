@@ -75,6 +75,19 @@ function renderHorizontalLine(
   ctx.lineTo(width, y);
   ctx.stroke();
 
+  const label = drawing.price.toFixed(5);
+  ctx.font = '11px system-ui, sans-serif';
+  ctx.textBaseline = 'middle';
+  const tw = ctx.measureText(label).width;
+  const lx = width - tw - 8;
+  const ly = y;
+  ctx.fillStyle = drawing.color;
+  ctx.globalAlpha = 0.85;
+  ctx.fillRect(lx - 4, ly - 8, tw + 8, 16);
+  ctx.fillStyle = '#fff';
+  ctx.globalAlpha = 1.0;
+  ctx.fillText(label, lx, ly);
+
   ctx.restore();
 }
 
@@ -107,6 +120,22 @@ function renderVerticalLine(
   ctx.moveTo(x, 0);
   ctx.lineTo(x, height);
   ctx.stroke();
+
+  const d = new Date(drawing.time);
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  const ss = String(d.getSeconds()).padStart(2, '0');
+  const timeLabel = `${hh}:${mm}:${ss}`;
+  ctx.font = '11px system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  const tw = ctx.measureText(timeLabel).width;
+  ctx.fillStyle = drawing.color;
+  ctx.globalAlpha = 0.85;
+  ctx.fillRect(x - tw / 2 - 4, height - 18, tw + 8, 16);
+  ctx.fillStyle = '#fff';
+  ctx.globalAlpha = 1.0;
+  ctx.fillText(timeLabel, x, height - 17);
 
   ctx.restore();
 }
@@ -428,10 +457,15 @@ function renderFibonacci(
   ctx.lineTo(x2, y2);
   ctx.stroke();
 
-  // Горизонтальные уровни Фибоначчи
+  const FIB_LABELS = ['0%', '23.6%', '38.2%', '50%', '61.8%', '78.6%', '100%'];
   const xMin = Math.min(x1, x2);
   const xMax = Math.max(x1, x2);
-  for (const ratio of FIB_RATIOS) {
+
+  ctx.font = '10px system-ui, sans-serif';
+  ctx.textBaseline = 'bottom';
+
+  for (let fi = 0; fi < FIB_RATIOS.length; fi++) {
+    const ratio = FIB_RATIOS[fi];
     const price = priceLow + priceRange * ratio;
     if (price < viewport.priceMin || price > viewport.priceMax) continue;
     const y = priceToY(price, viewport, height);
@@ -439,6 +473,11 @@ function renderFibonacci(
     ctx.moveTo(xMin, y);
     ctx.lineTo(xMax, y);
     ctx.stroke();
+
+    ctx.fillStyle = drawing.color;
+    ctx.globalAlpha = 0.7;
+    ctx.fillText(`${FIB_LABELS[fi]}  ${price.toFixed(5)}`, xMax + 4, y - 2);
+    ctx.globalAlpha = isHovered || isSelected ? LINE_OPACITY_HOVER : LINE_OPACITY;
   }
 
   if (isHovered || isSelected) {

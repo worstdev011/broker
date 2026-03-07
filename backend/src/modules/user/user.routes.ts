@@ -8,6 +8,7 @@ import path from 'path';
 import { UserService } from '../../domain/user/UserService.js';
 import { PrismaUserRepository } from '../../infrastructure/prisma/PrismaUserRepository.js';
 import { PrismaSessionRepository } from '../../infrastructure/prisma/PrismaSessionRepository.js';
+import { PrismaAccountRepository } from '../../infrastructure/prisma/PrismaAccountRepository.js';
 import { UserController } from './user.controller.js';
 import { FileStorage } from '../../infrastructure/storage/FileStorage.js';
 import { requireAuth } from '../auth/auth.middleware.js';
@@ -29,8 +30,9 @@ export async function registerUserRoutes(app: FastifyInstance) {
   // Initialize dependencies
   const userRepository = new PrismaUserRepository();
   const sessionRepository = new PrismaSessionRepository();
+  const accountRepository = new PrismaAccountRepository();
   const userService = new UserService(userRepository, sessionRepository);
-  const userController = new UserController(userService);
+  const userController = new UserController(userService, accountRepository);
   const fileStorage = new FileStorage();
 
   // Register multipart plugin for file uploads

@@ -19,7 +19,7 @@ export interface Trade {
   userId: string;
   accountId: string;
   direction: TradeDirection;
-  instrument: string; // Trading instrument (e.g., 'AUDCHF', 'BTCUSD')
+  instrument: string; // Trading instrument (e.g., 'EURUSD_OTC', 'AUDCHF_REAL')
   amount: number; // Decimal as number for domain
   entryPrice: number;
   exitPrice: number | null;
@@ -36,7 +36,7 @@ export interface OpenTradeInput {
   direction: TradeDirection;
   amount: number;
   expirationSeconds: number; // Must be multiple of 5, min 5, max 300 (5m)
-  instrument: string; // Trading instrument (e.g., 'AUDCHF', 'BTCUSD')
+  instrument: string; // Trading instrument (e.g., 'EURUSD_OTC', 'AUDCHF_REAL')
 }
 
 export interface TradeDTO {

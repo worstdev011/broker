@@ -17,6 +17,7 @@ export const openTradeSchema = {
       amount: {
         type: 'number',
         minimum: 0.01,
+        maximum: 50000,
       },
       expirationSeconds: {
         type: 'number',

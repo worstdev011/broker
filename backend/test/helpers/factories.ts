@@ -37,7 +37,7 @@ export function createTestTrade(overrides?: Partial<Trade>): Trade {
     userId: overrides?.userId || 'test-user-id',
     accountId: overrides?.accountId || 'test-account-id',
     direction: overrides?.direction || TradeDirection.CALL,
-    instrument: overrides?.instrument || 'EURUSD',
+    instrument: overrides?.instrument || 'EURUSD_OTC',
     amount: overrides?.amount !== undefined ? overrides.amount : 100,
     entryPrice: overrides?.entryPrice !== undefined ? overrides.entryPrice : 50000,
     exitPrice: overrides?.exitPrice !== undefined ? overrides.exitPrice : null,

@@ -3,6 +3,10 @@ import { AuthGuard } from '../AuthGuard';
 import { useAuth } from '@/lib/hooks/useAuth';
 
 jest.mock('@/lib/hooks/useAuth');
+jest.mock('next/image', () => ({
+  __esModule: true,
+  default: (props: { alt: string }) => <img alt={props.alt} />,
+}));
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: jest.fn() }),
   usePathname: () => '/profile',
@@ -34,7 +38,7 @@ describe('AuthGuard', () => {
         <div>Protected</div>
       </AuthGuard>
     );
-    expect(screen.getByText('Loading...')).toBeInTheDocument();
+    expect(screen.getByText('Загрузка...')).toBeInTheDocument();
   });
 
   it('renders children when authenticated and requireAuth', () => {

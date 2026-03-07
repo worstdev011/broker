@@ -69,14 +69,32 @@ export function saveChartSettings(settings: ChartSettings): void {
   
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+    _cachedSettings = { ...settings };
+    _cacheTime = Date.now();
   } catch (error) {
     console.error('Failed to save chart settings:', error);
   }
 }
 
+let _cachedSettings: ChartSettings | null = null;
+let _cacheTime = 0;
+const CACHE_TTL_MS = 500;
+
 /**
- * Получает текущие настройки (синхронно)
+ * Получает текущие настройки (кэш 500ms — один localStorage read на ~30 кадров)
  */
 export function getChartSettings(): ChartSettings {
-  return loadChartSettings();
+  const now = Date.now();
+  if (_cachedSettings && now - _cacheTime < CACHE_TTL_MS) {
+    return _cachedSettings;
+  }
+  _cachedSettings = loadChartSettings();
+  _cacheTime = now;
+  return _cachedSettings;
+}
+
+/** Force-invalidate settings cache (call after saveChartSettings) */
+export function invalidateChartSettingsCache(): void {
+  _cachedSettings = null;
+  _cacheTime = 0;
 }

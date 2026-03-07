@@ -26,6 +26,7 @@ const PRICE_LABEL_BG_WIDTH = 60; // Ширина фона для меток це
 // Чуть темнее фона графика (#061230) для меток времени
 const TIME_LABEL_BG_COLOR = '#05122a';
 const PRICE_LABEL_PADDING = 4; // Паддинг для меток цены справа (меньше чем общий LABEL_PADDING)
+const PRICE_LABEL_OFFSET_ABOVE_GRID = 12; // Смещение метки вверх от линии сетки (≈ половина высоты шрифта + зазор)
 
 /**
  * Конвертирует время в X координату
@@ -97,17 +98,23 @@ function calculateTimeLabelStep(timeRange: number, width: number): number {
 }
 
 /**
- * Вычисляет оптимальный шаг для подписей цены
+ * Вычисляет оптимальный шаг для подписей цены.
+ * Должен совпадать с calculatePriceStep в renderGrid — иначе метки и сетка расходятся при скролле.
  */
-function calculatePriceLabelStep(priceRange: number, height: number): number {
-  const targetLabels = Math.floor(height / MIN_LABEL_SPACING);
-  if (targetLabels <= 0) return priceRange;
-  
-  const pricePerLabel = priceRange / targetLabels;
-  
-  // Округляем до "красивых" значений
-  const magnitude = Math.pow(10, Math.floor(Math.log10(pricePerLabel)));
-  const normalized = pricePerLabel / magnitude;
+function calculatePriceStep(priceRange: number, height: number): number {
+  if (height <= 0 || priceRange <= 0) return priceRange || 1;
+
+  const targetSteps = 10;
+  const pixelsPerStep = height / targetSteps;
+  const pricePerPixel = priceRange / height;
+  const priceStep = pixelsPerStep * pricePerPixel;
+
+  if (!Number.isFinite(priceStep) || priceStep <= 0) return priceRange || 1;
+
+  const magnitude = Math.pow(10, Math.floor(Math.log10(priceStep)));
+  if (!Number.isFinite(magnitude) || magnitude <= 0) return priceRange || 1;
+
+  const normalized = priceStep / magnitude;
 
   let step: number;
   if (normalized <= 1) step = 1;
@@ -160,7 +167,7 @@ export function renderAxes({
 
   // Y-ось (справа) - цены
   if (priceRange > 0) {
-    const priceStep = calculatePriceLabelStep(priceRange, height);
+    const priceStep = calculatePriceStep(priceRange, height);
     const startPrice = Math.ceil(viewport.priceMin / priceStep) * priceStep;
 
     ctx.fillStyle = LABEL_COLOR; // Восстанавливаем цвет для текста
@@ -175,7 +182,7 @@ export function renderAxes({
       labelCount++;
       const y = priceToY(price, viewport, height);
       if (y >= 0 && y <= height) {
-        ctx.fillText(formatPrice(price, digits), priceLabelCenterX, y);
+        ctx.fillText(formatPrice(price, digits), priceLabelCenterX, y - PRICE_LABEL_OFFSET_ABOVE_GRID);
       }
     }
   }

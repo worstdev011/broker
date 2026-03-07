@@ -99,10 +99,10 @@ export function useOhlcHover({
     const liveCandle = getLiveCandle();
     const candles = getCandles();
 
-    // 2️⃣ Проверяем live-свечу
+    // 2️⃣ Проверяем live-свечу по периоду (crosshair снэпится к центру свечи = startTime + timeframeMs/2, а endTime в данных = текущее время, поэтому time < endTime часто ложно)
     if (liveCandle) {
-      if (time >= liveCandle.startTime && time < liveCandle.endTime) {
-        // Используем live-свечу
+      const livePeriodEnd = liveCandle.startTime + timeframeMs;
+      if (time >= liveCandle.startTime && time < livePeriodEnd) {
         ohlcRef.current = {
           open: liveCandle.open,
           high: liveCandle.high,

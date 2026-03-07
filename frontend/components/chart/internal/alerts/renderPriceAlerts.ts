@@ -53,7 +53,7 @@ export function renderPriceAlerts({
       continue;
     }
 
-    const y = mapPriceToY(alert.price, viewport, height);
+    const y = Math.round(mapPriceToY(alert.price, viewport, height)) + 0.5;
 
     ctx.beginPath();
     ctx.strokeStyle = ALERT_COLOR_ACTIVE;

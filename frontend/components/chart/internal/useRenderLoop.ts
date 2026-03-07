@@ -11,7 +11,8 @@
 
 import { useEffect, useRef, RefObject } from 'react';
 import { getChartSettings } from '@/lib/chartSettings';
-import { renderEngine } from './render/renderEngine';
+import { renderCandles } from './render/renderCandles';
+import { renderPriceLine } from './render/renderPriceLine';
 import { renderCrosshair, renderCrosshairTimeLabel } from './crosshair/renderCrosshair';
 import { renderOhlcPanel } from './ohlc/renderOhlcPanel';
 import { renderIndicators } from './indicators/renderIndicators';
@@ -259,7 +260,13 @@ export function useRenderLoop({
     timeframe,
   };
 
-  // FLOW E: плавная анимация вертикальной линии экспирации при смене expirationSeconds
+  const prevPriceRef = useRef<number | null>(null);
+
+  // Static layer cache: grid + closed candles + axes. Redrawn only when viewport/data change.
+  const staticCanvasRef = useRef<OffscreenCanvas | null>(null);
+  const staticCtxRef = useRef<OffscreenCanvasRenderingContext2D | null>(null);
+  const staticKeyRef = useRef<string>('');
+
   const expirationRenderTimeRef = useRef<number | null>(null);
   const expirationTargetTimeRef = useRef<number | null>(null);
   const expirationAnimStartTimeRef = useRef<number | null>(null);
@@ -403,7 +410,7 @@ export function useRenderLoop({
       const macdHeight = hasMACD ? 100 : 0;
       const atrHeight = hasATR ? 80 : 0;
       const adxHeight = hasADX ? 80 : 0;
-      const mainHeight = height - rsiHeight - stochHeight - momentumHeight - awesomeOscillatorHeight - macdHeight - atrHeight - adxHeight; // Высота основного графика
+      const mainHeight = Math.max(1, height - rsiHeight - stochHeight - momentumHeight - awesomeOscillatorHeight - macdHeight - atrHeight - adxHeight);
 
       // FLOW C-MARKET-CLOSED: Если рынок закрыт, рисуем только grid + axes + overlay
       if (!marketOpen) {
@@ -462,18 +469,43 @@ export function useRenderLoop({
         return;
       }
 
-      // Вызываем render engine (только если рынок открыт)
-      renderEngine({
-        ctx,
-        viewport,
-        candles,
-        liveCandle,
-        width,
-        height: mainHeight,
-        timeframeMs: p.getTimeframeMs(),
-        mode,
-        digits,
-      });
+      // Static layer cache: skip expensive grid+candles+axes redraw when nothing changed
+      const colors = { bullishColor: settings.bullishColor, bearishColor: settings.bearishColor };
+      const candleCount = candles.length;
+      const lastCandle = candleCount > 0 ? candles[candleCount - 1] : null;
+      const staticKey = `${viewport.timeStart}|${viewport.timeEnd}|${viewport.priceMin}|${viewport.priceMax}|${candleCount}|${lastCandle?.startTime ?? 0}|${lastCandle?.close ?? 0}|${width}|${mainHeight}|${mode}|${settings.bullishColor}|${settings.bearishColor}`;
+
+      if (staticKey !== staticKeyRef.current || !staticCanvasRef.current) {
+        // Viewport or data changed — redraw static layers
+        if (
+          !staticCanvasRef.current ||
+          staticCanvasRef.current.width !== Math.round(width) ||
+          staticCanvasRef.current.height !== Math.round(mainHeight)
+        ) {
+          staticCanvasRef.current = new OffscreenCanvas(Math.round(width), Math.round(mainHeight));
+          staticCtxRef.current = staticCanvasRef.current.getContext('2d');
+        }
+        const sctx = staticCtxRef.current;
+        if (sctx) {
+          sctx.clearRect(0, 0, width, mainHeight);
+          renderGrid({ ctx: sctx as unknown as CanvasRenderingContext2D, viewport, width, height: mainHeight, timeframeMs: p.getTimeframeMs() });
+          renderCandles({ ctx: sctx as unknown as CanvasRenderingContext2D, viewport, candles, liveCandle: null, width, height: mainHeight, timeframeMs: p.getTimeframeMs(), mode, settings: colors });
+          renderAxes({ ctx: sctx as unknown as CanvasRenderingContext2D, viewport, width, height: mainHeight, digits });
+        }
+        staticKeyRef.current = staticKey;
+      }
+
+      // Blit static cache
+      if (staticCanvasRef.current) {
+        ctx.drawImage(staticCanvasRef.current, 0, 0);
+      }
+
+      // Dynamic layers: live candle, price line (always redrawn)
+      if (liveCandle) {
+        renderCandles({ ctx, viewport, candles: [], liveCandle, width, height: mainHeight, timeframeMs: p.getTimeframeMs(), mode, settings: colors });
+        renderPriceLine({ ctx, viewport, currentPrice: liveCandle.close, width, height: mainHeight, digits, previousPrice: prevPriceRef.current });
+        prevPriceRef.current = liveCandle.close;
+      }
 
       // FLOW E: Expiration overlay — вертикальная пунктирная линия по server time с плавным смещением
       // Используем ту же логику что и на линейном графике (где все работает нормально)
@@ -718,7 +750,7 @@ export function useRenderLoop({
         ctx,
         ohlc,
         width,
-        height,
+        height: mainHeight,
         digits,
       });
 

@@ -5,7 +5,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { ChevronDown, Clock } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 
 type Timeframe = '5s' | '10s' | '15s' | '30s' | '1m' | '2m' | '3m' | '5m' | '10m' | '15m' | '30m' | '1h' | '4h' | '1d';
 
@@ -68,7 +68,7 @@ export function TimeframeMenu({ timeframe, onTimeframeChange }: TimeframeMenuPro
       </button>
 
       {isOpen && (
-        <div className="absolute top-full left-1/2 -translate-x-[calc(50%+36px)] md:-translate-x-1/2 mt-2 rounded-lg shadow-xl z-50 w-[340px] overflow-hidden bg-[#1a2438] border border-white/5">
+        <div className="absolute top-full left-1/2 -translate-x-[calc(50%+36px)] md:-translate-x-1/2 mt-2 rounded-lg shadow-xl z-50 w-[340px] overflow-hidden bg-[#091C56] border border-white/5">
           <div className="p-2 grid grid-cols-7 gap-1.5">
             {TIMEFRAMES.map((tf) => {
               const isActive = timeframe === tf.id;

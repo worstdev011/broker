@@ -161,7 +161,7 @@ export function IndicatorMenu({ indicatorConfigs, onConfigChange }: IndicatorMen
 
       {/* Выпадающее меню */}
       {isOpen && (
-        <div className="absolute top-full left-1/2 -translate-x-[calc(50%+36px)] md:-translate-x-1/2 mt-2 rounded-lg shadow-xl min-w-[200px] z-50 overflow-hidden bg-[#1a2438] border border-white/5">
+        <div className="absolute top-full left-1/2 -translate-x-[calc(50%+36px)] md:-translate-x-1/2 mt-2 rounded-lg shadow-xl min-w-[200px] z-50 overflow-hidden bg-[#091C56] border border-white/5">
           <div className="p-2">
             {favoriteConfigs.length > 0 && (
               <>

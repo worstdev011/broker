@@ -8,7 +8,7 @@
 
 import { useRef } from 'react';
 
-const DURATION_MS = 150;
+const DURATION_MS = 80;
 
 const clamp = (v: number, min: number, max: number): number =>
   Math.max(min, Math.min(max, v));
@@ -28,6 +28,8 @@ export interface UseLinePriceAnimatorReturn {
   seedFrom: (price: number) => void;
   /** Сброс только hasValueRef — разрешить seed на следующем live-сегменте (НЕ полный reset) */
   clearLiveState: () => void;
+  /** Мгновенный переход к цене без анимации (для second-boundary transitions) */
+  snapTo: (price: number) => void;
 }
 
 export function useLinePriceAnimator(): UseLinePriceAnimatorReturn {
@@ -52,12 +54,14 @@ export function useLinePriceAnimator(): UseLinePriceAnimatorReturn {
   });
 
   const onPriceUpdate = (price: number): void => {
-    // Анимируем от текущего визуального состояния к новой цене
+    if (!hasValueRef.current) {
+      snapTo(price);
+      return;
+    }
+
     const current = valueRef.current;
-    
-    // Если цена не изменилась существенно, не запускаем анимацию
     if (Math.abs(current - price) < 1e-8) return;
-    
+
     animationRef.current = {
       from: current,
       to: price,
@@ -114,6 +118,18 @@ export function useLinePriceAnimator(): UseLinePriceAnimatorReturn {
     hasValueRef.current = false;
   };
 
+  const snapTo = (price: number): void => {
+    valueRef.current = price;
+    hasValueRef.current = true;
+    animationRef.current = {
+      from: price,
+      to: price,
+      startTime: 0,
+      duration: DURATION_MS,
+      active: false,
+    };
+  };
+
   return {
     getAnimatedPrice,
     onPriceUpdate,
@@ -121,5 +137,6 @@ export function useLinePriceAnimator(): UseLinePriceAnimatorReturn {
     reset,
     seedFrom,
     clearLiveState,
+    snapTo,
   };
 }

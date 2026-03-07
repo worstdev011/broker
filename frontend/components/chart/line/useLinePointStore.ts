@@ -1,33 +1,39 @@
 /**
- * FLOW LP-3: LinePointStore - хранилище price points
- * 
- * Ответственность:
- * - Хранит price points (time, price) - 1 точка в секунду
- * - Поддерживает append (для новых точек) и prepend (для истории)
- * - Ограничивает размер (MAX_POINTS)
- * - НЕ знает про canvas, viewport, рендеринг
+ * LinePointStore — хранилище price points для линейного графика
+ *
+ * Каждый тик = отдельная точка (tick-level granularity, как Pocket Option).
+ * Snapshot/history может быть менее гранулярным (1/сек), что нормально.
  */
 
 import { useRef } from 'react';
 
 export type PricePoint = {
-  time: number;   // timestamp (ms), начало секунды
+  time: number;   // timestamp (ms)
   price: number;
 };
 
-const MAX_POINTS = 3000; // Максимальное количество точек в памяти
+const MAX_POINTS = 7000;
 
 export function useLinePointStore() {
   const pointsRef = useRef<PricePoint[]>([]);
 
   /**
-   * Добавить новую точку в конец (для live обновлений)
+   * Добавить точку в конец. Дедуплицирует по timestamp,
+   * игнорирует out-of-order тики (time < last).
    */
   function push(point: PricePoint): void {
     const arr = pointsRef.current;
-    arr.push(point);
 
-    // Ограничиваем размер: удаляем старые точки слева
+    if (arr.length > 0) {
+      const last = arr[arr.length - 1];
+      if (point.time === last.time) {
+        last.price = point.price;
+        return;
+      }
+      if (point.time < last.time) return;
+    }
+
+    arr.push(point);
     if (arr.length > MAX_POINTS) {
       arr.splice(0, arr.length - MAX_POINTS);
     }
@@ -54,12 +60,13 @@ export function useLinePointStore() {
     const arr = pointsRef.current;
 
     if (arr.length === 0) {
-      arr.push(...points);
+      const sorted = [...points].sort((a, b) => a.time - b.time);
+      arr.push(...sorted);
     } else {
-      // Самая ранняя существующая точка — всё что >= её времени уже есть
       const earliestExisting = arr[0].time;
-      // Берём только те точки из history, которые строго раньше существующих
-      const filtered = points.filter(p => p.time < earliestExisting);
+      const filtered = points
+        .filter(p => p.time < earliestExisting)
+        .sort((a, b) => a.time - b.time);
       if (filtered.length > 0) {
         arr.unshift(...filtered);
       }

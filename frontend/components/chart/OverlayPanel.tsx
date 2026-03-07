@@ -57,8 +57,15 @@ export function OverlayPanel({
           return (
             <div
               key={overlay.id}
-              className="flex items-center gap-1.5 px-1.5 py-0.5 rounded-md md:hover:bg-white/5 group"
+              className="flex items-center gap-1.5 px-1.5 py-0.5 rounded-md md:hover:bg-white/5 group focus-within:bg-white/5 outline-none"
               role="listitem"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Delete' || e.key === 'Backspace') {
+                  e.preventDefault();
+                  onRemove(overlay.id);
+                }
+              }}
             >
               <span className="flex-1 text-[11px] text-gray-200 truncate" title={displayName}>
                 {displayName}

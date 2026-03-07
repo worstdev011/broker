@@ -65,7 +65,7 @@ interface UseChartInteractionsParams {
   scheduleReturnToFollow?: () => void;
 }
 
-const MIN_VISIBLE_CANDLES = 20;
+const MIN_VISIBLE_CANDLES = 35; // Меньше zoom in — нельзя так сильно приближать
 const MAX_VISIBLE_CANDLES = 300; // Увеличено для возможности большего zoom out
 const ZOOM_SENSITIVITY = 0.1; // 10% за шаг колесика
 const PRICE_AXIS_WIDTH = 80; // 🔥 FLOW Y1: Ширина правой оси цены
@@ -188,12 +188,14 @@ export function useChartInteractions({
   const touchModeRef = useRef<'none' | 'pan' | 'pinch'>('none');
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
   const pinchStartRef = useRef<{ distance: number; centerX: number } | null>(null);
-  // 🔥 FLOW C-INERTIA: Pan inertia state (используем переданные refs или создаем свои)
   const internalPanVelocityRef = useRef<number>(0);
   const internalInertiaActiveRef = useRef<boolean>(false);
   const panVelocityPxPerMsRef = externalPanInertiaRefs?.velocityRef || internalPanVelocityRef;
   const inertiaActiveRef = externalPanInertiaRefs?.activeRef || internalInertiaActiveRef;
   const lastMoveTimeRef = useRef<number | null>(null);
+  /** Smoothed velocity via EMA for stable inertia starts */
+  const emaVelocityRef = useRef<number>(0);
+  const EMA_ALPHA = 0.35;
 
   /**
    * Обработчик mouseDown - начало pan или Y-scale drag
@@ -227,9 +229,9 @@ export function useChartInteractions({
     // FLOW C-MARKET-CLOSED: когда рынок закрыт, не начинаем pan (но клики по альтернативным парам уже обработаны выше)
     if (h.getMarketStatus && h.getMarketStatus() !== 'OPEN') return;
 
-    // 🔥 FLOW C-INERTIA: Сбрасываем инерцию при новом взаимодействии
     inertiaActiveRef.current = false;
     panVelocityPxPerMsRef.current = 0;
+    emaVelocityRef.current = 0;
     lastMoveTimeRef.current = null;
 
     // FLOW G16: Если идет редактирование drawing, не начинаем pan
@@ -336,15 +338,15 @@ export function useChartInteractions({
     const currentX = e.clientX - rect.left;
     const deltaX = currentX - state.lastX;
 
-    // 🔥 FLOW C-INERTIA: Собираем скорость движения мыши
     const now = performance.now();
     const lastTime = lastMoveTimeRef.current;
 
     if (lastTime !== null) {
       const dt = now - lastTime;
       if (dt > 0) {
-        // Скорость в пикселях на миллисекунду (не сглаживаем, берем последнюю реальную скорость)
-        panVelocityPxPerMsRef.current = deltaX / dt;
+        const rawVelocity = deltaX / dt;
+        emaVelocityRef.current = EMA_ALPHA * rawVelocity + (1 - EMA_ALPHA) * emaVelocityRef.current;
+        panVelocityPxPerMsRef.current = emaVelocityRef.current;
       }
     }
 
@@ -517,13 +519,14 @@ export function useChartInteractions({
 
       const deltaX = t.clientX - start.x;
 
-      // 🔥 FLOW C-INERTIA: Собираем скорость для touch pan (как в handleMouseMove)
       const now = performance.now();
       const lastTime = lastMoveTimeRef.current;
       if (lastTime !== null) {
         const dt = now - lastTime;
         if (dt > 0) {
-          panVelocityPxPerMsRef.current = deltaX / dt;
+          const rawVelocity = deltaX / dt;
+          emaVelocityRef.current = EMA_ALPHA * rawVelocity + (1 - EMA_ALPHA) * emaVelocityRef.current;
+          panVelocityPxPerMsRef.current = emaVelocityRef.current;
         }
       }
       lastMoveTimeRef.current = now;
@@ -640,9 +643,9 @@ export function useChartInteractions({
     yDragStateRef.current = false;
     handlersRef.current.endYScaleDrag?.();
 
-    // 🔥 FLOW C-INERTIA: Сбрасываем инерцию
     inertiaActiveRef.current = false;
     panVelocityPxPerMsRef.current = 0;
+    emaVelocityRef.current = 0;
     lastMoveTimeRef.current = null;
   };
 

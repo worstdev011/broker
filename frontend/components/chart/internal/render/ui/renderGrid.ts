@@ -94,10 +94,10 @@ export function renderGrid({
     
     ctx.beginPath();
     for (let time = startTime; time <= timeEnd; time += timeStep) {
-      const x = timeToX(time, viewport, width);
-      if (x >= 0 && x <= width) {
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, height);
+      const rx = Math.round(timeToX(time, viewport, width)) + 0.5;
+      if (rx >= 0 && rx <= width) {
+        ctx.moveTo(rx, 0);
+        ctx.lineTo(rx, height);
       }
     }
     ctx.stroke();
@@ -125,10 +125,10 @@ export function renderGrid({
     
     ctx.beginPath();
     for (let price = startPrice; price <= priceMax; price += priceStep) {
-      const y = priceToY(price, viewport, height);
-      if (y >= 0 && y <= height) {
-        ctx.moveTo(0, y);
-        ctx.lineTo(width, y);
+      const ry = Math.round(priceToY(price, viewport, height)) + 0.5;
+      if (ry >= 0 && ry <= height) {
+        ctx.moveTo(0, ry);
+        ctx.lineTo(width, ry);
       }
     }
     ctx.stroke();

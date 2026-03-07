@@ -35,6 +35,11 @@ export const updateProfileSchema = {
         type: 'string',
         maxLength: 100,
       },
+      currency: {
+        type: 'string',
+        maxLength: 10,
+        description: 'Account currency code (e.g., USD, EUR). Set once, cannot be changed.',
+      },
       dateOfBirth: {
         type: ['string', 'null'],
         format: 'date',

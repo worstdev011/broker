@@ -50,13 +50,17 @@ export function useHistoryLoader({
   const isLoadingRef = useRef<boolean>(false);
   const hasMoreRef = useRef<boolean>(true);
   const loadedRangesRef = useRef<Set<string>>(new Set());
-  // 🔥 FIX #20: Debounce — не более 1 запроса в 300ms при быстром скролле
-  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pendingViewportRef = useRef<Viewport | null>(null);
+  // 🔥 FIX: AbortController — отмена in-flight запросов при reset/смене таймфрейма
+  const abortControllerRef = useRef<AbortController | null>(null);
+  // Минимальный throttle — не чаще 1 вызова в 50ms (смягчает спайки при быстром pan)
+  const lastCallTimeRef = useRef<number>(0);
 
   /** FLOW P: всегда брать текущий инструмент при запросе — колбэк pan может быть из старого рендера */
   const assetRef = useRef(asset);
   assetRef.current = asset;
+
+  const timeframeRef = useRef(timeframe);
+  timeframeRef.current = timeframe;
 
   /**
    * Получить текущее состояние
@@ -110,11 +114,16 @@ export function useHistoryLoader({
     isLoadingRef.current = true;
     loadedRangesRef.current.add(rangeKey);
 
+    // 🔥 FIX: Отменяем предыдущий in-flight запрос и создаём новый AbortController
+    abortControllerRef.current?.abort();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     try {
-      const url = `/api/quotes/candles?instrument=${encodeURIComponent(currentInstrument)}&timeframe=${encodeURIComponent(timeframe)}&to=${toTime}&limit=${HISTORY_LIMIT}`;
+      const url = `/api/quotes/candles?instrument=${encodeURIComponent(currentInstrument)}&timeframe=${encodeURIComponent(timeframeRef.current)}&to=${toTime}&limit=${HISTORY_LIMIT}`;
 
       // Формат ответа: { items: SnapshotCandle[] } или SnapshotCandle[]
-      const response = await api<{ items: SnapshotCandle[] } | SnapshotCandle[]>(url);
+      const response = await api<{ items: SnapshotCandle[] } | SnapshotCandle[]>(url, { signal: controller.signal });
       
       // Нормализуем формат ответа
       let items: SnapshotCandle[];
@@ -149,6 +158,10 @@ export function useHistoryLoader({
 
       isLoadingRef.current = false;
     } catch (error) {
+      // 🔥 FIX: Игнорируем отменённые запросы (AbortController)
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        return;
+      }
       console.error('Failed to load history:', error);
       isLoadingRef.current = false;
       // 🔥 FIX: Удаляем rangeKey при ошибке — иначе повторная загрузка заблокирована навсегда
@@ -157,37 +170,21 @@ export function useHistoryLoader({
     }
   };
 
-  /**
-   * 🔥 FIX #20: Debounced wrapper — при быстром скролле откладывает запрос на 300ms
-   * Сразу загружает если не было запросов недавно, иначе debounce
-   */
-  const DEBOUNCE_MS = 300;
+  const THROTTLE_MS = 50; // Капелька задержки — не чаще 1 вызова в 50ms
   const maybeLoadMore = (viewport: Viewport): void => {
-    pendingViewportRef.current = viewport;
-
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current);
-    }
-
-    debounceTimerRef.current = setTimeout(() => {
-      debounceTimerRef.current = null;
-      const vp = pendingViewportRef.current;
-      if (vp) {
-        pendingViewportRef.current = null;
-        doLoadMore(vp);
-      }
-    }, DEBOUNCE_MS);
+    const now = performance.now();
+    if (now - lastCallTimeRef.current < THROTTLE_MS) return;
+    lastCallTimeRef.current = now;
+    doLoadMore(viewport);
   };
 
   const reset = (): void => {
+    // 🔥 FIX: Отменяем in-flight HTTP запрос при reset (смена таймфрейма/инструмента)
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
     loadedRangesRef.current = new Set();
     hasMoreRef.current = true;
     isLoadingRef.current = false;
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current);
-      debounceTimerRef.current = null;
-    }
-    pendingViewportRef.current = null;
   };
 
   return {

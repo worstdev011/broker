@@ -16,9 +16,13 @@ import {
 import { hashToken } from '../../utils/crypto.js';
 import { getSessionToken } from '../../infrastructure/auth/CookieAuthAdapter.js';
 import { logger } from '../../shared/logger.js';
+import type { AccountRepository } from '../../ports/repositories/AccountRepository.js';
 
 export class UserController {
-  constructor(private userService: UserService) {}
+  constructor(
+    private userService: UserService,
+    private accountRepository?: AccountRepository,
+  ) {}
 
   /**
    * GET /api/user/profile
@@ -34,6 +38,15 @@ export class UserController {
       }
 
       const profile = await this.userService.getProfile(userId);
+
+      // 🔥 Синхрон валюты: если у юзера задана валюта, а у счетов — другая (старые юзеры до фикса), подтянуть
+      if (profile.currency && this.accountRepository) {
+        const activeAccount = await this.accountRepository.findActiveByUserId(userId);
+        if (activeAccount && activeAccount.currency !== profile.currency) {
+          await this.accountRepository.updateCurrencyByUserId(userId, profile.currency);
+        }
+      }
+
       return reply.send({ user: profile });
     } catch (error) {
       if (error instanceof UserNotFoundError) {
@@ -62,6 +75,7 @@ export class UserController {
         nickname?: string;
         phone?: string;
         country?: string;
+        currency?: string;
         dateOfBirth?: string; // ISO date string
         avatarUrl?: string;
       };
@@ -78,6 +92,17 @@ export class UserController {
 
       const body = request.body;
 
+      // 🔥 Currency immutability: если уже установлена, нельзя менять
+      if (body.currency !== undefined) {
+        const currentProfile = await this.userService.getProfile(userId);
+        if (currentProfile.currency) {
+          return reply.status(400).send({
+            error: 'Currency already set',
+            message: 'Currency cannot be changed once set',
+          });
+        }
+      }
+
       // 🔥 FLOW U1.1: Convert dateOfBirth string to Date if provided
       // Валидация формата уже выполнена Fastify schema (format: 'date')
       const updateData: {
@@ -86,6 +111,7 @@ export class UserController {
         nickname?: string | null;
         phone?: string | null;
         country?: string | null;
+        currency?: string | null;
         dateOfBirth?: Date | null;
         avatarUrl?: string | null;
       } = {};
@@ -95,6 +121,7 @@ export class UserController {
       if (body.nickname !== undefined) updateData.nickname = body.nickname || null;
       if (body.phone !== undefined) updateData.phone = body.phone || null;
       if (body.country !== undefined) updateData.country = body.country || null;
+      if (body.currency !== undefined) updateData.currency = body.currency || null;
       if (body.dateOfBirth !== undefined) {
         // Парсим ISO date string (YYYY-MM-DD) в Date объект
         // null передается как null (не undefined)
@@ -103,6 +130,12 @@ export class UserController {
       if (body.avatarUrl !== undefined) updateData.avatarUrl = body.avatarUrl || null;
 
       const profile = await this.userService.updateProfile(userId, updateData);
+
+      // 🔥 Синхрон валюты: при первом выборе валюты обновить все счета пользователя
+      if (body.currency !== undefined && body.currency && this.accountRepository) {
+        await this.accountRepository.updateCurrencyByUserId(userId, body.currency);
+      }
+
       return reply.send({ user: profile });
     } catch (error) {
       if (error instanceof NicknameAlreadyTakenError) {

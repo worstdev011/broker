@@ -7,7 +7,8 @@ export const dynamic = 'force-dynamic'
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  viewportFit: 'cover', // iOS Safari: safe-area-inset работает только с cover
+  viewportFit: 'cover',
+  themeColor: '#061230',
 }
 
 const montserrat = Montserrat({
@@ -15,16 +16,17 @@ const montserrat = Montserrat({
   variable: '--font-montserrat',
   display: 'swap',
   weight: ['400', '500', '600', '700'],
-  fallback: ['system-ui', 'arial'], // Fallback на случай проблем с загрузкой
+  fallback: ['system-ui', 'arial'],
 })
 
 export const metadata: Metadata = {
-  title: {
-    default: 'COMFORTRADE - Торговля на финансовых рынках',
-    template: '%s | COMFORTRADE',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
   },
-  description: 'Торгуйте на валютных парах, криптовалютах и других активах. Современная платформа с интуитивным интерфейсом, техническими индикаторами и инструментами анализа.',
-  keywords: ['валютный рынок', 'торговля', 'форекс', 'криптовалюта', 'финансовые рынки', 'трейдинг'],
+  other: {
+    'theme-color': '#061230',
+  },
   icons: {
     icon: [
       { url: '/images/logo.png', sizes: '32x32', type: 'image/png' },
@@ -35,13 +37,6 @@ export const metadata: Metadata = {
     ],
     shortcut: '/images/logo.png',
   },
-  openGraph: {
-    type: 'website',
-    locale: 'ru_RU',
-    siteName: 'COMFORTRADE',
-    title: 'COMFORTRADE - Торговля на финансовых рынках',
-    description: 'Торгуйте на валютных парах, криптовалютах и других активах.',
-  },
 }
 
 export default function RootLayout({
@@ -50,7 +45,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className={montserrat.variable}>
+    <html className={montserrat.variable}>
       <body className={montserrat.className}>{children}</body>
     </html>
   )

@@ -7,19 +7,21 @@
 import type { Viewport } from '../viewport.types';
 
 interface RenderPriceLineParams {
-  ctx: CanvasRenderingContext2D; // Нативный тип браузера
+  ctx: CanvasRenderingContext2D;
   viewport: Viewport;
   currentPrice: number;
   width: number;
   height: number;
-  /** Количество знаков после запятой для цен (по инструменту). */
   digits?: number;
+  previousPrice?: number | null;
 }
 
-const PRICE_LINE_COLOR = 'rgba(64, 100, 143, 0.5)'; // Цвет как у кроссхейра
-const PRICE_LINE_WIDTH = 2; // Толщина как у линии экспирации
-const LABEL_COLOR = '#ffffff'; // Белый текст как у кроссхейра
-const LABEL_BG_COLOR = '#40648f'; // Цвет фона как у кроссхейра
+const PRICE_LINE_COLOR = 'rgba(64, 100, 143, 0.5)';
+const PRICE_LINE_WIDTH = 1;
+const LABEL_COLOR = '#ffffff';
+const LABEL_BG_UP = '#26a69a';
+const LABEL_BG_DOWN = '#ef5350';
+const LABEL_BG_NEUTRAL = '#40648f';
 const LABEL_FONT = '12px monospace'; // Шрифт как у кроссхейра
 const LABEL_PADDING = 6;
 const LABEL_BORDER_RADIUS = 6; // Скругление как у кроссхейра
@@ -52,6 +54,7 @@ export function renderPriceLine({
   width,
   height,
   digits,
+  previousPrice,
 }: RenderPriceLineParams): void {
   const y = priceToY(currentPrice, viewport, height);
 
@@ -66,34 +69,34 @@ export function renderPriceLine({
   const TIME_LABEL_HEIGHT = 25; // Высота области меток времени
   const maxX = width - PRICE_LABEL_AREA_WIDTH;
 
-  // Рисуем горизонтальную линию (ограничиваем по ширине и высоте)
+  const sy = Math.round(y) + 0.5;
+
   ctx.strokeStyle = PRICE_LINE_COLOR;
   ctx.lineWidth = PRICE_LINE_WIDTH;
-  ctx.setLineDash([]);
+  ctx.setLineDash([6, 4]);
   ctx.beginPath();
-  ctx.moveTo(0, y);
-  // Ограничиваем линию, чтобы не перекрывать метки цены и времени
-  ctx.lineTo(maxX, y);
+  ctx.moveTo(0, sy);
+  ctx.lineTo(maxX, sy);
   ctx.stroke();
+  ctx.setLineDash([]);
 
-  // Рисуем label справа в области меток цены (как у кроссхейра)
-  const label = formatPrice(currentPrice, digits);
+  const isUp = previousPrice != null && currentPrice > previousPrice;
+  const isDown = previousPrice != null && currentPrice < previousPrice;
+  const arrow = isUp ? ' ▲' : isDown ? ' ▼' : '';
+  const label = formatPrice(currentPrice, digits) + arrow;
+  const bgColor = isUp ? LABEL_BG_UP : isDown ? LABEL_BG_DOWN : LABEL_BG_NEUTRAL;
+
   ctx.font = LABEL_FONT;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
 
-  // Вычисляем позицию метки в области меток цены
-  const backgroundTop = y - PRICE_LABEL_HEIGHT / 2;
-  const backgroundCenter = backgroundTop + PRICE_LABEL_HEIGHT / 2;
   const labelX = width - PRICE_LABEL_AREA_WIDTH + LABEL_PADDING;
 
-  // Ограничиваем позицию по вертикали, чтобы метка не выходила за границы
   const clampedY = Math.max(PRICE_LABEL_HEIGHT / 2, Math.min(y, height - TIME_LABEL_HEIGHT - PRICE_LABEL_HEIGHT / 2));
   const clampedBackgroundTop = clampedY - PRICE_LABEL_HEIGHT / 2;
   const clampedBackgroundCenter = clampedBackgroundTop + PRICE_LABEL_HEIGHT / 2;
 
-  // Фон для label (как у кроссхейра)
-  ctx.fillStyle = LABEL_BG_COLOR;
+  ctx.fillStyle = bgColor;
   ctx.beginPath();
   ctx.roundRect(
     width - PRICE_LABEL_AREA_WIDTH,
@@ -104,7 +107,6 @@ export function renderPriceLine({
   );
   ctx.fill();
 
-  // Текст label (белый как у кроссхейра)
   ctx.fillStyle = LABEL_COLOR;
   ctx.fillText(label, labelX, clampedBackgroundCenter);
 

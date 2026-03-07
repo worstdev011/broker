@@ -62,7 +62,7 @@ describe('Trade Flow Integration', () => {
           direction: 'CALL',
           amount: 10,
           expirationSeconds: 5,
-          instrument: 'EURUSD',
+          instrument: 'EURUSD_OTC',
         },
       });
 
@@ -71,7 +71,7 @@ describe('Trade Flow Integration', () => {
       expect(body.trade).toBeDefined();
       expect(body.trade.id).toBeDefined();
       expect(body.trade.status).toBe('OPEN');
-      expect(body.trade.instrument).toBe('EURUSD');
+      expect(body.trade.instrument).toBe('EURUSD_OTC');
 
       // Balance should be deducted (10000 - 10 = 9990)
       const snapshotRes = await app!.inject({
@@ -93,7 +93,7 @@ describe('Trade Flow Integration', () => {
           direction: 'CALL',
           amount: 10,
           expirationSeconds: 5,
-          instrument: 'EURUSD',
+          instrument: 'EURUSD_OTC',
         },
       });
       expect(res.statusCode).toBe(401);
@@ -123,7 +123,7 @@ describe('Trade Flow Integration', () => {
           direction: 'CALL',
           amount: 50,
           expirationSeconds: 5,
-          instrument: 'EURUSD',
+          instrument: 'EURUSD_OTC',
         },
       });
       expect(openRes.statusCode).toBe(201);

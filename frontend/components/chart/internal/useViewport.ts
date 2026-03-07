@@ -42,17 +42,13 @@ interface UseViewportParams {
 
 // 🔥 FLOW: Timeframe-aware visibleCandles - UX константы
 const TARGET_CANDLE_PX = 14; // Визуально комфортная ширина свечи в пикселях
-const MIN_VISIBLE_CANDLES = 20; // Минимум свечей на экране
+const MIN_VISIBLE_CANDLES = 35; // Минимум свечей (ограничение max zoom in)
 const MAX_VISIBLE_CANDLES = 300; // Максимум свечей на экране
 const BASE_TIMEFRAME_MS = 5000; // Базовый таймфрейм (5s) в миллисекундах
 
-/** Длительность и эйзинг анимации сдвига в follow mode (как у candle animator) */
-const FOLLOW_SHIFT_DURATION_MS = 320;
+const FOLLOW_SHIFT_DURATION_MS = 200;
 const easeOutCubic = (t: number): number => 1 - Math.pow(1 - t, 3);
 const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
-
-/** 🔥 FLOW Y-SMOOTH: Плавная анимация Y-оси при pan/scroll */
-const Y_ANIMATION_DURATION_MS = 120; // Быстрая, но плавная (не желейная)
 
 interface UseViewportReturn {
   viewportRef: React.RefObject<Viewport | null>;
@@ -207,6 +203,24 @@ function calculatePriceRange(
   };
 }
 
+/**
+ * Применяет масштабный коэффициент к авто-диапазону цен.
+ * Масштабирование от центра диапазона.
+ * scaleFactor = 1.0 → без изменений, > 1.0 → шире (zoom out), < 1.0 → уже (zoom in)
+ */
+function applyYScaleFactor(
+  priceRange: { priceMin: number; priceMax: number },
+  scaleFactor: number
+): { priceMin: number; priceMax: number } {
+  const mid = (priceRange.priceMin + priceRange.priceMax) / 2;
+  const range = priceRange.priceMax - priceRange.priceMin;
+  const scaledRange = range * scaleFactor;
+  return {
+    priceMin: mid - scaledRange / 2,
+    priceMax: mid + scaledRange / 2,
+  };
+}
+
 export function useViewport({
   getCandles,
   getLiveCandle,
@@ -250,11 +264,15 @@ export function useViewport({
   const yDragRef = useRef<{
     startY: number;
     startRange: number;
+    autoRange: number; // авто-диапазон на момент начала drag (для вычисления yScaleFactor)
   } | null>(null);
 
-  // 🔥 FLOW RETURN-TO-FOLLOW: Автоматический возврат в follow mode после pan (сохраняет масштаб)
+  const yScaleFactorRef = useRef<number>(1.0);
+  /** Timestamp of the last Y-lerp step for time-based interpolation */
+  const lastYLerpTimeRef = useRef<number>(0);
+
   const returnToFollowTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const RETURN_TO_FOLLOW_DELAY_MS = 5000; // 5 секунд задержка
+  const RETURN_TO_FOLLOW_DELAY_MS = 3000;
 
   /**
    * Пересчет viewport на основе текущих данных
@@ -303,26 +321,30 @@ export function useViewport({
 
       const visibleCandlesList = getVisibleCandles(candles, liveCandle, timeStart, timeEnd);
       const currentYMode = viewportRef.current?.yMode || 'auto';
+
+      const priceRange = calculatePriceRange(visibleCandlesList, yPaddingRatio);
+      if (!priceRange) {
+        viewportRef.current = {
+          timeStart,
+          timeEnd,
+          priceMin: 0,
+          priceMax: 100,
+          yMode: 'auto',
+        };
+        targetViewportRef.current = null;
+        followAnimationStartRef.current = null;
+        return;
+      }
+
       let priceMin: number;
       let priceMax: number;
 
-      if (currentYMode === 'manual' && viewportRef.current) {
-        priceMin = viewportRef.current.priceMin;
-        priceMax = viewportRef.current.priceMax;
+      // 🔥 FLOW Y2: manual → авто-диапазон * yScaleFactor
+      if (currentYMode === 'manual') {
+        const scaled = applyYScaleFactor(priceRange, yScaleFactorRef.current);
+        priceMin = scaled.priceMin;
+        priceMax = scaled.priceMax;
       } else {
-        const priceRange = calculatePriceRange(visibleCandlesList, yPaddingRatio);
-        if (!priceRange) {
-          viewportRef.current = {
-            timeStart,
-            timeEnd,
-            priceMin: 0,
-            priceMax: 100,
-            yMode: 'auto',
-          };
-          targetViewportRef.current = null;
-          followAnimationStartRef.current = null;
-          return;
-        }
         priceMin = priceRange.priceMin;
         priceMax = priceRange.priceMax;
       }
@@ -390,29 +412,29 @@ export function useViewport({
     // Получаем видимые свечи
     const visibleCandlesList = getVisibleCandles(candles, liveCandle, timeStart, timeEnd);
 
-    // 🔥 FLOW Y1: Auto-fit по Y только если yMode === 'auto'
+    // Auto-fit по Y: вычисляем priceMin и priceMax
     const currentYMode = viewportRef.current?.yMode || 'auto';
+    const priceRange = calculatePriceRange(visibleCandlesList, yPaddingRatio);
+    if (!priceRange) {
+      viewportRef.current = {
+        timeStart,
+        timeEnd,
+        priceMin: 0,
+        priceMax: 100,
+        yMode: 'auto',
+      };
+      return;
+    }
+
     let priceMin: number;
     let priceMax: number;
 
-    if (currentYMode === 'manual' && viewportRef.current) {
-      // Сохраняем текущие Y значения
-      priceMin = viewportRef.current.priceMin;
-      priceMax = viewportRef.current.priceMax;
+    // 🔥 FLOW Y2: manual → авто-диапазон * yScaleFactor
+    if (currentYMode === 'manual') {
+      const scaled = applyYScaleFactor(priceRange, yScaleFactorRef.current);
+      priceMin = scaled.priceMin;
+      priceMax = scaled.priceMax;
     } else {
-      // Auto-fit по Y: вычисляем priceMin и priceMax
-      const priceRange = calculatePriceRange(visibleCandlesList, yPaddingRatio);
-      if (!priceRange) {
-        // Если нет видимых свечей, используем дефолтные значения
-        viewportRef.current = {
-          timeStart,
-          timeEnd,
-          priceMin: 0,
-          priceMax: 100,
-          yMode: 'auto',
-        };
-        return;
-      }
       priceMin = priceRange.priceMin;
       priceMax = priceRange.priceMax;
     }
@@ -430,16 +452,15 @@ export function useViewport({
   /**
    * Обновление только Y масштаба (auto-fit) без изменения X
    * Используется при обновлении данных (price update)
-   * 🔥 FLOW Y1: Не обновляет Y если yMode === 'manual'
+   * 🔥 FLOW Y2: В manual режиме применяет yScaleFactor к авто-диапазону
+   *   (вместо полного пропуска Y — авто-масштаб работает с пользовательским зумом)
    */
   const recalculateYOnly = (): void => {
     const currentViewport = viewportRef.current;
     if (!currentViewport) return;
 
-    // 🔥 FLOW Y1: Если yMode === 'manual', не трогаем Y
-    if (currentViewport.yMode === 'manual') {
-      return;
-    }
+    // Не мешаем активному drag
+    if (yDragRef.current) return;
 
     const candles = getCandles();
     const liveCandle = getLiveCandle();
@@ -458,6 +479,18 @@ export function useViewport({
 
     if (!priceRange) {
       return; // Не меняем viewport если нет видимых свечей
+    }
+
+    // 🔥 FLOW Y2: Если manual — применяем yScaleFactor к авто-диапазону
+    if (currentViewport.yMode === 'manual') {
+      const scaled = applyYScaleFactor(priceRange, yScaleFactorRef.current);
+      viewportRef.current = {
+        ...currentViewport,
+        priceMin: scaled.priceMin,
+        priceMax: scaled.priceMax,
+        yMode: 'manual',
+      };
+      return;
     }
 
     // Обновляем ТОЛЬКО Y, X остается прежним
@@ -503,18 +536,6 @@ export function useViewport({
 
     const currentViewport = viewportRef.current;
     const currentYMode = currentViewport?.yMode || 'auto';
-    
-    // 🔥 FLOW Y1: Если yMode === 'manual', сохраняем текущие Y значения
-    if (currentYMode === 'manual' && currentViewport) {
-      viewportRef.current = {
-        timeStart: vp.timeStart,
-        timeEnd: vp.timeEnd,
-        priceMin: currentViewport.priceMin,
-        priceMax: currentViewport.priceMax,
-        yMode: 'manual',
-      };
-      return;
-    }
 
     // Получаем видимые свечи в новом viewport
     const visibleCandles = getVisibleCandles(
@@ -535,27 +556,40 @@ export function useViewport({
         timeEnd: vp.timeEnd,
         priceMin: 0,
         priceMax: 100,
-        yMode: 'auto',
+        yMode: currentYMode,
       };
       return;
     }
 
-    // 🔥 FLOW Y-SMOOTH: Простой lerp для плавности (без отдельной анимации)
-    // Интерполируем Y к целевому значению за один кадр
-    const currentMin = currentViewport?.priceMin ?? priceRange.priceMin;
-    const currentMax = currentViewport?.priceMax ?? priceRange.priceMax;
+    // 🔥 FLOW Y2: manual → авто-диапазон * yScaleFactor (с lerp для плавности)
+    // Целевые значения Y
+    let targetMin: number;
+    let targetMax: number;
+    if (currentYMode === 'manual') {
+      const scaled = applyYScaleFactor(priceRange, yScaleFactorRef.current);
+      targetMin = scaled.priceMin;
+      targetMax = scaled.priceMax;
+    } else {
+      targetMin = priceRange.priceMin;
+      targetMax = priceRange.priceMax;
+    }
+
+    const currentMin = currentViewport?.priceMin ?? targetMin;
+    const currentMax = currentViewport?.priceMax ?? targetMax;
     
-    // 🔥 FIX #18: Пропускаем lerp если цель уже достигнута (epsilon < 0.0001 пункта)
     const EPSILON = 0.0001;
-    const minDiff = Math.abs(currentMin - priceRange.priceMin);
-    const maxDiff = Math.abs(currentMax - priceRange.priceMax);
+    const minDiff = Math.abs(currentMin - targetMin);
+    const maxDiff = Math.abs(currentMax - targetMax);
     const alreadyAtTarget = minDiff < EPSILON && maxDiff < EPSILON;
 
-    // Коэффициент сглаживания: 0.3 = 30% движения к цели за кадр
-    // Это даёт плавность без "желейности"
-    const smoothFactor = 0.3;
-    const smoothedMin = alreadyAtTarget ? priceRange.priceMin : lerp(currentMin, priceRange.priceMin, smoothFactor);
-    const smoothedMax = alreadyAtTarget ? priceRange.priceMax : lerp(currentMax, priceRange.priceMax, smoothFactor);
+    // Time-based smoothing: consistent across all refresh rates (60/120/144hz)
+    const now = performance.now();
+    const dt = now - (lastYLerpTimeRef.current || now);
+    lastYLerpTimeRef.current = now;
+    const BASE_SMOOTH = 0.3;
+    const smoothFactor = alreadyAtTarget ? 1 : 1 - Math.pow(1 - BASE_SMOOTH, dt / 16.67);
+    const smoothedMin = lerp(currentMin, targetMin, smoothFactor);
+    const smoothedMax = lerp(currentMax, targetMax, smoothFactor);
 
     // Обновляем viewport с плавным Y
     viewportRef.current = {
@@ -563,7 +597,7 @@ export function useViewport({
       timeEnd: vp.timeEnd,
       priceMin: smoothedMin,
       priceMax: smoothedMax,
-      yMode: 'auto',
+      yMode: currentYMode,
     };
   };
 
@@ -653,15 +687,19 @@ export function useViewport({
 
     const visibleCandlesList = getVisibleCandles(candles, liveCandle ?? null, timeStart, timeEnd);
     const currentYMode = viewportRef.current?.yMode || 'auto';
+    
+    const priceRange = calculatePriceRange(visibleCandlesList, yPaddingRatio);
+    if (!priceRange) return;
+
     let priceMin: number;
     let priceMax: number;
 
-    if (currentYMode === 'manual' && viewportRef.current) {
-      priceMin = viewportRef.current.priceMin;
-      priceMax = viewportRef.current.priceMax;
+    // 🔥 FLOW Y2: manual → авто-диапазон * yScaleFactor
+    if (currentYMode === 'manual') {
+      const scaled = applyYScaleFactor(priceRange, yScaleFactorRef.current);
+      priceMin = scaled.priceMin;
+      priceMax = scaled.priceMax;
     } else {
-      const priceRange = calculatePriceRange(visibleCandlesList, yPaddingRatio);
-      if (!priceRange) return;
       priceMin = priceRange.priceMin;
       priceMax = priceRange.priceMax;
     }
@@ -744,23 +782,24 @@ export function useViewport({
       
       const visibleCandlesList = getVisibleCandles(candles, liveCandle ?? null, timeStart, timeEnd);
       const currentYMode = currentVp.yMode || 'auto';
+      
+      const priceRange = calculatePriceRange(visibleCandlesList, yPaddingRatio);
       let priceMin: number;
       let priceMax: number;
-      
-      if (currentYMode === 'manual') {
+
+      if (!priceRange) {
+        // Не можем вычислить цены — включаем follow mode, используем текущие Y
+        followModeRef.current = true;
         priceMin = currentVp.priceMin;
         priceMax = currentVp.priceMax;
+      } else if (currentYMode === 'manual') {
+        // 🔥 FLOW Y2: manual → авто-диапазон * yScaleFactor
+        const scaled = applyYScaleFactor(priceRange, yScaleFactorRef.current);
+        priceMin = scaled.priceMin;
+        priceMax = scaled.priceMax;
       } else {
-        const priceRange = calculatePriceRange(visibleCandlesList, yPaddingRatio);
-        if (!priceRange) {
-          // Не можем вычислить цены — включаем follow mode, используем текущие Y
-          followModeRef.current = true;
-          priceMin = currentVp.priceMin;
-          priceMax = currentVp.priceMax;
-        } else {
-          priceMin = priceRange.priceMin;
-          priceMax = priceRange.priceMax;
-        }
+        priceMin = priceRange.priceMin;
+        priceMax = priceRange.priceMax;
       }
       
       const target: Viewport = {
@@ -815,15 +854,25 @@ export function useViewport({
     recalculateViewport();
   };
 
-  // 🔥 FLOW Y1: Y-scale drag методы
+  // 🔥 FLOW Y1 + Y2: Y-scale drag методы
   const beginYScaleDrag = (startY: number): void => {
     const viewport = viewportRef.current;
     if (!viewport) return;
 
     const startRange = viewport.priceMax - viewport.priceMin;
+
+    // Вычисляем авто-диапазон для текущих видимых свечей
+    const candles_ = getCandles();
+    const liveCandle_ = getLiveCandle();
+    const { yPaddingRatio } = configRef.current;
+    const visibleCandlesList = getVisibleCandles(candles_, liveCandle_, viewport.timeStart, viewport.timeEnd);
+    const autoRange_ = calculatePriceRange(visibleCandlesList, yPaddingRatio);
+    const autoRangeValue = autoRange_ ? (autoRange_.priceMax - autoRange_.priceMin) : startRange;
+
     yDragRef.current = {
       startY,
       startRange,
+      autoRange: autoRangeValue,
     };
 
     // Переключаем в manual режим
@@ -849,6 +898,9 @@ export function useViewport({
     
     const newRange = Math.max(minRange, Math.min(maxRange, dragState.startRange * scaleFactor));
 
+    // 🔥 FLOW Y2: Обновляем yScaleFactor = newRange / autoRange
+    yScaleFactorRef.current = newRange / dragState.autoRange;
+
     // Центр масштабирования - середина текущего диапазона
     const mid = (viewport.priceMin + viewport.priceMax) / 2;
     const newPriceMin = mid - newRange / 2;
@@ -870,6 +922,9 @@ export function useViewport({
   const resetYScale = (): void => {
     const viewport = viewportRef.current;
     if (!viewport) return;
+
+    // 🔥 FLOW Y2: Сбрасываем коэффициент масштабирования
+    yScaleFactorRef.current = 1.0;
 
     // Переключаем обратно в auto режим и пересчитываем
     viewportRef.current = {
@@ -927,8 +982,9 @@ export function useViewport({
     targetViewportRef.current = null;
     followAnimationStartRef.current = null;
     
-    // Очищаем Y-scale drag
+    // Очищаем Y-scale drag и сбрасываем масштаб
     yDragRef.current = null;
+    yScaleFactorRef.current = 1.0;
     
     // Очищаем якорь времени
     latestCandleTimeRef.current = null;
@@ -946,20 +1002,19 @@ export function useViewport({
    * 🔥 FLOW C-INERTIA: Pan inertia tick (ядро инерции)
    * Применяет velocity к viewport, уменьшает её с friction, останавливает при затухании
    */
-  const PAN_FRICTION = 0.92;
+  const PAN_FRICTION_PER_16MS = 0.92;
   const PAN_STOP_EPSILON = 0.02;
+  const lastInertiaTimeRef = useRef<number>(0);
 
   const advancePanInertia = (now: number): void => {
     if (!panInertiaRefs) return;
 
-    // FLOW C-MARKET-CLOSED: когда рынок закрыт, не применяем инерцию
     if (getMarketStatus && getMarketStatus() !== 'OPEN') {
       panInertiaRefs.activeRef.current = false;
       panInertiaRefs.velocityRef.current = 0;
       return;
     }
 
-    // 🔥 FLOW C-INERTIA: Инвариант - инерция и follow mode не могут работать вместе
     if (followModeRef.current) {
       panInertiaRefs.activeRef.current = false;
       panInertiaRefs.velocityRef.current = 0;
@@ -970,10 +1025,8 @@ export function useViewport({
 
     const velocity = panInertiaRefs.velocityRef.current;
     if (Math.abs(velocity) < PAN_STOP_EPSILON) {
-      // Скорость слишком мала, останавливаем инерцию
       panInertiaRefs.activeRef.current = false;
       panInertiaRefs.velocityRef.current = 0;
-      // Return-to-follow уже запланирован из handleMouseUp
       return;
     }
 
@@ -983,8 +1036,10 @@ export function useViewport({
     const canvas = canvasRef?.current;
     if (!canvas) return;
 
-    // Применяем velocity за один кадр (~16ms)
-    const dt = 16;
+    // Real delta-time for frame-rate independent inertia
+    const prev = lastInertiaTimeRef.current || now;
+    const dt = Math.min(now - prev, 64); // cap to avoid spiral after tab switch
+    lastInertiaTimeRef.current = now;
     const deltaX = velocity * dt;
 
     // Вычисляем pixelsPerMs
@@ -1004,8 +1059,8 @@ export function useViewport({
     // Вызываем callback для загрузки истории (FLOW G6) - вызывается из useChart через ref
     onViewportChangeRef?.current?.(newViewport);
 
-    // Уменьшаем скорость с friction
-    panInertiaRefs.velocityRef.current *= PAN_FRICTION;
+    // Time-based friction: consistent deceleration across all refresh rates
+    panInertiaRefs.velocityRef.current *= Math.pow(PAN_FRICTION_PER_16MS, dt / 16);
   };
 
   // Первоначальный расчет viewport

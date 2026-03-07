@@ -7,16 +7,19 @@
 import { getChartSettings } from '@/lib/chartSettings';
 
 /**
- * Форматирует instrumentId в читаемый label: "EURUSD_otc" → "EUR/USD OTC"
+ * Форматирует instrumentId в читаемый label.
+ * Real пары — без суффикса (EUR/USD). OTC пары — с суффиксом "OTC" (EUR/USD OTC).
  */
 function formatInstrumentLabel(instrumentId: string): string {
   let id = instrumentId;
   let suffix = '';
 
-  // Обрабатываем _otc суффикс
-  if (id.endsWith('_otc')) {
+  if (id.endsWith('_OTC')) {
     suffix = ' OTC';
     id = id.slice(0, -4);
+  } else if (id.endsWith('_REAL')) {
+    suffix = ''; // Real — без суффикса (основные рыночные котировки)
+    id = id.slice(0, -5);
   }
 
   // Пытаемся разделить на пары (6 символов = 3+3, например EURUSD → EUR/USD)
@@ -25,7 +28,6 @@ function formatInstrumentLabel(instrumentId: string): string {
   }
 
   // Крипто-пары (BTCUSD → BTC/USD)
-  // Ищем известные quote currencies в конце
   const quoteCurrencies = ['USD', 'EUR', 'GBP', 'JPY', 'BTC', 'ETH', 'USDT'];
   for (const quote of quoteCurrencies) {
     if (id.endsWith(quote) && id.length > quote.length) {

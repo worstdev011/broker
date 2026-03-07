@@ -94,6 +94,26 @@ export function showTradeOpenToast(data: TradeOpenPayload & { id: string }): voi
   });
 }
 
+/** Показать тост результата сделки (WIN/LOSS/TIE) */
+export function showTradeCloseToast(data: {
+  result: 'WIN' | 'LOSS' | 'TIE';
+  amount: string;
+  payout: string;
+  direction: 'CALL' | 'PUT';
+  instrument: string;
+}): void {
+  const amt = parseFloat(data.amount);
+  const pay = parseFloat(data.payout);
+  if (data.result === 'WIN') {
+    const profit = amt * pay;
+    useToastStore.getState().toast(`+${profit.toFixed(2)} USD`, 'success', { duration: 4000 });
+  } else if (data.result === 'LOSS') {
+    useToastStore.getState().toast(`-${amt.toFixed(2)} USD`, 'error', { duration: 4000 });
+  } else {
+    useToastStore.getState().toast(`Ничья: возврат ${amt.toFixed(2)} USD`, 'info', { duration: 4000 });
+  }
+}
+
 /** Снять тост по ключу (например тост «сделка открыта» по tradeId при закрытии сделки) */
 export function dismissToastByKey(key: string): void {
   useToastStore.getState().dismissByKey(key);

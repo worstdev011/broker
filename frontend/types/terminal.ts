@@ -4,7 +4,7 @@
  */
 
 export interface TerminalSnapshot {
-  instrument: string; // BTCUSD, EURUSD, AUDCAD
+  instrument: string; // EURUSD_OTC, EURUSD_REAL, AUDCAD_OTC
   user: {
     id: string;
     email: string;

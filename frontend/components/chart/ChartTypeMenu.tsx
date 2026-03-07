@@ -1,12 +1,12 @@
 /**
  * ChartTypeMenu — выпадающее меню для выбора типа графика
  * Свечи/Линия + режимы свечей (Classic/Heikin Ashi/Bars)
+ * Иконки из public/images: liner.png, candler.png, barser.png, ashier.png
  */
 
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { ChevronDown, TrendingUp, BarChart3, Gauge, LineChart } from 'lucide-react';
 import type { ChartType } from './chart.types';
 import type { CandleMode } from './internal/candleModes/candleMode.types';
 
@@ -21,12 +21,12 @@ const CHART_OPTIONS: Array<{
   chartType: ChartType;
   candleMode?: CandleMode;
   label: string;
-  icon: React.ComponentType<{ className?: string }>;
+  iconSrc: string;
 }> = [
-  { chartType: 'line', label: 'Линия', icon: TrendingUp },
-  { chartType: 'candles', candleMode: 'classic', label: 'Свечи', icon: BarChart3 },
-  { chartType: 'candles', candleMode: 'bars', label: 'Столбцы', icon: BarChart3 },
-  { chartType: 'candles', candleMode: 'heikin_ashi', label: 'Heikin Ashi', icon: Gauge },
+  { chartType: 'line', label: 'Линия', iconSrc: '/images/liner.png' },
+  { chartType: 'candles', candleMode: 'classic', label: 'Свечи', iconSrc: '/images/candler.png' },
+  { chartType: 'candles', candleMode: 'bars', label: 'Столбцы', iconSrc: '/images/barser.png' },
+  { chartType: 'candles', candleMode: 'heikin_ashi', label: 'Heikin Ashi', iconSrc: '/images/ashier.png' },
 ];
 
 export function ChartTypeMenu({
@@ -57,27 +57,31 @@ export function ChartTypeMenu({
     };
   }, [isOpen]);
 
+  const currentOption = CHART_OPTIONS.find(
+    (opt) =>
+      opt.chartType === chartType &&
+      (chartType === 'line' || opt.candleMode === candleMode)
+  );
+  const triggerIconSrc = currentOption?.iconSrc ?? '/images/candler.png';
+
   return (
     <div className="relative" ref={menuRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="px-3.5 py-2 rounded-md text-sm font-semibold transition-colors flex items-center justify-center text-white md:hover:bg-white/10"
-        title="Тип графика"
-        style={{ width: '44px', height: '36px', minWidth: '44px', maxWidth: '44px' }}
+        className="rounded-md text-sm font-semibold transition-colors flex items-center justify-center text-white md:hover:bg-white/10 p-1 min-w-[36px] min-h-[32px]"
+        title={currentOption ? `Тип графика: ${currentOption.label}` : 'Тип графика'}
       >
-        <BarChart3 className="w-4 h-4" strokeWidth={2.5} />
+        <img src={triggerIconSrc} alt="" className="w-5 h-4 object-contain" />
       </button>
 
       {isOpen && (
-        <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 rounded-lg shadow-xl z-50 overflow-hidden bg-[#1a2438] border border-white/5">
-          <div className="p-2 flex items-center gap-1.5">
+        <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 rounded-lg shadow-xl z-50 overflow-hidden bg-[#091C56] border border-white/5">
+          <div className="p-1.5 flex items-center gap-1">
             {CHART_OPTIONS.map((option) => {
               const isActive =
                 option.chartType === chartType &&
                 (option.candleMode === candleMode ||
                   (!option.candleMode && candleMode === 'classic'));
-              const Icon = option.icon;
-              
               return (
                 <button
                   key={`${option.chartType}-${option.candleMode || 'classic'}`}
@@ -91,13 +95,15 @@ export function ChartTypeMenu({
                     }
                     setIsOpen(false);
                   }}
-                  className={`flex flex-col items-center justify-center gap-1 px-3 py-1.5 rounded-lg transition-colors flex-1 min-w-0 ${
+                  className={`flex flex-col items-center justify-center gap-1 px-3 py-1.5 rounded-lg transition-colors w-[72px] min-w-[72px] ${
                     isActive
                       ? 'bg-[#3347ff] text-white border border-[#3347ff]'
                       : 'bg-white/10 text-gray-300 md:hover:bg-white/15 md:hover:text-white'
                   }`}
                 >
-                  <Icon className="w-4 h-4" />
+                  <span className="flex items-center justify-center w-8 h-6 shrink-0">
+                    <img src={option.iconSrc} alt="" className="max-w-full max-h-full object-contain" />
+                  </span>
                   <span className="text-[10px] font-medium whitespace-nowrap">{option.label}</span>
                 </button>
               );

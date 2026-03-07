@@ -7,6 +7,7 @@ import { TradeService } from '../../domain/trades/TradeService.js';
 import { PrismaTradeRepository } from '../../infrastructure/prisma/PrismaTradeRepository.js';
 import { PrismaAccountRepository } from '../../infrastructure/prisma/PrismaAccountRepository.js';
 import { PrismaTransactionRepository } from '../../infrastructure/prisma/PrismaTransactionRepository.js';
+import { PrismaInstrumentRepository } from '../../infrastructure/prisma/PrismaInstrumentRepository.js';
 import { PriceServiceAdapter } from '../../infrastructure/pricing/PriceServiceAdapter.js';
 import { getPriceEngineManager } from '../../bootstrap/prices.bootstrap.js';
 import { TradesController } from './trades.controller.js';
@@ -38,7 +39,8 @@ export async function registerTradesRoutes(app: FastifyInstance) {
     },
   };
 
-  const tradeService = new TradeService(tradeRepository, accountRepository, lazyPriceProvider, transactionRepository);
+  const instrumentRepository = new PrismaInstrumentRepository();
+  const tradeService = new TradeService(tradeRepository, accountRepository, lazyPriceProvider, transactionRepository, instrumentRepository);
   const accountService = new AccountService(accountRepository, transactionRepository);
   const tradesController = new TradesController(tradeService, accountService);
 

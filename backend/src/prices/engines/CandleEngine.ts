@@ -21,7 +21,7 @@ export class CandleEngine {
   private closeTimer: NodeJS.Timeout | null = null;
 
   constructor(
-    private instrumentId: string, // instrumentId для агрегации (EURUSD, EURUSD_REAL)
+    private instrumentId: string, // instrumentId для агрегации (EURUSD_OTC, EURUSD_REAL)
     private candleStore: CandleStore,
     private eventBus: PriceEventBus,
   ) {}

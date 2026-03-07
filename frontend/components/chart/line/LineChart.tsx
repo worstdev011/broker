@@ -9,7 +9,7 @@
 import { forwardRef, useRef, useEffect, useImperativeHandle } from 'react';
 import { useLineChart } from './useLineChart';
 import { useWebSocket } from '@/lib/hooks/useWebSocket';
-import { dismissToastByKey, showTradeOpenToast } from '@/stores/toast.store';
+import { dismissToastByKey, showTradeOpenToast, showTradeCloseToast } from '@/stores/toast.store';
 import { api } from '@/lib/api/api';
 import type { IndicatorConfig } from '../internal/indicators/indicator.types';
 import type { OverlayRegistryParams } from '../useChart';
@@ -20,14 +20,11 @@ interface LineChartProps {
   instrument?: string;
   payoutPercent?: number;
   activeInstrumentRef?: React.MutableRefObject<string>;
-  /** Количество знаков после запятой для цен (по инструменту) */
   digits?: number;
-  /** FLOW G14: Режим рисования */
   drawingMode?: 'horizontal' | 'vertical' | 'trend' | 'rectangle' | 'fibonacci' | 'parallel-channel' | 'ray' | 'arrow' | null;
-  /** FLOW G12: Конфигурация индикаторов */
   indicatorConfigs?: IndicatorConfig[];
-  /** FLOW O: Overlay Registry */
   overlayRegistry?: OverlayRegistryParams;
+  onReady?: () => void;
 }
 
 export interface LineChartRef {
@@ -66,10 +63,14 @@ export interface LineChartRef {
   prependHistory: (points: Array<{ time: number; price: number }>) => void;
   /** FLOW BO-HOVER: установить hover action (CALL/PUT/null) */
   setHoverAction: (action: 'CALL' | 'PUT' | null) => void;
+  zoomIn: () => void;
+  zoomOut: () => void;
+  shouldShowReturnToLatest: () => boolean;
+  followLatest: () => void;
 }
 
 export const LineChart = forwardRef<LineChartRef, LineChartProps>(
-  ({ className, style, instrument, payoutPercent = 75, activeInstrumentRef, digits, drawingMode, indicatorConfigs, overlayRegistry }, ref) => {
+  ({ className, style, instrument, payoutPercent = 75, activeInstrumentRef, digits, drawingMode, indicatorConfigs, overlayRegistry, onReady }, ref) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     // 🔥 FLOW C-INERTIA: Создаем refs для pan инерции (используются в LineChart.tsx и useLineChart)
     const panVelocityPxPerMsRef = useRef<number>(0);
@@ -104,6 +105,7 @@ export const LineChart = forwardRef<LineChartRef, LineChartProps>(
       onTradeClose: (data) => {
         lineChart.removeTrade(data.id);
         dismissToastByKey(data.id);
+        showTradeCloseToast(data);
       },
       enabled: true,
     });
@@ -124,6 +126,10 @@ export const LineChart = forwardRef<LineChartRef, LineChartProps>(
       initializeFromSnapshot: lineChart.initializeFromSnapshot,
       prependHistory: lineChart.prependHistory,
       setHoverAction: lineChart.setHoverAction,
+      zoomIn: lineChart.zoomInAnimated,
+      zoomOut: lineChart.zoomOutAnimated,
+      shouldShowReturnToLatest: () => !lineChart.getViewport().autoFollow,
+      followLatest: lineChart.resetFollow,
     }));
 
     // FLOW LP-3: Загрузка snapshot при монтировании и смене инструмента
@@ -162,9 +168,10 @@ export const LineChart = forwardRef<LineChartRef, LineChartProps>(
             serverTime: number;
           }>(`/api/line/snapshot?symbol=${instrument}`);
           lineChartRef.current.initializeFromSnapshot(snapshot);
+          onReady?.();
         } catch (error) {
           console.error('[LineChart] Error loading snapshot:', error);
-          lastLoadedInstrumentRef.current = null; // Разрешаем повторную попытку при ошибке
+          lastLoadedInstrumentRef.current = null;
         } finally {
           isLoadingSnapshotRef.current = false;
         }
@@ -173,14 +180,14 @@ export const LineChart = forwardRef<LineChartRef, LineChartProps>(
       loadSnapshot();
     }, [instrument]); // Только instrument в зависимостях, lineChart через ref
 
-    // FLOW LP-5: Infinite scroll влево
     const isLoadingHistoryRef = useRef(false);
+    const lastHistoryEdgeRef = useRef<number>(0);
     useEffect(() => {
       const canvas = canvasRef.current;
       if (!canvas || !instrument) return;
 
       const checkScroll = () => {
-        if (isLoadingHistoryRef.current) return; // Предотвращаем параллельные запросы
+        if (isLoadingHistoryRef.current) return;
         
         const viewport = lineChartRef.current.getViewport();
         const points = lineChartRef.current.getPoints();
@@ -188,14 +195,13 @@ export const LineChart = forwardRef<LineChartRef, LineChartProps>(
         
         if (!firstPoint) return;
 
-        // Проверяем, близко ли viewport к левому краю данных
         const timeRange = viewport.timeEnd - viewport.timeStart;
-        const threshold = timeRange * 0.2; // 20% от диапазона
+        const threshold = timeRange * 0.2;
         
-        if (viewport.timeStart - firstPoint.time < threshold) {
+        if (viewport.timeStart - firstPoint.time < threshold && firstPoint.time !== lastHistoryEdgeRef.current) {
           isLoadingHistoryRef.current = true;
+          lastHistoryEdgeRef.current = firstPoint.time;
           
-          // Загружаем историю
           const loadHistory = async () => {
             try {
               const { points: historyPoints } = await api<{
@@ -205,9 +211,10 @@ export const LineChart = forwardRef<LineChartRef, LineChartProps>(
               if (historyPoints.length > 0) {
                 lineChartRef.current.prependHistory(historyPoints);
               }
-              isLoadingHistoryRef.current = false;
             } catch (error) {
               console.error('[LineChart] Error loading history:', error);
+              lastHistoryEdgeRef.current = 0;
+            } finally {
               isLoadingHistoryRef.current = false;
             }
           };
@@ -216,35 +223,24 @@ export const LineChart = forwardRef<LineChartRef, LineChartProps>(
         }
       };
 
-      // Проверяем при изменении viewport (каждую секунду)
-      const interval = setInterval(checkScroll, 1000);
+      const interval = setInterval(checkScroll, 500);
       return () => clearInterval(interval);
-    }, [instrument]); // Только instrument в зависимостях, lineChart через ref
+    }, [instrument]);
 
-    // Обработка взаимодействий
-    const handleWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
-      e.preventDefault();
-      // 🔥 FLOW C-INERTIA: Прерываем инерцию при zoom
-      panInertiaRefs.activeRef.current = false;
-      panInertiaRefs.velocityRef.current = 0;
-      // Инвертируем: вверх (deltaY < 0) = увеличение (zoom in), вниз (deltaY > 0) = уменьшение (zoom out)
-      // factor > 1 = уменьшить окно (больше масштаб), factor < 1 = увеличить окно (меньше масштаб)
-      const delta = e.deltaY < 0 ? 1.1 : 0.9; // Инвертировано: вверх = 1.1 (zoom in), вниз = 0.9 (zoom out)
-      lineChartForEventsRef.current.zoom(delta);
-    };
-
-    const handleDoubleClick = () => {
-      // 🔥 FLOW C-INERTIA: Прерываем инерцию при включении follow
+    const handleDoubleClickFn = () => {
       panInertiaRefs.activeRef.current = false;
       panInertiaRefs.velocityRef.current = 0;
       lineChartForEventsRef.current.resetFollow();
     };
+
+    // (handleDoubleClick is registered natively below)
 
     // Обработка pan (перетаскивание мышью) - используем нативные события как в свечном графике
     const isPanningRef = useRef(false);
     const lastPanXRef = useRef<number | null>(null);
     // 🔥 FLOW C-INERTIA: Pan inertia state для линейного графика (используем refs из panInertiaRefs)
     const lastMoveTimeRef = useRef<number | null>(null);
+    const emaVelocityRef = useRef<number>(0);
 
     // 🔥 FLOW TOUCH-CHART: Touch gesture refs (1 finger = pan, 2 fingers = pinch zoom)
     const touchModeRef = useRef<'none' | 'pan' | 'pinch'>('none');
@@ -266,22 +262,31 @@ export const LineChart = forwardRef<LineChartRef, LineChartProps>(
       const canvas = canvasRef.current;
       if (!canvas) return;
 
+      const handleWheel = (e: WheelEvent) => {
+        e.preventDefault();
+        panInertiaRefs.activeRef.current = false;
+        panInertiaRefs.velocityRef.current = 0;
+        const rect = canvas.getBoundingClientRect();
+        const anchorRatio = (e.clientX - rect.left) / rect.width;
+        const delta = e.deltaY < 0 ? 1.1 : 0.9;
+        lineChartForEventsRef.current.zoomAt(delta, anchorRatio);
+      };
+
       const handleMouseDown = (e: MouseEvent) => {
-        // Только левая кнопка мыши для pan
         if (e.button !== 0) return;
         
-        // FLOW G16: Не начинаем pan, если идет редактирование drawing
         if (lineChartForEventsRef.current.getIsEditingDrawing()) {
           return;
         }
         
-        // 🔥 FLOW C-INERTIA: Сбрасываем инерцию при новом взаимодействии
         panInertiaRefs.activeRef.current = false;
         panInertiaRefs.velocityRef.current = 0;
         lastMoveTimeRef.current = null;
+        emaVelocityRef.current = 0;
         
         e.preventDefault();
         isPanningRef.current = true;
+        canvas.style.cursor = 'grabbing';
         const rect = canvas.getBoundingClientRect();
         lastPanXRef.current = e.clientX - rect.left;
       };
@@ -310,8 +315,10 @@ export const LineChart = forwardRef<LineChartRef, LineChartProps>(
         if (lastTime !== null) {
           const dt = now - lastTime;
           if (dt > 0) {
-            // Скорость в пикселях на миллисекунду (не сглаживаем, берем последнюю реальную скорость)
-            panInertiaRefs.velocityRef.current = deltaX / dt;
+            const EMA_ALPHA = 0.35;
+            const rawVelocity = deltaX / dt;
+            emaVelocityRef.current = EMA_ALPHA * rawVelocity + (1 - EMA_ALPHA) * emaVelocityRef.current;
+            panInertiaRefs.velocityRef.current = emaVelocityRef.current;
           }
         }
 
@@ -347,11 +354,13 @@ export const LineChart = forwardRef<LineChartRef, LineChartProps>(
 
         isPanningRef.current = false;
         lastPanXRef.current = null;
+        if (canvas) canvas.style.cursor = '';
       };
 
       const handleMouseLeave = () => {
         isPanningRef.current = false;
         lastPanXRef.current = null;
+        canvas.style.cursor = '';
       };
 
       // 🔥 FLOW TOUCH-CHART: Touch handlers (1 finger = pan, 2 fingers = pinch zoom)
@@ -370,6 +379,8 @@ export const LineChart = forwardRef<LineChartRef, LineChartProps>(
           touchStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
           panInertiaRefs.activeRef.current = false;
           panInertiaRefs.velocityRef.current = 0;
+          emaVelocityRef.current = 0;
+          lastMoveTimeRef.current = null;
         } else if (e.touches.length === 2) {
           const [t1, t2] = [e.touches[0], e.touches[1]];
           touchModeRef.current = 'pinch';
@@ -401,6 +412,19 @@ export const LineChart = forwardRef<LineChartRef, LineChartProps>(
           const deltaMs = -dx / pxPerMs;
           lineChartForEventsRef.current.pan(deltaMs);
 
+          const now = performance.now();
+          const lastTime = lastMoveTimeRef.current;
+          if (lastTime !== null) {
+            const dtMs = now - lastTime;
+            if (dtMs > 0) {
+              const EMA_ALPHA = 0.35;
+              const rawVelocity = dx / dtMs;
+              emaVelocityRef.current = EMA_ALPHA * rawVelocity + (1 - EMA_ALPHA) * emaVelocityRef.current;
+              panInertiaRefs.velocityRef.current = emaVelocityRef.current;
+            }
+          }
+          lastMoveTimeRef.current = now;
+
           touchStartRef.current = { x: t.clientX, y: t.clientY };
         } else if (touchModeRef.current === 'pinch' && e.touches.length === 2) {
           const [t1, t2] = [e.touches[0], e.touches[1]];
@@ -409,41 +433,53 @@ export const LineChart = forwardRef<LineChartRef, LineChartProps>(
 
           const newDistance = getTouchDistance(t1, t2);
           const zoomFactor = newDistance / pinch.distance;
-          lineChartForEventsRef.current.zoom(zoomFactor);
+          const pinchCenterX = getTouchCenterX(t1, t2);
+          const anchorRatio = width > 0 ? (pinchCenterX - rect.left) / width : 0.5;
+          lineChartForEventsRef.current.zoomAt(zoomFactor, Math.max(0, Math.min(1, anchorRatio)));
 
           pinchStartRef.current = {
             distance: newDistance,
-            centerX: getTouchCenterX(t1, t2),
+            centerX: pinchCenterX,
           };
         }
       };
 
       const handleTouchEnd = () => {
         if (touchModeRef.current === 'pan') {
-          lineChartForEventsRef.current.scheduleReturnToFollow();
+          const velocity = panInertiaRefs.velocityRef.current;
+          if (Math.abs(velocity) > 0.05) {
+            panInertiaRefs.activeRef.current = true;
+            lineChartForEventsRef.current.setAutoFollow(false);
+          } else {
+            panInertiaRefs.activeRef.current = false;
+            panInertiaRefs.velocityRef.current = 0;
+            lineChartForEventsRef.current.scheduleReturnToFollow();
+          }
         }
         touchModeRef.current = 'none';
         touchStartRef.current = null;
         pinchStartRef.current = null;
       };
 
-      // Подписываемся на нативные события (как в свечном графике)
+      canvas.addEventListener('wheel', handleWheel, { passive: false });
       canvas.addEventListener('mousedown', handleMouseDown);
       window.addEventListener('mousemove', handleMouseMove);
       window.addEventListener('mouseup', handleMouseUp);
       canvas.addEventListener('mouseleave', handleMouseLeave);
+      canvas.addEventListener('dblclick', handleDoubleClickFn);
 
-      // 🔥 FLOW TOUCH-CHART: Touch events
       canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
       canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
       canvas.addEventListener('touchend', handleTouchEnd);
       canvas.addEventListener('touchcancel', handleTouchEnd);
 
       return () => {
+        canvas.removeEventListener('wheel', handleWheel);
         canvas.removeEventListener('mousedown', handleMouseDown);
         window.removeEventListener('mousemove', handleMouseMove);
         window.removeEventListener('mouseup', handleMouseUp);
         canvas.removeEventListener('mouseleave', handleMouseLeave);
+        canvas.removeEventListener('dblclick', handleDoubleClickFn);
         canvas.removeEventListener('touchstart', handleTouchStart);
         canvas.removeEventListener('touchmove', handleTouchMove);
         canvas.removeEventListener('touchend', handleTouchEnd);
@@ -460,10 +496,9 @@ export const LineChart = forwardRef<LineChartRef, LineChartProps>(
           width: '100%',
           height: '100%',
           display: 'block',
-          touchAction: 'none', // 🔥 FLOW TOUCH-CHART: блокируем page scroll при жестах
+          cursor: 'grab',
+          touchAction: 'none',
         }}
-        onWheel={handleWheel}
-        onDoubleClick={handleDoubleClick}
         onContextMenu={(e) => e.preventDefault()}
       />
     );

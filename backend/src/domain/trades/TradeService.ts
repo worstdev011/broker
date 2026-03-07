@@ -6,6 +6,7 @@ import type { TradeRepository } from '../../ports/repositories/TradeRepository.j
 import type { AccountRepository } from '../../ports/repositories/AccountRepository.js';
 import type { PriceProvider } from '../../ports/pricing/PriceProvider.js';
 import type { TransactionRepository } from '../../ports/repositories/TransactionRepository.js';
+import type { InstrumentRepository } from '../../ports/repositories/InstrumentRepository.js';
 import type { OpenTradeInput, Trade } from './TradeTypes.js';
 import { TradeDirection, TradeStatus } from './TradeTypes.js';
 import {
@@ -17,25 +18,26 @@ import {
 import { AccountNotFoundError, UnauthorizedAccountAccessError } from '../accounts/AccountErrors.js';
 import { AccountType } from '../accounts/AccountTypes.js';
 
-const PAYOUT_PERCENTAGE = 0.8; // 80% payout
-const MIN_EXPIRATION = 5; // 5 seconds
-const MAX_EXPIRATION = 300; // 5 minutes (300 seconds)
-const EXPIRATION_STEP = 5; // Must be multiple of 5
+const DEFAULT_PAYOUT = 0.75;
+const MIN_EXPIRATION = 5;
+const MAX_EXPIRATION = 300;
+const EXPIRATION_STEP = 5;
+const MAX_TRADE_AMOUNT = 50_000;
 
 export class TradeService {
   constructor(
     private tradeRepository: TradeRepository,
     private accountRepository: AccountRepository,
     private priceProvider: PriceProvider,
-    private transactionRepository?: TransactionRepository, // Optional for balance history
+    private transactionRepository?: TransactionRepository,
+    private instrumentRepository?: InstrumentRepository,
   ) {}
 
   /**
    * Open a new trade
    */
   async openTrade(input: OpenTradeInput): Promise<Trade> {
-    // Validate amount
-    if (input.amount <= 0) {
+    if (input.amount <= 0 || input.amount > MAX_TRADE_AMOUNT) {
       throw new InvalidTradeAmountError();
     }
 
@@ -63,21 +65,29 @@ export class TradeService {
       throw new UnauthorizedAccountAccessError();
     }
 
-    // Check balance
-    // 🔥 REAL account: balance from transactions (deposits/withdrawals), not Account.balance
-    let availableBalance: number;
-    if (account.type === AccountType.REAL && this.transactionRepository) {
-      availableBalance = await this.transactionRepository.getBalance(account.id);
-      // Sync Account.balance so updateBalance(-amount) works correctly
-      await this.accountRepository.setBalance(account.id, availableBalance);
-    } else {
-      availableBalance = typeof account.balance === 'number' ? account.balance : Number(account.balance);
-    }
+    const availableBalance = typeof account.balance === 'number' ? account.balance : Number(account.balance);
     if (availableBalance < input.amount) {
       throw new InsufficientBalanceError();
     }
 
-    // Get current price for the specified instrument
+    let payoutFraction = DEFAULT_PAYOUT;
+    if (this.instrumentRepository) {
+      const inst = await this.instrumentRepository.findById(input.instrument);
+      if (!inst) {
+        throw new Error(`Unknown instrument: ${input.instrument}`);
+      }
+      payoutFraction = (inst.payoutPercent ?? 75) / 100;
+    }
+
+    // Market hours check for real instruments
+    const isReal = input.instrument.endsWith('_REAL');
+    if (isReal) {
+      const day = new Date().getUTCDay();
+      if (day === 0 || day === 6) {
+        throw new Error('Market is closed');
+      }
+    }
+
     const priceData = await this.priceProvider.getCurrentPrice(input.instrument);
     if (!priceData) {
       throw new Error(`Price service unavailable for instrument: ${input.instrument}`);
@@ -85,14 +95,12 @@ export class TradeService {
 
     const entryPrice = priceData.price;
 
-    // Calculate expiration time
     const now = new Date();
     const expiresAt = new Date(now.getTime() + input.expirationSeconds * 1000);
 
-    // 🔥 FIX: Атомарная операция — списание баланса + создание сделки в одной транзакции.
-    // Раньше: updateBalance → create (если create падает — деньги списаны, сделки нет).
-    // Теперь: обе операции в $transaction — если одна падает, откатываются обе.
-    const trade = await this.tradeRepository.createWithBalanceDeduction(
+    let trade: Trade;
+    try {
+      trade = await this.tradeRepository.createWithBalanceDeduction(
       {
         userId: input.userId,
         accountId: input.accountId,
@@ -101,7 +109,7 @@ export class TradeService {
         amount: input.amount,
         entryPrice,
         exitPrice: null,
-        payout: PAYOUT_PERCENTAGE,
+        payout: payoutFraction,
         status: TradeStatus.OPEN,
         expiresAt,
         closedAt: null,
@@ -109,6 +117,12 @@ export class TradeService {
       input.accountId,
       input.amount,
     );
+    } catch (err: any) {
+      if (err?.message === 'INSUFFICIENT_BALANCE') {
+        throw new InsufficientBalanceError();
+      }
+      throw err;
+    }
 
     return trade;
   }

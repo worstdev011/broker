@@ -21,7 +21,6 @@ const PANEL_MARGIN = 8; // Отступ слева
 const PANEL_MARGIN_BOTTOM = 35; // Отступ снизу
 const PANEL_FONT = '12px sans-serif'; // Как у меток осей и времени
 const PANEL_LINE_HEIGHT = 22; // Увеличено расстояние между строками
-const LIVE_LABEL_COLOR = '#10b981'; // Зелёный для LIVE
 
 /**
  * Форматирует цену: по digits инструмента или 5 по умолчанию (forex).
@@ -70,26 +69,21 @@ export function renderOhlcPanel({
     closeMetrics.width
   );
 
-  // Вычисляем размеры панели
+  // Вычисляем размеры панели (только OHLC, без LIVE)
   const panelWidth = maxWidth + PANEL_PADDING * 2;
-  const lineCount = ohlc.isLive ? 5 : 4; // +1 для LIVE метки
+  const lineCount = 4;
   const panelHeight = lineCount * PANEL_LINE_HEIGHT + PANEL_PADDING * 2;
 
   // Позиция панели (левый нижний угол)
   const panelX = PANEL_MARGIN;
   const panelY = height - panelHeight - PANEL_MARGIN_BOTTOM;
 
-  // Рисуем текст (без фона)
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+  ctx.beginPath();
+  ctx.roundRect(panelX, panelY, panelWidth, panelHeight, 4);
+  ctx.fill();
+
   let currentY = panelY + PANEL_PADDING;
-
-  // LIVE метка (если isLive)
-  if (ohlc.isLive) {
-    ctx.fillStyle = LIVE_LABEL_COLOR;
-    ctx.fillText('LIVE', panelX + PANEL_PADDING, currentY);
-    currentY += PANEL_LINE_HEIGHT;
-  }
-
-  // OHLC данные
   ctx.fillStyle = PANEL_TEXT_COLOR;
   ctx.fillText(openLabel, panelX + PANEL_PADDING, currentY);
   currentY += PANEL_LINE_HEIGHT;

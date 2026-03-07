@@ -68,6 +68,8 @@ export interface CandleChartRef {
   removeTrade: (id: string) => void;
   /** FLOW BO-HOVER: установить hover action (CALL/PUT/null) */
   setHoverAction: (action: 'CALL' | 'PUT' | null) => void;
+  zoomIn: () => void;
+  zoomOut: () => void;
 }
 
 export const CandleChart = forwardRef<CandleChartRef, CandleChartProps>(
@@ -96,6 +98,8 @@ export const CandleChart = forwardRef<CandleChartRef, CandleChartProps>(
       addTradeOverlayFromDTO: chartApi.addTradeOverlayFromDTO,
       removeTrade: chartApi.removeTrade,
       setHoverAction: chartApi.setHoverAction,
+      zoomIn: chartApi.zoomIn,
+      zoomOut: chartApi.zoomOut,
     }));
 
     return (

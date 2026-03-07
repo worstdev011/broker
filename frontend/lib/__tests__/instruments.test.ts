@@ -25,9 +25,9 @@ describe('instruments', () => {
 
   describe('getInstrument', () => {
     it('returns instrument by id', () => {
-      const inst = getInstrument('EURUSD');
+      const inst = getInstrument('EURUSD_OTC');
       expect(inst).toBeDefined();
-      expect(inst?.id).toBe('EURUSD');
+      expect(inst?.id).toBe('EURUSD_OTC');
       expect(inst?.label).toContain('EUR');
     });
 
@@ -44,8 +44,8 @@ describe('instruments', () => {
 
   describe('getInstrumentOrDefault', () => {
     it('returns instrument when id exists', () => {
-      const inst = getInstrumentOrDefault('GBPUSD');
-      expect(inst.id).toBe('GBPUSD');
+      const inst = getInstrumentOrDefault('GBPUSD_OTC');
+      expect(inst.id).toBe('GBPUSD_OTC');
     });
 
     it('returns default when id is undefined', () => {

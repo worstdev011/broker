@@ -1,7 +1,7 @@
 /**
  * FLOW P1 — Instrument config
  *
- * id = symbol key (EURUSD, GBPUSD, …).
+ * id = instrument key (EURUSD_OTC, GBPUSD_REAL, …).
  * digits = precision for price display.
  * Engine params = initialPrice, bounds, volatility, tickInterval for OTC engine.
  * 
@@ -68,24 +68,25 @@ function getPair(base: string, quote: string): string {
 }
 
 export const INSTRUMENTS: Record<string, InstrumentConfig> = {
-  EURUSD: forex('EURUSD', 'EUR', 'USD', 5, 1.08, 0.95, 1.25),
-  GBPUSD: forex('GBPUSD', 'GBP', 'USD', 5, 1.27, 1.0, 1.5),
-  USDCAD: forex('USDCAD', 'USD', 'CAD', 5, 1.36, 1.2, 1.5),
-  USDCHF: forex('USDCHF', 'USD', 'CHF', 5, 0.88, 0.8, 1.0),
-  AUDCAD: forex('AUDCAD', 'AUD', 'CAD', 5, 0.88, 0.8, 1.0),
-  AUDCHF: forex('AUDCHF', 'AUD', 'CHF', 5, 0.57, 0.5, 0.65),
-  CADJPY: forex('CADJPY', 'CAD', 'JPY', 3, 110, 95, 125),
-  EURJPY: forex('EURJPY', 'EUR', 'JPY', 3, 165, 140, 175),
-  GBPJPY: forex('GBPJPY', 'GBP', 'JPY', 3, 200, 165, 220),
-  NZDUSD: forex('NZDUSD', 'NZD', 'USD', 5, 0.61, 0.52, 0.72),
-  NZDJPY: forex('NZDJPY', 'NZD', 'JPY', 3, 97, 82, 110),
-  EURCHF: forex('EURCHF', 'EUR', 'CHF', 5, 0.95, 0.88, 1.02),
-  EURNZD: forex('EURNZD', 'EUR', 'NZD', 5, 1.75, 1.55, 1.95),
-  GBPAUD: forex('GBPAUD', 'GBP', 'AUD', 5, 1.95, 1.7, 2.2),
-  CHFNOK: forex('CHFNOK', 'CHF', 'NOK', 4, 12.0, 10.5, 13.5),
-  UAHUSD: forex('UAHUSD', 'UAH', 'USD', 5, 0.025, 0.02, 0.03),
-  BTCUSD: {
-    id: 'BTCUSD',
+  // OTC pairs (суффикс _OTC)
+  EURUSD_OTC: forex('EURUSD_OTC', 'EUR', 'USD', 5, 1.08, 0.95, 1.25),
+  GBPUSD_OTC: forex('GBPUSD_OTC', 'GBP', 'USD', 5, 1.27, 1.0, 1.5),
+  USDCAD_OTC: forex('USDCAD_OTC', 'USD', 'CAD', 5, 1.36, 1.2, 1.5),
+  USDCHF_OTC: forex('USDCHF_OTC', 'USD', 'CHF', 5, 0.88, 0.8, 1.0),
+  AUDCAD_OTC: forex('AUDCAD_OTC', 'AUD', 'CAD', 5, 0.88, 0.8, 1.0),
+  AUDCHF_OTC: forex('AUDCHF_OTC', 'AUD', 'CHF', 5, 0.57, 0.5, 0.65),
+  CADJPY_OTC: forex('CADJPY_OTC', 'CAD', 'JPY', 3, 110, 95, 125),
+  EURJPY_OTC: forex('EURJPY_OTC', 'EUR', 'JPY', 3, 165, 140, 175),
+  GBPJPY_OTC: forex('GBPJPY_OTC', 'GBP', 'JPY', 3, 200, 165, 220),
+  NZDUSD_OTC: forex('NZDUSD_OTC', 'NZD', 'USD', 5, 0.61, 0.52, 0.72),
+  NZDJPY_OTC: forex('NZDJPY_OTC', 'NZD', 'JPY', 3, 97, 82, 110),
+  EURCHF_OTC: forex('EURCHF_OTC', 'EUR', 'CHF', 5, 0.95, 0.88, 1.02),
+  EURNZD_OTC: forex('EURNZD_OTC', 'EUR', 'NZD', 5, 1.75, 1.55, 1.95),
+  GBPAUD_OTC: forex('GBPAUD_OTC', 'GBP', 'AUD', 5, 1.95, 1.7, 2.2),
+  CHFNOK_OTC: forex('CHFNOK_OTC', 'CHF', 'NOK', 4, 12.0, 10.5, 13.5),
+  UAHUSD_OTC: forex('UAHUSD_OTC', 'UAH', 'USD', 5, 0.025, 0.02, 0.03),
+  BTCUSD_OTC: {
+    id: 'BTCUSD_OTC',
     base: 'BTC',
     quote: 'USD',
     digits: 2,
@@ -99,8 +100,8 @@ export const INSTRUMENTS: Record<string, InstrumentConfig> = {
       tickInterval: 500,
     },
   },
-  ETHUSD: {
-    id: 'ETHUSD',
+  ETHUSD_OTC: {
+    id: 'ETHUSD_OTC',
     base: 'ETH',
     quote: 'USD',
     digits: 2,
@@ -114,8 +115,8 @@ export const INSTRUMENTS: Record<string, InstrumentConfig> = {
       tickInterval: 500,
     },
   },
-  SOLUSD: {
-    id: 'SOLUSD',
+  SOLUSD_OTC: {
+    id: 'SOLUSD_OTC',
     base: 'SOL',
     quote: 'USD',
     digits: 2,
@@ -129,8 +130,8 @@ export const INSTRUMENTS: Record<string, InstrumentConfig> = {
       tickInterval: 500,
     },
   },
-  BNBUSD: {
-    id: 'BNBUSD',
+  BNBUSD_OTC: {
+    id: 'BNBUSD_OTC',
     base: 'BNB',
     quote: 'USD',
     digits: 2,
@@ -144,7 +145,7 @@ export const INSTRUMENTS: Record<string, InstrumentConfig> = {
       tickInterval: 500,
     },
   },
-  
+
   // FLOW R-MULTI: Real market prices для всех валютных пар
   // Унифицированный symbol (EUR/USD) для внутренней логики, pair (EURUSD) для внешнего API
   AUDCHF_REAL: {
@@ -365,7 +366,7 @@ export const INSTRUMENTS: Record<string, InstrumentConfig> = {
   },
 };
 
-export const DEFAULT_INSTRUMENT_ID = 'EURUSD';
+export const DEFAULT_INSTRUMENT_ID = 'EURUSD_OTC';
 
 export function getInstrumentIds(): string[] {
   return Object.keys(INSTRUMENTS);
@@ -382,7 +383,7 @@ export function getInstrumentOrDefault(id: string | undefined): InstrumentConfig
   return inst;
 }
 
-/** Resolve instrumentId from symbol "EUR/USD" or id "EURUSD" */
+/** Resolve instrumentId from symbol "EUR/USD" or id "EURUSD_OTC" */
 export function getInstrumentIdBySymbol(symbolOrId: string): string {
   if (!symbolOrId) return DEFAULT_INSTRUMENT_ID;
   const found = Object.entries(INSTRUMENTS).find(

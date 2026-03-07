@@ -269,7 +269,7 @@ export function mockTradeRepository(overrides?: Partial<TradeRepository>): Trade
         userId: 'test-user',
         accountId: 'test-account',
         direction: 'CALL' as any,
-        instrument: 'EURUSD',
+        instrument: 'EURUSD_OTC',
         amount: 100,
         entryPrice: 50000,
         exitPrice,

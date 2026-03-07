@@ -29,7 +29,7 @@ export async function bootstrapWebSocketEvents(
 
     // 🔥 FLOW WS-BINARY: Pre-compute instrument header (constant per instrument)
     // Binary format: [0x01][instrLen:1][instrument:ASCII][price:Float64BE][timestamp:Float64BE]
-    // Example: BTCUSD → 1 + 1 + 6 + 8 + 8 = 24 bytes (was 112 bytes JSON)
+    // Example: EURUSD_OTC → 1 + 1 + 10 + 8 + 8 = 28 bytes (was 112 bytes JSON)
     const instrBuf = Buffer.from(instrumentId, 'ascii');
     const headerSize = 2 + instrBuf.length;
     const tickBufSize = headerSize + 16; // + price(8) + timestamp(8)

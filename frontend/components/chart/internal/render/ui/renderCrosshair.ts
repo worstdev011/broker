@@ -85,18 +85,19 @@ export function renderCrosshair({
 
   ctx.save();
 
-  // Вертикальная линия
+  const cx = Math.round(crosshair.x) + 0.5;
+  const cy = Math.round(crosshair.y) + 0.5;
+
   ctx.strokeStyle = LINE_COLOR;
   ctx.lineWidth = LINE_WIDTH;
   ctx.beginPath();
-  ctx.moveTo(crosshair.x, 0);
-  ctx.lineTo(crosshair.x, height);
+  ctx.moveTo(cx, 0);
+  ctx.lineTo(cx, height);
   ctx.stroke();
 
-  // Горизонтальная линия
   ctx.beginPath();
-  ctx.moveTo(0, crosshair.y);
-  ctx.lineTo(width, crosshair.y);
+  ctx.moveTo(0, cy);
+  ctx.lineTo(width, cy);
   ctx.stroke();
 
   // Метка цены (справа)

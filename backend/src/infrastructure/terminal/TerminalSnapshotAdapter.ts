@@ -1,6 +1,6 @@
 /**
  * Terminal Snapshot Adapter - aggregates data from various sources
- * FLOW P4: uses PriceEngineManager, instrument = instrumentId (BTCUSD, …)
+ * FLOW P4: uses PriceEngineManager, instrument = instrumentId (EURUSD_OTC, …)
  */
 
 import type { TerminalSnapshotPort } from '../../ports/terminal/TerminalSnapshotPort.js';

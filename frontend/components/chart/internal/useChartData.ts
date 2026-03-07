@@ -42,7 +42,8 @@ interface UseChartDataReturn {
   handlePriceUpdate: (price: number, timestamp: number) => void;
   handleCandleClose: (
     closedCandle: SnapshotCandle,
-    nextCandleStartTime: number
+    nextCandleStartTime: number,
+    actualTimeframeMs?: number
   ) => void;
   /** FLOW CANDLE-SNAPSHOT: Применить снапшот активной свечи к live-свече (восстановление OHLC после reload) */
   applyActiveCandleSnapshot: (candle: { open: number; high: number; low: number; close: number; timestamp: number }) => void;
@@ -264,7 +265,8 @@ export function useChartData({ onDataChange, timeframeMs: defaultTimeframeMs = 5
     candlesRef.current = closedCandles;
 
     // FLOW G6: храним реальные timestamps для API и дедупа
-    earliestRealTimeRef.current = snapshotCandles[0].startTime;
+    const firstValid = snapshotCandles.find(c => c.startTime > 0);
+    earliestRealTimeRef.current = firstValid ? firstValid.startTime : snapshotCandles[0].startTime;
     realStartTimesRef.current = new Set(snapshotCandles.map((c) => c.startTime));
 
     // FLOW R-FIX: Создаем live-свечу на основе последней закрытой свечи
@@ -400,21 +402,41 @@ export function useChartData({ onDataChange, timeframeMs: defaultTimeframeMs = 5
    */
   const handleCandleClose = (
     closedCandle: SnapshotCandle,
-    nextCandleStartTime: number
+    nextCandleStartTime: number,
+    actualTimeframeMs?: number
   ): void => {
+    const tfMs = actualTimeframeMs ?? defaultTimeframeMs;
     const liveCandle = liveCandleRef.current;
 
     if (!liveCandle) {
-      // Если нет live-свечи, создаем новую на основе closedCandle
       const lastCandle = candlesRef.current[candlesRef.current.length - 1];
       const previousClose = lastCandle?.close ?? closedCandle.close;
 
+      // Нормализуем и добавляем закрытую свечу в историю (иначе она теряется)
+      const normalizedStartTime = lastCandle ? lastCandle.endTime : closedCandle.startTime;
+      const normalizedEndTime = normalizedStartTime + tfMs;
+      const closedNormalized = normalizeCandle({
+        ...closedCandle,
+        open: previousClose,
+        startTime: normalizedStartTime,
+        endTime: normalizedEndTime,
+        isClosed: true,
+      });
+      candlesRef.current = [...candlesRef.current, closedNormalized];
+
+      const MAX_CANDLES = 3000;
+      if (candlesRef.current.length > MAX_CANDLES) {
+        candlesRef.current = candlesRef.current.slice(candlesRef.current.length - MAX_CANDLES);
+      }
+
       liveCandleRef.current = createLiveCandle(
-        previousClose,
-        nextCandleStartTime,
+        closedNormalized.close,
+        normalizedEndTime,
         closedCandle.close,
         nextCandleStartTime
       );
+
+      onDataChange?.();
       return;
     }
 
@@ -434,7 +456,7 @@ export function useChartData({ onDataChange, timeframeMs: defaultTimeframeMs = 5
     
     // Вычисляем нормализованный endTime: startTime + timeframeMs (фиксированная длительность свечи)
     // НЕ используем liveCandle.endTime - liveCandle.startTime, т.к. endTime не нормализован
-    const normalizedEndTime = normalizedStartTime + defaultTimeframeMs;
+    const normalizedEndTime = normalizedStartTime + tfMs;
 
     // Закрываем текущую live-свечу с нормализованным временем
     const closedLiveCandle: Candle = normalizeCandle({
@@ -486,14 +508,12 @@ export function useChartData({ onDataChange, timeframeMs: defaultTimeframeMs = 5
   /**
    * FLOW CANDLE-SNAPSHOT: Применяет снапшот активной свечи с бэкенда к текущей live-свече
    * 
-   * При перезагрузке страницы фронтенд теряет накопленные OHLC live-свечи.
-   * Этот метод восстанавливает их из снапшота, который бэкенд отправляет при подписке.
-   * 
    * Стратегия MERGE:
-   * - open: оставляем фронтендовый (он привязан к close предыдущей свечи для инварианта)
-   * - high: берём максимум (бэкенд может знать о более высоком пике до reload)
-   * - low: берём минимум (бэкенд может знать о более низком минимуме до reload)
-   * - close: оставляем фронтендовый (он актуальнее — обновляется каждым тиком)
+   * - open: оставляем фронтендовый (привязан к close предыдущей для инварианта)
+   * - high: берём максимум (бэкенд может знать о более высоком пике до reload/reconnect)
+   * - low: берём минимум (бэкенд может знать о более низком минимуме)
+   * - close: берём серверный если фронтенд не получал тиков после создания live-свечи
+   *   (после reconnect серверный close актуальнее), иначе оставляем фронтендовый
    */
   const applyActiveCandleSnapshot = (
     snapshotCandle: { open: number; high: number; low: number; close: number; timestamp: number }
@@ -503,43 +523,47 @@ export function useChartData({ onDataChange, timeframeMs: defaultTimeframeMs = 5
       return;
     }
 
-    // Валидация данных снапшота
     if (!Number.isFinite(snapshotCandle.high) || snapshotCandle.high <= 0 ||
-        !Number.isFinite(snapshotCandle.low) || snapshotCandle.low <= 0) {
+        !Number.isFinite(snapshotCandle.low) || snapshotCandle.low <= 0 ||
+        !Number.isFinite(snapshotCandle.close) || snapshotCandle.close <= 0) {
       console.warn('[applyActiveCandleSnapshot] Invalid snapshot data:', snapshotCandle);
       return;
     }
 
-    // MERGE: расширяем high/low live-свечи данными из снапшота
     const mergedHigh = Math.max(liveCandle.high, snapshotCandle.high);
     const mergedLow = Math.min(liveCandle.low, snapshotCandle.low);
 
-    // Проверяем, изменилось ли что-то
-    if (mergedHigh === liveCandle.high && mergedLow === liveCandle.low) {
-      return; // Ничего не изменилось
+    const liveHasNoTicks = liveCandle.open === liveCandle.close &&
+                           liveCandle.open === liveCandle.high &&
+                           liveCandle.open === liveCandle.low;
+    const mergedClose = liveHasNoTicks ? snapshotCandle.close : liveCandle.close;
+
+    if (mergedHigh === liveCandle.high && mergedLow === liveCandle.low && mergedClose === liveCandle.close) {
+      return;
     }
 
     liveCandleRef.current = normalizeCandle({
       ...liveCandle,
       high: mergedHigh,
       low: mergedLow,
+      close: mergedClose,
     });
 
     onDataChange?.();
   };
 
   /**
-   * Получить все закрытые свечи
+   * Получить все закрытые свечи (read-only reference, no copy)
    */
   const getCandles = (): Candle[] => {
-    return [...candlesRef.current];
+    return candlesRef.current;
   };
 
   /**
-   * Получить live-свечу
+   * Получить live-свечу (read-only reference, no copy)
    */
   const getLiveCandle = (): Candle | null => {
-    return liveCandleRef.current ? { ...liveCandleRef.current } : null;
+    return liveCandleRef.current;
   };
 
   /**
@@ -659,11 +683,9 @@ export function useChartData({ onDataChange, timeframeMs: defaultTimeframeMs = 5
       earliestRealTimeRef.current = oldestNew;
     }
 
-    // Ограничиваем количество свечей (например, max 3000)
     const MAX_CANDLES = 3000;
     if (candlesRef.current.length > MAX_CANDLES) {
-      // Удаляем самые новые (в конце массива)
-      candlesRef.current = candlesRef.current.slice(0, MAX_CANDLES);
+      candlesRef.current = candlesRef.current.slice(-MAX_CANDLES);
     }
 
     // Уведомляем об изменении данных

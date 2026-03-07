@@ -31,7 +31,25 @@ const STOCH_OVERBOUGHT = 80;
 const STOCH_OVERSOLD = 20;
 /** Отступ по вертикали для линий %K/%D, чтобы не упирались в границы зоны (px) */
 const STOCH_OSC_PADDING = 10;
-const LINE_WIDTH = 1.5; // Уменьшаем толщину линий индикаторов, чтобы не перекрывать свечи
+const LINE_WIDTH = 1.5;
+
+function hexToRgba(hex: string, alpha: number): string {
+  if (!hex || hex.length < 4) return `rgba(0,0,0,${alpha})`;
+  let r: number, g: number, b: number;
+  if (hex.length === 4) {
+    r = parseInt(hex[1] + hex[1], 16);
+    g = parseInt(hex[2] + hex[2], 16);
+    b = parseInt(hex[3] + hex[3], 16);
+  } else {
+    r = parseInt(hex.slice(1, 3), 16);
+    g = parseInt(hex.slice(3, 5), 16);
+    b = parseInt(hex.slice(5, 7), 16);
+  }
+  if (!Number.isFinite(r)) r = 0;
+  if (!Number.isFinite(g)) g = 0;
+  if (!Number.isFinite(b)) b = 0;
+  return `rgba(${r},${g},${b},${alpha})`;
+}
 
 /**
  * Конвертирует время в X координату
@@ -99,24 +117,19 @@ function renderIndicatorLine(
   if (visiblePoints.length === 0) return;
 
   ctx.save();
-  // Конвертируем hex в rgba с прозрачностью
-  const hexToRgba = (hex: string, alpha: number): string => {
-    const r = parseInt(hex.slice(1, 3), 16);
-    const g = parseInt(hex.slice(3, 5), 16);
-    const b = parseInt(hex.slice(5, 7), 16);
-    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-  };
   ctx.strokeStyle = hexToRgba(color, opacity);
   ctx.lineWidth = LINE_WIDTH;
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
 
   ctx.beginPath();
+  let started = false;
 
   for (let i = 0; i < visiblePoints.length; i++) {
     const point = visiblePoints[i];
+    if (!Number.isFinite(point.value)) continue;
     const x = timeToX(point.time, viewport, width);
-    
+
     let y: number;
     if (isRSI) {
       y = oscPadding > 0
@@ -126,8 +139,9 @@ function renderIndicatorLine(
       y = priceToY(point.value, viewport, height);
     }
 
-    if (i === 0) {
+    if (!started) {
       ctx.moveTo(x, y);
+      started = true;
     } else {
       ctx.lineTo(x, y);
     }
@@ -492,12 +506,6 @@ function renderBollingerBands(
   if (upper.length === 0 || lower.length === 0) return;
 
   const color = config.color;
-  const hexToRgba = (hex: string, alpha: number): string => {
-    const r = parseInt(hex.slice(1, 3), 16);
-    const g = parseInt(hex.slice(3, 5), 16);
-    const b = parseInt(hex.slice(5, 7), 16);
-    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-  };
 
   ctx.save();
 

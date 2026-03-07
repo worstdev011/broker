@@ -6,7 +6,7 @@ import type { PriceTick } from '../../prices/PriceTypes.js';
 import type { Candle } from '../../prices/PriceTypes.js';
 import type { TradeDTO } from '../../domain/trades/TradeTypes.js';
 
-/** FLOW P5: price/candle events include instrument (BTCUSD, EURUSD, …) */
+/** FLOW P5: price/candle events include instrument (BTCUSD_OTC, EURUSD_OTC, EURUSD_REAL, …) */
 export type WsEvent =
   | { instrument: string; type: 'price:update'; data: { asset: string; price: number; timestamp: number } }
   | { instrument: string; type: 'candle:update'; data: { timeframe: string; candle: Candle } }
@@ -28,7 +28,7 @@ export type WsEvent =
 export interface WsClientMessage {
   type: 'ping' | 'subscribe' | 'unsubscribe' | 'unsubscribe_all';
   /**
-   * Для subscribe: идентификатор инструмента (EURUSD, BTCUSD, …)
+   * Для subscribe: идентификатор инструмента (EURUSD_OTC, BTCUSD_OTC, EURUSD_REAL, …)
    */
   instrument?: string;
   /**

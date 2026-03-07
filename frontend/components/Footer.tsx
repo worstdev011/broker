@@ -1,7 +1,14 @@
+'use client'
+
 import Image from 'next/image'
-import Link from 'next/link'
+import { Link } from '@/components/navigation'
+import { useTranslations } from 'next-intl'
 
 export default function Footer() {
+  const t = useTranslations('footer')
+  const tc = useTranslations('common')
+  const tn = useTranslations('nav')
+
   return (
     <footer className="bg-[#061230] text-white py-12">
       <div className="container mx-auto px-4">
@@ -12,32 +19,32 @@ export default function Footer() {
               <span className="text-xl font-bold uppercase">Comfortrade</span>
             </div>
             <p className="text-gray-400 text-sm max-w-md">
-              Надёжный брокер для торговли валютными парами и криптовалютами. Доходность до 89%, демо и реальный счёт.
+              {t('description')}
             </p>
           </div>
           <div>
-            <h3 className="font-bold mb-4">Быстрые ссылки</h3>
+            <h3 className="font-bold mb-4">{t('quick_links')}</h3>
             <ul className="space-y-2 text-sm text-gray-400">
-              <li><Link href="/" className="hover:text-white transition-colors">Главная</Link></li>
-              <li><Link href="/about" className="hover:text-white transition-colors">О нас</Link></li>
-              <li><Link href="/assets" className="hover:text-white transition-colors">Активы</Link></li>
-              <li><Link href="/reviews" className="hover:text-white transition-colors">Отзывы</Link></li>
-              <li><Link href="/start" className="hover:text-white transition-colors">Как начать</Link></li>
-              <li><Link href="/education" className="hover:text-white transition-colors">Обучение</Link></li>
+              <li><Link href="/" className="hover:text-white transition-colors">{tc('home')}</Link></li>
+              <li><Link href="/about" className="hover:text-white transition-colors">{tn('about')}</Link></li>
+              <li><Link href="/assets" className="hover:text-white transition-colors">{tn('assets')}</Link></li>
+              <li><Link href="/reviews" className="hover:text-white transition-colors">{tn('reviews')}</Link></li>
+              <li><Link href="/start" className="hover:text-white transition-colors">{t('how_to_start')}</Link></li>
+              <li><Link href="/education" className="hover:text-white transition-colors">{tn('education')}</Link></li>
             </ul>
           </div>
           <div>
-            <h3 className="font-bold mb-4">Политика</h3>
+            <h3 className="font-bold mb-4">{t('policy')}</h3>
             <ul className="space-y-2 text-sm text-gray-400">
-              <li><Link href="/policy/terms" className="hover:text-white transition-colors">Условия использования</Link></li>
-              <li><Link href="/policy/privacy" className="hover:text-white transition-colors">Политика конфиденциальности</Link></li>
-              <li><Link href="/policy/risks" className="hover:text-white transition-colors">Предупреждение о рисках</Link></li>
-              <li><Link href="/policy/aml-kyc" className="hover:text-white transition-colors">AML/KYC</Link></li>
+              <li><Link href="/policy/terms" className="hover:text-white transition-colors">{t('terms')}</Link></li>
+              <li><Link href="/policy/privacy" className="hover:text-white transition-colors">{t('privacy')}</Link></li>
+              <li><Link href="/policy/risks" className="hover:text-white transition-colors">{t('risks')}</Link></li>
+              <li><Link href="/policy/aml-kyc" className="hover:text-white transition-colors">{t('aml_kyc')}</Link></li>
             </ul>
           </div>
         </div>
         <div className="border-t border-gray-700 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
-          <p className="text-gray-400 text-sm">© 2024 Comfortrade. Все права защищены.</p>
+          <p className="text-gray-400 text-sm">{tc('all_rights')}</p>
           <div className="flex gap-6">
             <a href="https://www.instagram.com/comfortrade/" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white transition-colors" aria-label="Instagram">
               <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">

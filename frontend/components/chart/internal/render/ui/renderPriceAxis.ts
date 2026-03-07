@@ -19,6 +19,7 @@ interface RenderPriceAxisParams {
 const LABEL_COLOR = 'rgba(255, 255, 255, 0.45)';
 const LABEL_FONT = '12px sans-serif';
 const LABEL_PADDING_RIGHT = 4;
+const PRICE_LABEL_OFFSET_ABOVE_GRID = 12; // Смещение метки вверх от линии сетки (≈ половина высоты шрифта + зазор)
 
 /**
  * Конвертирует цену в Y координату
@@ -52,25 +53,31 @@ export function renderPriceAxis({
   const { priceMin, priceMax } = viewport;
   const priceRange = priceMax - priceMin;
 
-  if (priceRange <= 0) return;
+  if (priceRange <= 0 || height <= 0) return;
 
   ctx.save();
 
-  // Настройки текста
   ctx.font = LABEL_FONT;
   ctx.fillStyle = LABEL_COLOR;
   ctx.textAlign = 'right';
   ctx.textBaseline = 'middle';
 
-  // 🔥 FLOW I-PAYOUT FIX: Используем тот же алгоритм расчета шагов что и в renderGrid
-  // чтобы метки совпадали с линиями сетки
-  const targetSteps = 10; // Целевое количество шагов (как в renderGrid)
+  const targetSteps = 10;
   const pixelsPerStep = height / targetSteps;
   const pricePerPixel = priceRange / height;
   const priceStepRaw = pixelsPerStep * pricePerPixel;
 
-  // Округляем до "красивых" значений (как в renderGrid)
+  if (!Number.isFinite(priceStepRaw) || priceStepRaw <= 0) {
+    ctx.restore();
+    return;
+  }
+
   const magnitude = Math.pow(10, Math.floor(Math.log10(priceStepRaw)));
+  if (!Number.isFinite(magnitude) || magnitude <= 0) {
+    ctx.restore();
+    return;
+  }
+
   const normalized = priceStepRaw / magnitude;
 
   let priceStep: number;
@@ -80,6 +87,7 @@ export function renderPriceAxis({
   else priceStep = 10;
 
   priceStep = priceStep * magnitude;
+  if (priceStep <= 0) { ctx.restore(); return; }
   const startPrice = Math.ceil(priceMin / priceStep) * priceStep;
 
   // Рисуем метки цены (БЕЗ горизонтальных линий - они уже нарисованы в renderGrid)
@@ -91,7 +99,7 @@ export function renderPriceAxis({
 
     // Только текст метки справа (без линии - линия уже в renderGrid)
     const priceText = formatPrice(price, digits);
-    ctx.fillText(priceText, width - LABEL_PADDING_RIGHT, y);
+    ctx.fillText(priceText, width - LABEL_PADDING_RIGHT, y - PRICE_LABEL_OFFSET_ABOVE_GRID);
   }
 
   ctx.restore();

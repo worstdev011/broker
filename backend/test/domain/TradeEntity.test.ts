@@ -12,7 +12,7 @@ describe('TradeEntity', () => {
     userId: 'user-1',
     accountId: 'account-1',
     direction: TradeDirection.CALL,
-    instrument: 'EURUSD',
+    instrument: 'EURUSD_OTC',
     amount: 100,
     entryPrice: 50000,
     payout: 0.8,

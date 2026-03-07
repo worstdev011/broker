@@ -214,11 +214,18 @@ export function useIndicators({
     return seriesCacheRef.current;
   };
 
-  // Пересчитываем при изменении количества свечей или конфигурации
+  const lastConfigKeyRef = useRef<string>('');
   useEffect(() => {
-    recalculateIndicators();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [getCandles, indicatorConfigs]);
+    const configKey = indicatorConfigs
+      .filter(c => c.enabled !== false)
+      .map(c => `${c.id}:${c.period}`)
+      .join(',');
+    if (configKey !== lastConfigKeyRef.current) {
+      lastConfigKeyRef.current = configKey;
+      lastCandlesLengthRef.current = -1;
+      recalculateIndicators();
+    }
+  }, [indicatorConfigs]);
 
   return {
     getIndicatorSeries,

@@ -51,13 +51,13 @@ describe('WebSocket Subscribe Integration', () => {
         });
 
         ws.on('open', () => {
-          ws.send(JSON.stringify({ type: 'subscribe', instrument: 'EURUSD' }));
+          ws.send(JSON.stringify({ type: 'subscribe', instrument: 'EURUSD_OTC' }));
         });
 
         ws.on('message', (data) => {
           try {
             const msg = JSON.parse(data.toString());
-            if (msg.type === 'subscribed' && msg.instrument === 'EURUSD') {
+            if (msg.type === 'subscribed' && msg.instrument === 'EURUSD_OTC') {
               ws.close();
               resolve();
             }
@@ -84,16 +84,16 @@ describe('WebSocket Subscribe Integration', () => {
         let receivedPriceUpdate = false;
 
         ws.on('open', () => {
-          ws.send(JSON.stringify({ type: 'subscribe', instrument: 'EURUSD' }));
+          ws.send(JSON.stringify({ type: 'subscribe', instrument: 'EURUSD_OTC' }));
         });
 
         ws.on('message', (data) => {
           try {
             const msg = JSON.parse(data.toString());
-            if (msg.type === 'subscribed' && msg.instrument === 'EURUSD') {
+            if (msg.type === 'subscribed' && msg.instrument === 'EURUSD_OTC') {
               subscribed = true;
             }
-            if (subscribed && msg.type === 'price:update' && msg.instrument === 'EURUSD') {
+            if (subscribed && msg.type === 'price:update' && msg.instrument === 'EURUSD_OTC') {
               expect(msg.data).toHaveProperty('price');
               expect(msg.data).toHaveProperty('timestamp');
               expect(typeof msg.data.price).toBe('number');
@@ -127,16 +127,16 @@ describe('WebSocket Subscribe Integration', () => {
         });
 
         ws.on('open', () => {
-          ws.send(JSON.stringify({ type: 'subscribe', instrument: 'GBPUSD' }));
+          ws.send(JSON.stringify({ type: 'subscribe', instrument: 'GBPUSD_OTC' }));
         });
 
         ws.on('message', (data) => {
           try {
             const msg = JSON.parse(data.toString());
-            if (msg.type === 'subscribed' && msg.instrument === 'GBPUSD') {
-              ws.send(JSON.stringify({ type: 'unsubscribe', instrument: 'GBPUSD' }));
+            if (msg.type === 'subscribed' && msg.instrument === 'GBPUSD_OTC') {
+              ws.send(JSON.stringify({ type: 'unsubscribe', instrument: 'GBPUSD_OTC' }));
             }
-            if (msg.type === 'unsubscribed' && msg.instrument === 'GBPUSD') {
+            if (msg.type === 'unsubscribed' && msg.instrument === 'GBPUSD_OTC') {
               ws.close();
               resolve();
             }

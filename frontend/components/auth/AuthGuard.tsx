@@ -5,7 +5,8 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
+import Image from 'next/image';
+import { useRouter, usePathname } from '@/components/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
 
 interface AuthGuardProps {
@@ -45,11 +46,12 @@ export function AuthGuard({ children, requireAuth, requireGuest }: AuthGuardProp
     }
   }, [isAuthenticated, isLoading, requireAuth, requireGuest, router, pathname]);
 
-  // Show nothing while loading or redirecting
+  // Show loader while checking auth
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div>Loading...</div>
+      <div className="min-h-screen flex flex-col items-center justify-center gap-6 bg-[#061230]">
+        <Image src="/images/logo.png" alt="Comfortrade" width={80} height={80} className="w-16 h-16 sm:w-20 sm:h-20 object-contain animate-pulse" />
+        <span className="text-white/70 text-sm">Загрузка...</span>
       </div>
     );
   }

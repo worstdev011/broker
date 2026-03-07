@@ -171,6 +171,7 @@ export function configureContainer(
         c.resolve<AccountRepository>(T.AccountRepository),
         c.resolve<PriceProvider>(T.PriceProvider),
         c.resolve<TransactionRepository>(T.TransactionRepository),
+        c.resolve<InstrumentRepository>(T.InstrumentRepository),
       ),
     ),
   });

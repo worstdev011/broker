@@ -6,5 +6,5 @@
 
 module.exports = {
   FALLBACK_BACKEND_URL: 'http://localhost:3001',
-  FALLBACK_SUPPORT_CHANNEL_URL: 'https://t.me/your_support_channel',
+  FALLBACK_SUPPORT_CHANNEL_URL: 'https://t.me/comfortrade_support',
 };

@@ -18,7 +18,7 @@ export class TradeNotFoundError extends TradeError {
 
 export class InvalidTradeAmountError extends TradeError {
   constructor() {
-    super('Trade amount must be greater than 0');
+    super('Trade amount must be between 0.01 and 50,000');
     this.name = 'InvalidTradeAmountError';
   }
 }

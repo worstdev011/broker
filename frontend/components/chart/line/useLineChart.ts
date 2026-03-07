@@ -85,6 +85,7 @@ export function useLineChart({
   
   // ✅ ПРАВИЛЬНАЯ АРХИТЕКТУРА: Live сегмент (ephemeral, не мутирует историю)
   const liveSegmentRef = useRef<LiveSegment>(null);
+  const prevPriceRef = useRef<number | null>(null);
   const setLiveSegment = useCallback((segment: LiveSegment) => {
     liveSegmentRef.current = segment;
   }, []);
@@ -108,10 +109,9 @@ export function useLineChart({
   
   const lineData = useLineData({ pointStore, viewport, enabled, setLiveSegment });
   const priceAnimator = useLinePriceAnimator();
-  /** Первый тик после появления live-сегмента — seed аниматора от fromPrice, без скачка */
-  const hadLiveSegmentRef = useRef<boolean>(false);
-  /** 🔥 Заморозка price range на время live-сегмента — НЕ передавать animatedPrice в range */
-  const frozenPriceRangeRef = useRef<{ min: number; max: number } | null>(null);
+  // Smooth price range: экспоненциальное сглаживание вместо заморозки
+  const smoothedRangeRef = useRef<{ min: number; max: number } | null>(null);
+  const lastFrameTimeRef = useRef<number>(performance.now());
   // 🔥 FIX #9: Кэш для setDataBounds — не обновляем каждый кадр если данные не изменились
   const lastDataBoundsMinRef = useRef<number>(0);
   const lastDataBoundsMaxRef = useRef<number>(0);
@@ -123,7 +123,7 @@ export function useLineChart({
     startTime: number;
     startOffset: number; // Насколько viewport отстаёт от live (в ms)
   } | null>(null);
-  const RETURN_TO_FOLLOW_DELAY_MS = 2000; // 2 секунды задержка перед возвратом
+  const RETURN_TO_FOLLOW_DELAY_MS = 3000;
   const RETURN_TO_FOLLOW_DURATION_MS = 400; // Длительность анимации возврата
 
   // FLOW E: Expiration seconds — хранится в ref, меняется только UI терминала
@@ -267,8 +267,7 @@ export function useLineChart({
               ? [{ time: 0, price: d.price }]
               : [{ time: d.time, price: 0 }];
 
-        const drawingType: import('../internal/overlay/overlay.types').DrawingOverlay['drawingType'] =
-          d.type === 'arrow' ? 'ray' : d.type;
+        const drawingType: import('../internal/overlay/overlay.types').DrawingOverlay['drawingType'] = d.type;
 
         cb({
           id: d.id,
@@ -347,55 +346,11 @@ export function useLineChart({
   const handlePriceUpdate = useCallback(
     (price: number, timestamp: number) => {
       lineData.onPriceUpdate(price, timestamp);
-      const seg = liveSegmentRef.current;
-      if (seg) {
-        if (!hadLiveSegmentRef.current) {
-          priceAnimator.seedFrom(seg.fromPrice);
-          hadLiveSegmentRef.current = true;
-          // Замораживаем price range при появлении live-сегмента
-          const historyPoints = pointStore.getAll();
-          const currentViewport = viewport.getViewport();
-          frozenPriceRangeRef.current = calculatePriceRange(
-            historyPoints,
-            currentViewport,
-            seg,
-            undefined
-          );
-        }
-        // 🔥 FIX: Расширяем frozen range если цена выходит за границы (но не сужаем)
-        // 🔥 FIX #12: Ограничиваем максимальное расширение — не больше 3x от исходного span
-        const frozen = frozenPriceRangeRef.current;
-        if (frozen) {
-          const originalSpan = frozen.max - frozen.min;
-          const maxSpan = (originalSpan || 1) * 3;
-          const padding = originalSpan * 0.1 || 1;
-          let newMin = frozen.min;
-          let newMax = frozen.max;
-          if (price < frozen.min + padding) {
-            newMin = price - padding;
-          }
-          if (price > frozen.max - padding) {
-            newMax = price + padding;
-          }
-          // Не позволяем span расти больше maxSpan
-          if (newMax - newMin > maxSpan) {
-            const center = (newMax + newMin) / 2;
-            newMin = center - maxSpan / 2;
-            newMax = center + maxSpan / 2;
-          }
-          if (newMin !== frozen.min || newMax !== frozen.max) {
-            frozenPriceRangeRef.current = { min: newMin, max: newMax };
-          }
-        }
-        priceAnimator.onPriceUpdate(price);
-      } else {
-        hadLiveSegmentRef.current = false;
-        frozenPriceRangeRef.current = null;
-        priceAnimator.clearLiveState();
-      }
+      // onPriceUpdate auto-snap'ит на первом вызове, далее — 80ms easeOut
+      priceAnimator.onPriceUpdate(price);
       onPriceUpdateRef.current?.(price, timestamp);
     },
-    [lineData, priceAnimator, pointStore, viewport]
+    [lineData, priceAnimator]
   );
 
   // 🔥 FLOW C-INERTIA: Pan inertia для линейного графика
@@ -491,31 +446,44 @@ export function useLineChart({
 
     let animationFrameId: number;
     const canvasElement: HTMLCanvasElement = canvas;
-    // 🔥 FIX #14: Кэшируем DPR и перечитываем каждый кадр — корректно при переносе окна между мониторами
     let cachedDpr = window.devicePixelRatio || 1;
+    let cachedWidth = 0;
+    let cachedHeight = 0;
+    let rectDirty = true;
+
+    const resizeObserver = new ResizeObserver(() => { rectDirty = true; });
+    resizeObserver.observe(canvasElement);
+
+    const matchDpr = window.matchMedia(`(resolution: ${cachedDpr}dppx)`);
+    const onDprChange = () => { rectDirty = true; };
+    matchDpr.addEventListener?.('change', onDprChange);
 
     function setupCanvas(): { ctx: CanvasRenderingContext2D; width: number; height: number } | null {
       const ctx = canvasElement.getContext('2d');
       if (!ctx) return null;
 
-      const rect = canvasElement.getBoundingClientRect();
-      const width = rect.width;
-      const height = rect.height;
+      if (rectDirty) {
+        const rect = canvasElement.getBoundingClientRect();
+        cachedWidth = rect.width;
+        cachedHeight = rect.height;
+        rectDirty = false;
+      }
 
-      if (width === 0 || height === 0) return null;
+      if (cachedWidth === 0 || cachedHeight === 0) return null;
 
-      // 🔥 FIX #14: Обновляем DPR каждый кадр
       const currentDpr = window.devicePixelRatio || 1;
       const dprChanged = currentDpr !== cachedDpr;
       if (dprChanged) cachedDpr = currentDpr;
 
-      if (dprChanged || canvasElement.width !== width * cachedDpr || canvasElement.height !== height * cachedDpr) {
-        canvasElement.width = width * cachedDpr;
-        canvasElement.height = height * cachedDpr;
+      const targetW = Math.round(cachedWidth * cachedDpr);
+      const targetH = Math.round(cachedHeight * cachedDpr);
+      if (dprChanged || canvasElement.width !== targetW || canvasElement.height !== targetH) {
+        canvasElement.width = targetW;
+        canvasElement.height = targetH;
         ctx.scale(cachedDpr, cachedDpr);
       }
 
-      return { ctx, width, height };
+      return { ctx, width: cachedWidth, height: cachedHeight };
     }
 
     function render(now: number) {
@@ -524,7 +492,7 @@ export function useLineChart({
         advancePanInertiaRef.current(now);
       }
       advanceReturnToFollowRef.current(now);
-      r.viewport.advanceFollowAnimation(now);
+      r.viewport.advanceContinuousFollow(now);
 
       const setup = setupCanvas();
       if (!setup) {
@@ -552,13 +520,13 @@ export function useLineChart({
         }
       }
 
-      // Live-сегмент: X интерполируется от fromTime к toTime, Y анимируется
+      // 🔥 FLOW CONTINUOUS-FOLLOW: Live-сегмент X = текущее wall time (тот же источник что и viewport)
+      // Раньше X интерполировался отдельно от viewport → рассинхрон → дрожание
       let visualTime: number | null = null;
       if (liveSegment) {
         r.priceAnimator.update(now);
-        const elapsed = now - liveSegment.startedAt;
-        const t = Math.min(1, elapsed / 1000); // Прогресс внутри секунды [0..1]
-        visualTime = liveSegment.fromTime + (liveSegment.toTime - liveSegment.fromTime) * t;
+        const wallNow = r.viewport.getWallTime(now);
+        visualTime = Math.max(liveSegment.fromTime, wallNow);
       }
       const animatedPrice = liveSegment ? r.priceAnimator.getAnimatedPrice() : undefined;
 
@@ -575,15 +543,32 @@ export function useLineChart({
         // История рисуется полностью, live сегмент ПРОДОЛЖАЕТ её от последней точки
         const historyPointsForRender = historyPoints;
 
-        // 🔥 priceRange заморожен на время live-сегмента — НИКОГДА не передаём animatedPrice
-        const calculatedPriceRange =
-          frozenPriceRangeRef.current ??
-          calculatePriceRange(
-            historyPoints,
-            currentViewport,
-            null,
-            undefined
-          );
+        // Целевой диапазон из видимых точек + live цена
+        const targetRange = calculatePriceRange(
+          historyPoints,
+          currentViewport,
+          liveSegment,
+          animatedPrice
+        );
+
+        // Asymmetric exponential smoothing:
+        //   расширение — быстро (80ms τ), чтобы spike не уходил за экран
+        //   сужение  — медленно (500ms τ), чтобы шкала не дёргалась
+        if (!smoothedRangeRef.current) {
+          smoothedRangeRef.current = { min: targetRange.min, max: targetRange.max };
+        } else {
+          const dt = Math.min(Math.max(now - lastFrameTimeRef.current, 1), 100);
+          const alphaFast = 1 - Math.exp(-dt / 80);
+          const alphaSlow = 1 - Math.exp(-dt / 500);
+          const sr = smoothedRangeRef.current;
+          sr.min += (targetRange.min - sr.min)
+            * (targetRange.min < sr.min ? alphaFast : alphaSlow);
+          sr.max += (targetRange.max - sr.max)
+            * (targetRange.max > sr.max ? alphaFast : alphaSlow);
+        }
+        lastFrameTimeRef.current = now;
+
+        const calculatedPriceRange = smoothedRangeRef.current;
         r.viewport.updatePriceRange(calculatedPriceRange.min, calculatedPriceRange.max);
         
         const timePriceViewport = r.viewport.getTimePriceViewport();
@@ -643,7 +628,7 @@ export function useLineChart({
         const macdHeight = hasMACD ? 100 : 0;
         const atrHeight = hasATR ? 80 : 0;
         const adxHeight = hasADX ? 80 : 0;
-        const mainHeight = height - rsiHeight - stochHeight - momentumHeight - awesomeOscillatorHeight - macdHeight - atrHeight - adxHeight;
+        const mainHeight = Math.max(1, height - rsiHeight - stochHeight - momentumHeight - awesomeOscillatorHeight - macdHeight - atrHeight - adxHeight);
 
         // Порядок рендеринга
         renderBackground(ctx, width, height);
@@ -811,7 +796,7 @@ export function useLineChart({
         // Hover Highlight
         const hoverAction = hoverActionRef.current;
         if (hoverAction) {
-          const lastHistoryPoint = pointStore.getLast();
+          const lastHistoryPoint = r.pointStore.getLast();
           const currentPrice = liveSegment && animatedPrice !== undefined ? animatedPrice : lastHistoryPoint?.price ?? 0;
           
           if (currentPrice > 0) {
@@ -904,7 +889,7 @@ export function useLineChart({
         }
         
         // Price Line — как на свечном (та же линия и метка)
-        const lastHistoryPoint = pointStore.getLast();
+        const lastHistoryPoint = r.pointStore.getLast();
         const currentPrice = liveSegment && animatedPrice !== undefined ? animatedPrice : lastHistoryPoint?.price ?? 0;
         if (currentPrice > 0 && timePriceViewport) {
           renderPriceLine({
@@ -914,7 +899,9 @@ export function useLineChart({
             width,
             height: mainHeight,
             digits: r.digits,
+            previousPrice: prevPriceRef.current,
           });
+          prevPriceRef.current = currentPrice;
         }
         
         // Price Axis
@@ -948,7 +935,7 @@ export function useLineChart({
             height: mainHeight,
           });
           
-          renderCrosshairTimeLabel(ctx, crosshairState, timePriceViewport, width, height);
+          renderCrosshairTimeLabel(ctx, crosshairState, timePriceViewport, width, mainHeight);
         }
       }
 
@@ -961,7 +948,8 @@ export function useLineChart({
       if (animationFrameId) {
         cancelAnimationFrame(animationFrameId);
       }
-      // 🔥 FIX: Очищаем returnToFollow таймер при unmount (утечка памяти + callback на мёртвом компоненте)
+      resizeObserver.disconnect();
+      matchDpr.removeEventListener?.('change', onDprChange);
       if (returnToFollowTimerRef.current) {
         clearTimeout(returnToFollowTimerRef.current);
         returnToFollowTimerRef.current = null;
@@ -988,10 +976,11 @@ export function useLineChart({
       returnToFollowTimerRef.current = null;
       
       // Вычисляем насколько viewport отстаёт от live (с учётом right padding)
+      // 🔥 FLOW CONTINUOUS-FOLLOW: используем тот же источник времени
       const currentViewport = viewport.getViewport();
       const windowMs = currentViewport.timeEnd - currentViewport.timeStart;
       const rightPadding = windowMs * RIGHT_PADDING_RATIO;
-      const now = Date.now();
+      const now = viewport.getWallTime(performance.now());
       const targetTimeEnd = now + rightPadding;
       const offset = targetTimeEnd - currentViewport.timeEnd; // Положительный = отстаём от live
       
@@ -1013,18 +1002,21 @@ export function useLineChart({
   const zoom = useCallback((factor: number) => {
     cancelReturnToFollow();
     viewport.zoom(factor);
-    // Размораживаем price range при zoom — пересчёт для нового viewport
-    frozenPriceRangeRef.current = null;
-    // Планируем возврат в follow mode
+    smoothedRangeRef.current = null;
+    scheduleReturnToFollow();
+  }, [viewport, cancelReturnToFollow, scheduleReturnToFollow]);
+
+  const zoomAt = useCallback((factor: number, anchorRatio: number) => {
+    cancelReturnToFollow();
+    viewport.zoomAt(factor, anchorRatio);
+    smoothedRangeRef.current = null;
     scheduleReturnToFollow();
   }, [viewport, cancelReturnToFollow, scheduleReturnToFollow]);
 
   const pan = useCallback((deltaMs: number) => {
     cancelReturnToFollow();
     viewport.pan(deltaMs);
-    // Размораживаем price range при pan — пересчёт для нового viewport
-    frozenPriceRangeRef.current = null;
-    // НЕ планируем возврат здесь — pan вызывается часто, планируем только после mouseUp/inertia
+    smoothedRangeRef.current = null;
   }, [viewport, cancelReturnToFollow]);
 
   const resetFollow = useCallback(() => {
@@ -1036,6 +1028,8 @@ export function useLineChart({
     viewport.setAutoFollow(enabled);
   }, [viewport]);
 
+  const lastInertiaTimeRef = useRef<number>(0);
+
   const advancePanInertia = useCallback((now: number) => {
     const refs = panInertiaRefsRef.current;
     if (!refs) return;
@@ -1043,6 +1037,7 @@ export function useLineChart({
     if (currentViewport.autoFollow) {
       refs.activeRef.current = false;
       refs.velocityRef.current = 0;
+      lastInertiaTimeRef.current = 0;
       return;
     }
 
@@ -1051,10 +1046,9 @@ export function useLineChart({
     const velocity = refs.velocityRef.current;
     const PAN_STOP_EPSILON = 0.02;
     if (Math.abs(velocity) < PAN_STOP_EPSILON) {
-      // Скорость слишком мала, останавливаем инерцию
       refs.activeRef.current = false;
       refs.velocityRef.current = 0;
-      // 🔥 FLOW RETURN-TO-FOLLOW: Планируем возврат когда инерция остановилась
+      lastInertiaTimeRef.current = 0;
       scheduleReturnToFollow();
       return;
     }
@@ -1062,22 +1056,21 @@ export function useLineChart({
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const dt = 16;
+    const dt = lastInertiaTimeRef.current > 0
+      ? Math.min(now - lastInertiaTimeRef.current, 64)
+      : 16;
+    lastInertiaTimeRef.current = now;
+
     const deltaX = velocity * dt;
 
-    // Вычисляем pixelsPerMs
     const timeRange = currentViewport.timeEnd - currentViewport.timeStart;
     const pixelsPerMs = canvas.clientWidth / timeRange;
-
-    // Конвертируем deltaX в deltaMs (инвертируем для интуитивного pan)
     const deltaMs = -deltaX / pixelsPerMs;
 
-    // Pan viewport
     viewport.pan(deltaMs);
 
-    // Уменьшаем скорость с friction
-    const PAN_FRICTION = 0.92;
-    refs.velocityRef.current *= PAN_FRICTION;
+    const PAN_FRICTION_PER_16MS = 0.92;
+    refs.velocityRef.current *= Math.pow(PAN_FRICTION_PER_16MS, dt / 16);
   }, [viewport, canvasRef, scheduleReturnToFollow]);
 
   // 🔥 FLOW RETURN-TO-FOLLOW: Обработка анимации возврата
@@ -1099,10 +1092,11 @@ export function useLineChart({
     const currentOffset = anim.startOffset * (1 - eased);
     
     // Устанавливаем viewport (с учётом right padding)
+    // 🔥 FLOW CONTINUOUS-FOLLOW: используем тот же источник времени что и viewport
     const currentViewport = viewport.getViewport();
     const windowMs = currentViewport.timeEnd - currentViewport.timeStart;
     const rightPadding = windowMs * 0.30; // RIGHT_PADDING_RATIO
-    const liveNow = Date.now();
+    const liveNow = viewport.getWallTime(now);
     const targetEnd = liveNow + rightPadding - currentOffset;
     
     viewport.setViewport(targetEnd - windowMs, targetEnd, false);
@@ -1127,8 +1121,7 @@ export function useLineChart({
     pointStore.reset();
     setLiveSegment(null);
     priceAnimator.reset();
-    hadLiveSegmentRef.current = false;
-    frozenPriceRangeRef.current = null;
+    smoothedRangeRef.current = null;
   }, [pointStore, setLiveSegment, priceAnimator]);
 
   const initializeFromSnapshot = useCallback((snapshot: {
@@ -1139,10 +1132,9 @@ export function useLineChart({
     pointStore.reset();
     setLiveSegment(null);
     priceAnimator.reset();
-    hadLiveSegmentRef.current = false;
-    frozenPriceRangeRef.current = null;
+    smoothedRangeRef.current = null;
 
-    const RIGHT_PADDING = 0.30; // Должен совпадать с useLineViewport
+    const RIGHT_PADDING = 0.30;
 
     // FLOW R-LINE-5: Обработка пустого snapshot (нормально для REAL инструментов)
     if (snapshot.points.length === 0) {
@@ -1169,12 +1161,58 @@ export function useLineChart({
     hoverActionRef.current = action;
   }, []);
 
+  const ZOOM_ANIM_DURATION = 180;
+  const ZOOM_STEP = 0.15;
+  const zoomAnimRef = useRef<number | null>(null);
+
+  const animateLineZoom = useCallback((factor: number) => {
+    if (zoomAnimRef.current) cancelAnimationFrame(zoomAnimRef.current);
+    cancelReturnToFollow();
+
+    const vp = viewport.getViewport();
+    const startTs = vp.timeStart;
+    const startTe = vp.timeEnd;
+    const oldWindow = startTe - startTs;
+    const anchorTime = startTs + oldWindow * 0.5;
+    const newWindow = oldWindow / factor;
+    const targetTs = anchorTime - newWindow * 0.5;
+    const targetTe = anchorTime + newWindow * 0.5;
+    const dTs = targetTs - startTs;
+    const dTe = targetTe - startTe;
+    const t0 = performance.now();
+
+    const step = (now: number) => {
+      const elapsed = now - t0;
+      const rawP = Math.min(1, elapsed / ZOOM_ANIM_DURATION);
+      const p = 1 - Math.pow(1 - rawP, 3);
+
+      const curVp = viewport.getViewport();
+      curVp.timeStart = startTs + dTs * p;
+      curVp.timeEnd = startTe + dTe * p;
+      curVp.autoFollow = false;
+      smoothedRangeRef.current = null;
+
+      if (rawP < 1) {
+        zoomAnimRef.current = requestAnimationFrame(step);
+      } else {
+        zoomAnimRef.current = null;
+        scheduleReturnToFollow();
+      }
+    };
+
+    zoomAnimRef.current = requestAnimationFrame(step);
+  }, [viewport, cancelReturnToFollow, scheduleReturnToFollow]);
+
+  const zoomInAnimated = useCallback(() => animateLineZoom(1 + ZOOM_STEP), [animateLineZoom]);
+  const zoomOutAnimated = useCallback(() => animateLineZoom(1 - ZOOM_STEP), [animateLineZoom]);
+
   return {
     handlePriceUpdate,
     handleServerTime,
     removeTrade,
     reset,
     zoom,
+    zoomAt,
     pan,
     resetFollow,
     setAutoFollow,
@@ -1194,5 +1232,7 @@ export function useLineChart({
     setPanInertiaRefs,
     advancePanInertia,
     scheduleReturnToFollow,
+    zoomInAnimated,
+    zoomOutAnimated,
   };
 }

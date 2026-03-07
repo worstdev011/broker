@@ -15,4 +15,5 @@ export interface AccountRepository {
   getRealAccount(userId: string): Promise<Account>; // 🔥 FLOW W1: Get or create REAL account
   findDemoByUserId(userId: string): Promise<Account | null>; // 🔥 FLOW D-RESET-DEMO: Find demo account
   setBalance(accountId: string, balance: number): Promise<Account>; // 🔥 FLOW D-RESET-DEMO: Set absolute balance
+  updateCurrencyByUserId(userId: string, currency: string): Promise<void>; // 🔥 Синхрон валюты с User.currency
 }

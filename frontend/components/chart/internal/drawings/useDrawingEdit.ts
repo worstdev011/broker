@@ -381,28 +381,36 @@ export function useDrawingEdit({
               },
             };
           } else if (editState.mode === 'resize-tl') {
+            const newT = Math.min(minT + deltaTime, maxT - 1);
+            const newP = Math.max(maxP + deltaPrice, minP + 0.00001);
             nextDrawing = {
               ...drawing,
-              start: { time: minT + deltaTime, price: maxP + deltaPrice },
+              start: { time: newT, price: newP },
               end: { time: maxT, price: minP },
             };
           } else if (editState.mode === 'resize-tr') {
+            const newT = Math.max(maxT + deltaTime, minT + 1);
+            const newP = Math.max(maxP + deltaPrice, minP + 0.00001);
             nextDrawing = {
               ...drawing,
-              start: { time: minT, price: maxP + deltaPrice },
-              end: { time: maxT + deltaTime, price: minP },
+              start: { time: minT, price: newP },
+              end: { time: newT, price: minP },
             };
           } else if (editState.mode === 'resize-bl') {
+            const newT = Math.min(minT + deltaTime, maxT - 1);
+            const newP = Math.min(minP + deltaPrice, maxP - 0.00001);
             nextDrawing = {
               ...drawing,
-              start: { time: minT + deltaTime, price: maxP },
-              end: { time: maxT, price: minP + deltaPrice },
+              start: { time: newT, price: maxP },
+              end: { time: maxT, price: newP },
             };
           } else if (editState.mode === 'resize-br') {
+            const newT = Math.max(maxT + deltaTime, minT + 1);
+            const newP = Math.min(minP + deltaPrice, maxP - 0.00001);
             nextDrawing = {
               ...drawing,
               start: { time: minT, price: maxP },
-              end: { time: maxT + deltaTime, price: minP + deltaPrice },
+              end: { time: newT, price: newP },
             };
           } else {
             nextDrawing = drawing;

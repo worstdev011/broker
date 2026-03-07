@@ -14,6 +14,7 @@ export interface User {
   nickname?: string | null;
   phone?: string | null;
   country?: string | null;
+  currency?: string | null; // 🔥 Валюта — устанавливается один раз
   dateOfBirth?: Date | null;
   avatarUrl?: string | null;
   // 🔥 FLOW S3: Two-Factor Authentication

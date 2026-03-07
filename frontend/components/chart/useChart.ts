@@ -25,8 +25,11 @@ import { useDrawingInteractions } from './internal/drawings/useDrawingInteractio
 import { useDrawingEdit } from './internal/drawings/useDrawingEdit';
 import { useCandleAnimator } from './internal/useCandleAnimator';
 import { useWebSocket, type TradeClosePayload } from '@/lib/hooks/useWebSocket';
-import { dismissToastByKey, showTradeOpenToast } from '@/stores/toast.store';
+import { DEFAULT_INSTRUMENT_ID } from '@/lib/instruments';
+import { dismissToastByKey, showTradeOpenToast, showTradeCloseToast } from '@/stores/toast.store';
 import { parseTimeframeToMs } from './internal/utils/timeframe';
+import { zoomViewportTime } from './internal/interactions/math';
+import { api } from '@/lib/api/api';
 import { formatServerTime } from './internal/utils/formatServerTime';
 import type { PriceAlert } from './internal/alerts/priceAlerts.types';
 import type { InteractionZone } from './internal/interactions/interaction.types';
@@ -272,8 +275,7 @@ export function useChart({ canvasRef, timeframe = '5s', snapshot, instrument, pa
               ? [{ time: 0, price: d.price }]
               : [{ time: d.time, price: 0 }];
 
-        const drawingType: import('./internal/overlay/overlay.types').DrawingOverlay['drawingType'] =
-          d.type === 'arrow' ? 'ray' : d.type;
+        const drawingType: import('./internal/overlay/overlay.types').DrawingOverlay['drawingType'] = d.type;
 
         cb({
           id: d.id,
@@ -303,6 +305,9 @@ export function useChart({ canvasRef, timeframe = '5s', snapshot, instrument, pa
 
   // FLOW E1: Expiration seconds — хранится в ref, меняется только UI терминала
   const expirationSecondsRef = useRef<number>(60);
+
+  // Deferred work timeout IDs (cleanup on unmount)
+  const deferredTimersRef = useRef<NodeJS.Timeout[]>([]);
 
   // FLOW BO-HOVER: Hover action state (ref-based, не триггерит render)
   const hoverActionRef = useRef<HoverAction>(null);
@@ -422,7 +427,8 @@ export function useChart({ canvasRef, timeframe = '5s', snapshot, instrument, pa
   const getExpirationTime = useCallback((): number | null => {
     const s = serverTimeRef.current;
     if (!s) return null;
-    return s.timestamp + expirationSecondsRef.current * 1000;
+    const now = s.timestamp + (performance.now() - lastSyncTimeRef.current);
+    return now + expirationSecondsRef.current * 1000;
   }, []);
 
   // Получение секунд экспирации для отображения метки
@@ -494,7 +500,7 @@ export function useChart({ canvasRef, timeframe = '5s', snapshot, instrument, pa
   // FLOW G6/P9: history loading по instrument (id для API ?instrument=)
   // FLOW R-FIX: Используем ТОЛЬКО переданный instrument, без fallback на snapshot
   // чтобы избежать смешивания OTC и REAL инструментов
-  const asset = instrument || 'BTCUSD';
+  const asset = instrument || DEFAULT_INSTRUMENT_ID;
 
   const historyLoader = useHistoryLoader({
     getCandles: chartData.getCandles,
@@ -651,19 +657,17 @@ export function useChart({ canvasRef, timeframe = '5s', snapshot, instrument, pa
     };
     lastSyncTimeRef.current = performance.now();
 
-    setTimeout(() => {
+    const tid = setTimeout(() => {
       viewport.recalculateViewport();
       viewport.setLatestCandleTime(chartData.getLiveCandle()?.endTime ?? currentTime);
       
-      // FLOW IS-0: Initial History Check — проверяем нужно ли догрузить историю при старте
-      // Вызывается один раз после инициализации viewport, без user input
-      // Использует тот же алгоритм maybeLoadMore, что и при pan/zoom
       const currentViewport = viewport.getViewport();
       if (currentViewport && chartData.getCandles().length > 0) {
-        // Проверяем что viewport рассчитан и есть данные
         historyLoader.maybeLoadMore(currentViewport);
       }
+      deferredTimersRef.current = deferredTimersRef.current.filter(t => t !== tid);
     }, 0);
+    deferredTimersRef.current.push(tid);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [snapshot, timeframe, instrument]);
 
@@ -677,16 +681,13 @@ export function useChart({ canvasRef, timeframe = '5s', snapshot, instrument, pa
     onTradeClose: (data: TradeClosePayload) => {
       removeTrade(data.id);
       dismissToastByKey(data.id);
+      showTradeCloseToast(data);
     },
     onServerTime: (timestamp) => {
       if (serverTimeRef.current) serverTimeRef.current.timestamp = timestamp;
       lastSyncTimeRef.current = performance.now();
     },
     onPriceUpdate: (price, timestamp) => {
-      // Логирование только для AUDCHF
-      if (instrument === 'AUDCHF') {
-        console.log(`[AUDCHF] [useChart] Price update received:`, price, '@', new Date(timestamp).toISOString());
-      }
       chartData.handlePriceUpdate(price, timestamp);
       // FLOW F3: якорь «текущее время» для кнопки «Вернуться к текущим»
       viewport.setLatestCandleTime(chartData.getLiveCandle()?.endTime ?? timestamp);
@@ -718,26 +719,40 @@ export function useChart({ canvasRef, timeframe = '5s', snapshot, instrument, pa
         }
       }
     },
-    // FLOW CANDLE-SNAPSHOT: Обработка снапшота активных свечей при подписке
     onCandleSnapshot: (candles) => {
-      // Находим свечу для текущего таймфрейма
       const match = candles.find((c: { timeframe: string; candle: any }) => c.timeframe === timeframe);
-      if (match) {
+      if (!match) return;
+
+      const liveCandle = chartData.getLiveCandle();
+      const tfMs = parseTimeframeToMs(timeframe);
+
+      if (liveCandle && match.candle.timestamp > liveCandle.startTime + tfMs * 1.5 && instrument) {
+        api<TerminalSnapshot>(
+          `/api/terminal/snapshot?instrument=${encodeURIComponent(instrument)}&timeframe=${encodeURIComponent(timeframe)}`,
+        ).then((snap) => {
+          if (!snap?.candles?.items?.length) return;
+          const price = snap.price?.value ?? null;
+          const time = snap.price?.timestamp ?? snap.serverTime;
+          chartData.reset();
+          candleAnimator.reset();
+          chartData.initializeFromSnapshot(
+            snap.candles.items, price, time, tfMs,
+            snap.marketStatus,
+            snap.nextMarketOpenAt,
+            snap.topAlternatives ?? [],
+          );
+          viewport.recalculateViewport();
+          viewport.setLatestCandleTime(chartData.getLiveCandle()?.endTime ?? time);
+        }).catch((err) => {
+          console.error('[useChart] Failed to backfill missed candles:', err);
+        });
+      } else {
         chartData.applyActiveCandleSnapshot(match.candle);
-        // Пересчитываем viewport чтобы учесть новые high/low
         viewport.recalculateYOnly();
       }
     },
     onCandleClose: (wsCandle, timeframeStr) => {
-      // Логирование только для AUDCHF
-      if (instrument === 'AUDCHF') {
-        console.log(`[AUDCHF] [useChart] Candle close received:`, timeframeStr, wsCandle, 'current timeframe:', timeframe);
-      }
-      // Фильтруем по timeframe - обрабатываем только свечи текущего timeframe
       if (timeframeStr !== timeframe) {
-        if (instrument === 'AUDCHF') {
-          console.log('[AUDCHF] [useChart] Candle timeframe mismatch, ignoring');
-        }
         return;
       }
 
@@ -755,20 +770,26 @@ export function useChart({ canvasRef, timeframe = '5s', snapshot, instrument, pa
         endTime: wsCandle.timestamp + timeframeMs,
       };
 
-      chartData.handleCandleClose(snapshotCandle, snapshotCandle.endTime);
+      chartData.handleCandleClose(snapshotCandle, snapshotCandle.endTime, timeframeMs);
       viewport.setLatestCandleTime(snapshotCandle.endTime);
       candleAnimator.onCandleClose();
 
-      setTimeout(() => {
-        if (viewport.getFollowMode()) {
-          viewport.recalculateViewport();
-        } else {
-          viewport.recalculateYOnly();
-        }
-      }, 0);
+      if (viewport.getFollowMode()) {
+        viewport.recalculateViewport();
+      } else {
+        viewport.recalculateYOnly();
+      }
     },
     enabled: !!(activeInstrumentRef && instrument), // FLOW WS-1: WebSocket управляет своим состоянием
   });
+
+  // Cleanup deferred timers on unmount
+  useEffect(() => {
+    return () => {
+      deferredTimersRef.current.forEach(clearTimeout);
+      deferredTimersRef.current = [];
+    };
+  }, []);
 
   /** FLOW F5/F6: вернуться к актуальным свечам, включить follow */
   const followLatest = (): void => {
@@ -785,8 +806,6 @@ export function useChart({ canvasRef, timeframe = '5s', snapshot, instrument, pa
     expiresAt: string;
     amount?: string; // Сумма сделки
   }): void => {
-    console.log('[useChart] addTradeOverlayFromDTO called with:', trade);
-    
     const entryPrice = parseFloat(trade.entryPrice);
     const openedAt = new Date(trade.openedAt).getTime();
     const expiresAt = new Date(trade.expiresAt).getTime();
@@ -812,8 +831,6 @@ export function useChart({ canvasRef, timeframe = '5s', snapshot, instrument, pa
       amount,
     };
 
-    console.log('[useChart] Adding trade:', tradeData);
-
     // Добавляем trade в хранилище
     tradesRef.current = [
       ...tradesRef.current.filter(t => t.id !== trade.id),
@@ -838,6 +855,64 @@ export function useChart({ canvasRef, timeframe = '5s', snapshot, instrument, pa
     }
   };
 
+  const BUTTON_ZOOM_STEP = 0.15;
+  const ZOOM_ANIM_DURATION = 180;
+  const zoomAnimRef = useRef<number | null>(null);
+
+  const animateZoom = useCallback((factor: number) => {
+    if (zoomAnimRef.current) cancelAnimationFrame(zoomAnimRef.current);
+
+    const startVp = viewport.viewportRef.current;
+    if (!startVp) return;
+
+    const anchorTime = (startVp.timeStart + startVp.timeEnd) / 2;
+    const targetVp = zoomViewportTime({
+      viewport: startVp,
+      zoomFactor: factor,
+      anchorTime,
+      minVisibleCandles: 35,
+      maxVisibleCandles: 300,
+      timeframeMs,
+    });
+
+    viewport.setFollowMode(false);
+
+    const startTs = startVp.timeStart;
+    const startTe = startVp.timeEnd;
+    const dTs = targetVp.timeStart - startTs;
+    const dTe = targetVp.timeEnd - startTe;
+    const t0 = performance.now();
+
+    const step = (now: number) => {
+      const elapsed = now - t0;
+      const rawP = Math.min(1, elapsed / ZOOM_ANIM_DURATION);
+      const p = 1 - Math.pow(1 - rawP, 3);
+
+      const curVp = viewport.viewportRef.current;
+      if (!curVp) return;
+
+      viewport.updateViewport({
+        timeStart: startTs + dTs * p,
+        timeEnd: startTe + dTe * p,
+        priceMin: curVp.priceMin,
+        priceMax: curVp.priceMax,
+        yMode: curVp.yMode,
+      });
+
+      if (rawP < 1) {
+        zoomAnimRef.current = requestAnimationFrame(step);
+      } else {
+        zoomAnimRef.current = null;
+        viewport.scheduleReturnToFollow();
+      }
+    };
+
+    zoomAnimRef.current = requestAnimationFrame(step);
+  }, [viewport, timeframeMs]);
+
+  const zoomIn = useCallback(() => animateZoom(1 - BUTTON_ZOOM_STEP), [animateZoom]);
+  const zoomOut = useCallback(() => animateZoom(1 + BUTTON_ZOOM_STEP), [animateZoom]);
+
   return {
     setCandleMode: candleMode.setMode,
     getCandleMode: candleMode.getMode,
@@ -858,5 +933,7 @@ export function useChart({ canvasRef, timeframe = '5s', snapshot, instrument, pa
     getHoverAction,
     handleAlternativeClick,
     handleAlternativeHover,
+    zoomIn,
+    zoomOut,
   };
 }

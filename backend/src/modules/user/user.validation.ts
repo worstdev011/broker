@@ -58,6 +58,12 @@ export const updateProfileSchema = z.object({
       z.null(),
     ])
     .optional(),
+  currency: z
+    .string()
+    .min(3, 'Currency code must be at least 3 characters')
+    .max(10, 'Currency code must be at most 10 characters')
+    .transform((s) => s.toUpperCase().trim())
+    .optional(),
   dateOfBirth: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date of birth must be in YYYY-MM-DD format')

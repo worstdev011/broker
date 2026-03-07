@@ -33,8 +33,13 @@ export function transformToHeikinAshi(candles: Candle[]): Candle[] {
 
   for (let i = 0; i < candles.length; i++) {
     const candle = candles[i];
+
+    if (!Number.isFinite(candle.open) || !Number.isFinite(candle.high) ||
+        !Number.isFinite(candle.low)  || !Number.isFinite(candle.close)) {
+      haCandles.push({ ...candle });
+      continue;
+    }
     
-    // HA_close = (O + H + L + C) / 4
     const haClose = (candle.open + candle.high + candle.low + candle.close) / 4;
 
     // HA_open

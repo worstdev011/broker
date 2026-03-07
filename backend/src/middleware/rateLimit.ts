@@ -33,9 +33,10 @@ const globalRateLimitConfig = {
   max: RATE_LIMIT_MAX,
   timeWindow: '1 minute',
   cache: RATE_LIMIT_CACHE,
-  // Skip rate limiting only for: localhost IPs, health check
+  // Skip rate limiting for: localhost, LAN IPs (192.168.x.x, 10.x.x.x), health check
   allowList: (request: FastifyRequest, key: string) => {
     if (['127.0.0.1', '::1'].includes(key)) return true;
+    if (key.startsWith('192.168.') || key.startsWith('10.') || key.startsWith('::ffff:192.168.') || key.startsWith('::ffff:10.')) return true;
     if (request.url === '/health') return true;
     return false;
   },

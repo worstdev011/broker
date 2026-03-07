@@ -18,7 +18,6 @@ interface RenderGridParams {
 const GRID_COLOR = 'rgba(255, 255, 255, 0.07)';
 const GRID_LINE_WIDTH = 1;
 const TIME_LABEL_HEIGHT = 25; // Высота области для меток времени (чтобы сетка не налазила)
-const PRICE_LABEL_WIDTH = 60; // Ширина области для меток цены справа (чтобы сетка не налазила)
 
 /**
  * Вычисляет оптимальный шаг для сетки по времени
@@ -54,13 +53,18 @@ function calculateTimeStep(timeRange: number, width: number, timeframeMs?: numbe
  * Вычисляет оптимальный шаг для сетки по цене
  */
 function calculatePriceStep(priceRange: number, height: number): number {
-  const targetSteps = 10; // Целевое количество шагов
+  if (height <= 0 || priceRange <= 0) return priceRange || 1;
+
+  const targetSteps = 10;
   const pixelsPerStep = height / targetSteps;
   const pricePerPixel = priceRange / height;
   const priceStep = pixelsPerStep * pricePerPixel;
 
-  // Округляем до "красивых" значений
+  if (!Number.isFinite(priceStep) || priceStep <= 0) return priceRange || 1;
+
   const magnitude = Math.pow(10, Math.floor(Math.log10(priceStep)));
+  if (!Number.isFinite(magnitude) || magnitude <= 0) return priceRange || 1;
+
   const normalized = priceStep / magnitude;
 
   let step: number;
@@ -72,18 +76,17 @@ function calculatePriceStep(priceRange: number, height: number): number {
   return step * magnitude;
 }
 
-/**
- * Конвертирует время в X координату
- */
+/** Sub-pixel aligned coordinate for crisp 1px lines */
+function snap(v: number): number {
+  return Math.round(v) + 0.5;
+}
+
 function timeToX(time: number, viewport: Viewport, width: number): number {
   const timeRange = viewport.timeEnd - viewport.timeStart;
   if (timeRange === 0) return 0;
   return ((time - viewport.timeStart) / timeRange) * width;
 }
 
-/**
- * Конвертирует цену в Y координату
- */
 function priceToY(price: number, viewport: Viewport, height: number): number {
   const priceRange = viewport.priceMax - viewport.priceMin;
   if (priceRange === 0) return height / 2;
@@ -125,7 +128,7 @@ export function renderGrid({
     for (let time = startTime; time <= viewport.timeEnd && lineCount < MAX_GRID_LINES; time += timeStep) {
       if (timeStep <= 0) break;
       lineCount++;
-      const x = timeToX(time, viewport, width);
+      const x = snap(timeToX(time, viewport, width));
       if (x >= 0 && x <= width) {
         ctx.moveTo(x, 0);
         ctx.lineTo(x, gridHeight);
@@ -140,17 +143,16 @@ export function renderGrid({
     const startPrice = Math.ceil(viewport.priceMin / priceStep) * priceStep;
 
     ctx.beginPath();
-    const gridWidth = width - PRICE_LABEL_WIDTH;
     const gridHeight = height - TIME_LABEL_HEIGHT;
     const MAX_GRID_LINES = 500;
     let lineCount = 0;
     for (let price = startPrice; price <= viewport.priceMax && lineCount < MAX_GRID_LINES; price += priceStep) {
       if (priceStep <= 0) break;
       lineCount++;
-      const y = priceToY(price, viewport, height);
+      const y = snap(priceToY(price, viewport, height));
       if (y >= 0 && y <= gridHeight) {
         ctx.moveTo(0, y);
-        ctx.lineTo(gridWidth, y);
+        ctx.lineTo(width, y);
       }
     }
     ctx.stroke();
@@ -197,7 +199,7 @@ export function renderVerticalGridOnly({
   for (let time = startTime; time <= viewport.timeEnd && lineCount < MAX_GRID_LINES; time += timeStep) {
     if (timeStep <= 0) break;
     lineCount++;
-    const x = timeToX(time, viewport, width);
+    const x = snap(timeToX(time, viewport, width));
     if (x >= 0 && x <= width) {
       ctx.moveTo(x, fromY);
       ctx.lineTo(x, toY);

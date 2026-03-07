@@ -162,13 +162,11 @@ export function SecuritySection({ profile, onProfileUpdate }: SecuritySectionPro
   const labelClass = 'block text-xs sm:text-sm font-medium text-white/70 mb-1.5 sm:mb-2';
 
   return (
-    <div className="w-full space-y-6">
-      {/* Смена пароля — карточка на всю ширину */}
-      <section className="rounded-lg sm:rounded-xl bg-[#0a1635] border border-white/10 p-4 sm:p-6">
-        <div className="mb-4 sm:mb-6">
-          <h2 className="text-base sm:text-lg font-semibold text-white">Смена пароля</h2>
-          <p className="text-sm text-white/50 mt-0.5">Обновите пароль для защиты аккаунта</p>
-        </div>
+    <>
+      {/* Смена пароля */}
+      <div className="mt-6 p-6 sm:p-8 rounded-xl bg-[#030E28]">
+        <h2 className="text-base sm:text-lg font-semibold text-white mb-1">Смена пароля</h2>
+        <p className="text-sm text-white/50 mb-6">Обновите пароль для защиты аккаунта</p>
         <form onSubmit={handleChangePassword} className="w-full">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
             <div>
@@ -221,14 +219,12 @@ export function SecuritySection({ profile, onProfileUpdate }: SecuritySectionPro
             {passwordSuccess && <p className="text-sm text-emerald-400">Пароль успешно изменён</p>}
           </div>
         </form>
-      </section>
+      </div>
 
-      {/* 2FA — карточка на всю ширину */}
-      <section className="rounded-lg sm:rounded-xl bg-[#0a1635] border border-white/10 p-4 sm:p-6">
-        <div className="mb-4 sm:mb-6">
-          <h2 className="text-base sm:text-lg font-semibold text-white">Двухфакторная аутентификация (2FA)</h2>
-          <p className="text-sm text-white/50 mt-0.5">Дополнительный уровень защиты при входе</p>
-        </div>
+      {/* 2FA */}
+      <div className="mt-6 p-6 sm:p-8 rounded-xl bg-[#030E28]">
+        <h2 className="text-base sm:text-lg font-semibold text-white mb-1">Двухфакторная аутентификация (2FA)</h2>
+        <p className="text-sm text-white/50 mb-6">Дополнительный уровень защиты при входе</p>
 
         {twoFAError && (
           <div className="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
@@ -243,9 +239,9 @@ export function SecuritySection({ profile, onProfileUpdate }: SecuritySectionPro
 
         {profile?.twoFactorEnabled ? (
           <div className="space-y-6">
-            <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm">
+            <p className="text-sm text-emerald-400">
               2FA включена. Ваш аккаунт защищён дополнительным кодом при входе.
-            </div>
+            </p>
             <form onSubmit={handleDisable2FA} className="w-full">
               <p className="text-sm text-white/60 mb-4">Для отключения 2FA введите пароль и текущий код из приложения.</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-2xl">
@@ -346,7 +342,7 @@ export function SecuritySection({ profile, onProfileUpdate }: SecuritySectionPro
             </div>
           </div>
         ) : (
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-4 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <p className="text-sm text-white/60">
               Добавьте дополнительный уровень защиты. При входе потребуется код из приложения.
             </p>
@@ -360,7 +356,7 @@ export function SecuritySection({ profile, onProfileUpdate }: SecuritySectionPro
             </button>
           </div>
         )}
-      </section>
-    </div>
+      </div>
+    </>
   );
 }

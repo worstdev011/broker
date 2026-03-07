@@ -1,4 +1,8 @@
 /** @type {import('next').NextConfig} */
+const createNextIntlPlugin = require('next-intl/plugin');
+
+const withNextIntl = createNextIntlPlugin('./i18n/request.ts');
+
 const backendUrl = process.env.API_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 const nextConfig = {
@@ -18,10 +22,13 @@ const nextConfig = {
       { protocol: 'https', hostname: 'flagcdn.com', pathname: '/**' },
     ],
   },
-  // Проксируем /api/* на бэкенд — cookies работают только при same-origin запросах (localhost:3000 ↔ localhost:3001 не шлёт cookies)
+  // Проксируем /api/* и /uploads/* на бэкенд — cookies работают только при same-origin запросах
   async rewrites() {
-    return [{ source: '/api/:path*', destination: `${backendUrl}/api/:path*` }];
+    return [
+      { source: '/api/:path*', destination: `${backendUrl}/api/:path*` },
+      { source: '/uploads/:path*', destination: `${backendUrl}/uploads/:path*` },
+    ];
   },
 }
 
-module.exports = nextConfig
+module.exports = withNextIntl(nextConfig)

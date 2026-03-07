@@ -21,29 +21,19 @@ import { renderPriceLine } from './renderPriceLine';
 import type { CandleMode } from '../candleModes/candleMode.types';
 
 interface RenderEngineParams {
-  ctx: CanvasRenderingContext2D; // Нативный тип браузера
+  ctx: CanvasRenderingContext2D;
   viewport: Viewport;
   candles: Candle[];
   liveCandle: Candle | null;
   width: number;
   height: number;
   timeframeMs: number;
-  mode?: CandleMode; // FLOW G10: Режим отображения свечей
-  /** Количество знаков после запятой для цен (по инструменту, напр. 5 для forex) */
+  mode?: CandleMode;
   digits?: number;
+  settings?: { bullishColor: string; bearishColor: string };
+  previousPrice?: number | null;
 }
 
-/**
- * Render Engine - оркестратор рендеринга
- * 
- * Порядок отрисовки (снизу вверх):
- * 1. Clear
- * 2. Grid
- * 3. Candles (закрытые)
- * 4. Live candle
- * 5. Axes
- * 6. Current price line
- */
 export function renderEngine({
   ctx,
   viewport,
@@ -52,23 +42,16 @@ export function renderEngine({
   width,
   height,
   timeframeMs,
-  mode = 'classic', // FLOW G10: Режим отображения (по умолчанию classic)
+  mode = 'classic',
   digits,
+  settings,
+  previousPrice,
 }: RenderEngineParams): void {
-  // Примечание: clearRect вызывается в useRenderLoop перед вызовом renderEngine
-  // Это позволяет корректно обрабатывать случаи с RSI зоной
-
-  // 1. Grid
   renderGrid({ ctx, viewport, width, height, timeframeMs });
-
-  // 3. Candles (закрытые)
-  renderCandles({ ctx, viewport, candles, liveCandle, width, height, timeframeMs, mode });
-
-  // 4. Axes (поверх свечей) — метки цены справа по digits инструмента
+  renderCandles({ ctx, viewport, candles, liveCandle, width, height, timeframeMs, mode, settings });
   renderAxes({ ctx, viewport, width, height, digits });
 
-  // 5. Current price line (поверх всего)
   if (liveCandle) {
-    renderPriceLine({ ctx, viewport, currentPrice: liveCandle.close, width, height, digits });
+    renderPriceLine({ ctx, viewport, currentPrice: liveCandle.close, width, height, digits, previousPrice });
   }
 }

@@ -31,7 +31,7 @@ export class TradesController {
         direction: 'CALL' | 'PUT';
         amount: number;
         expirationSeconds: number;
-        instrument: string; // Trading instrument (e.g., 'AUDCHF', 'BTCUSD')
+        instrument: string; // Trading instrument (e.g., 'EURUSD_OTC', 'AUDCHF_REAL')
       };
     }>,
     reply: FastifyReply,

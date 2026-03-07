@@ -11,6 +11,8 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
     "prisma:seed": "tsx prisma/seed.ts",
+    "prisma:fix-candles-symbols": "tsx prisma/run-candles-migration.ts",
+    "prisma:backfill-user-ids": "tsx prisma/scripts/backfill-user-ids.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:ui": "vitest --ui"

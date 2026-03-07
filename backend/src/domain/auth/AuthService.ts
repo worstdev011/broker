@@ -15,6 +15,7 @@ import {
   InvalidSessionError,
 } from './AuthErrors.js';
 import { hashPassword, verifyPassword, hashToken, generateSessionToken } from '../../utils/crypto.js';
+import { generateUserId } from '../../utils/userId.js';
 import { generateTempToken, verifyTempToken } from '../../utils/tempTokens.js';
 import { TwoFactorService } from '../user/TwoFactorService.js';
 
@@ -48,16 +49,26 @@ export class AuthService {
     // Hash password
     const passwordHash = await hashPassword(input.password);
 
+    // Generate unique 8-digit user id
+    let userId: string = '';
+    const maxAttempts = 10;
+    for (let i = 0; i < maxAttempts; i++) {
+      userId = generateUserId();
+      if (!(await this.userRepository.existsById(userId))) break;
+      if (i === maxAttempts - 1) throw new Error('Failed to generate unique user ID');
+    }
+
     // Create user
     const user = await this.userRepository.create({
+      id: userId,
       email: input.email,
       password: passwordHash,
     });
 
-    // 🔥 FLOW REGISTER-ACCOUNTS: Сразу создаём demo и real счета
+    // 🔥 FLOW REGISTER-ACCOUNTS: Сразу создаём real и demo; по умолчанию активен реальный счёт
     if (this.accountService) {
-      await this.accountService.createAccount({ userId: user.id, type: AccountType.DEMO });
       await this.accountService.createAccount({ userId: user.id, type: AccountType.REAL });
+      await this.accountService.createAccount({ userId: user.id, type: AccountType.DEMO });
     }
 
     // Create session
