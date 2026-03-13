@@ -9,12 +9,14 @@
  */
 
 import { useRef, useEffect, useCallback } from 'react';
+import { logger } from '@/lib/logger';
 import type React from 'react';
 import { useLinePointStore, type PricePoint } from './useLinePointStore';
+import { useLineReducedPoints } from './useLineReducedPoints';
 import { useLineViewport, DEFAULT_WINDOW_MS } from './useLineViewport';
 import { useLineData, type LiveSegment } from './useLineData';
 import { useLinePriceAnimator } from './useLinePriceAnimator';
-import { renderLine, calculatePriceRange, renderLiveSegment } from './renderLine';
+import { renderLine, calculatePriceRange } from './renderLine';
 import { renderPulsatingPoint } from './renderPulsatingPoint';
 import { renderTrades } from './renderTrades';
 import { 
@@ -72,6 +74,7 @@ export function useLineChart({
   overlayRegistry,
 }: UseLineChartParams) {
   const pointStore = useLinePointStore();
+  const reducedPoints = useLineReducedPoints();
   const viewport = useLineViewport();
 
   // Ref для instrument (используется в render loop без пересоздания)
@@ -85,7 +88,6 @@ export function useLineChart({
   
   // ✅ ПРАВИЛЬНАЯ АРХИТЕКТУРА: Live сегмент (ephemeral, не мутирует историю)
   const liveSegmentRef = useRef<LiveSegment>(null);
-  const prevPriceRef = useRef<number | null>(null);
   const setLiveSegment = useCallback((segment: LiveSegment) => {
     liveSegmentRef.current = segment;
   }, []);
@@ -109,6 +111,11 @@ export function useLineChart({
   
   const lineData = useLineData({ pointStore, viewport, enabled, setLiveSegment });
   const priceAnimator = useLinePriceAnimator();
+
+  // Fix #1: Buffer WS ticks until snapshot is loaded (race condition protection)
+  const snapshotReadyRef = useRef<boolean>(false);
+  const tickBufferRef = useRef<Array<{ price: number; timestamp: number }>>([]);
+
   // Smooth price range: экспоненциальное сглаживание вместо заморозки
   const smoothedRangeRef = useRef<{ min: number; max: number } | null>(null);
   const lastFrameTimeRef = useRef<number>(performance.now());
@@ -146,12 +153,14 @@ export function useLineChart({
 
   // Обработчик server time (вызывается из useWebSocket)
   const handleServerTime = useCallback((timestamp: number) => {
+    // Fix #2: calibrate time anchor on server:time events as well
+    viewport.calibrateTime(timestamp);
     serverTimeRef.current = {
       timestamp,
       lastSyncTime: performance.now(),
     };
     onServerTimeRef.current?.(timestamp);
-  }, []);
+  }, [viewport]);
 
   // FLOW E: единственный источник truth по времени экспирации (в мс)
   const getExpirationTime = useCallback((): number | null => {
@@ -178,6 +187,21 @@ export function useLineChart({
     amount?: number;
   }>>([]);
 
+  // Кратковременные метки результата закрытых сделок (после trade:close)
+  const RECENT_TRADE_DISPLAY_MS = 5000;
+  const recentClosedTradesRef = useRef<Array<{
+    id: string;
+    direction: 'CALL' | 'PUT';
+    entryPrice: number;
+    openedAt: number;
+    expiresAt: number;
+    entryTime?: number;
+    amount?: number;
+    result: 'WIN' | 'LOSS' | 'TIE';
+    pnl: number;
+    showUntil: number;
+  }>>([]);
+
   const getTrades = useCallback((): typeof tradesRef.current => {
     return tradesRef.current;
   }, []);
@@ -185,6 +209,19 @@ export function useLineChart({
   const removeTrade = useCallback((id: string): void => {
     tradesRef.current = tradesRef.current.filter((t) => t.id !== id);
   }, []);
+
+  const getRecentClosedTrades = useCallback(
+    (): typeof recentClosedTradesRef.current => {
+      const now = Date.now();
+      if (recentClosedTradesRef.current.length > 0) {
+        recentClosedTradesRef.current = recentClosedTradesRef.current.filter(
+          (t) => t.showUntil > now,
+        );
+      }
+      return recentClosedTradesRef.current;
+    },
+    [],
+  );
 
   /** FLOW T-OVERLAY: добавить overlay по Trade DTO (HTTP) */
   const addTradeOverlayFromDTO = useCallback((trade: {
@@ -201,7 +238,7 @@ export function useLineChart({
     const amount = trade.amount ? parseFloat(trade.amount) : undefined;
 
     if (!Number.isFinite(entryPrice) || !Number.isFinite(openedAt) || !Number.isFinite(expiresAt)) {
-      console.error('[useLineChart] Invalid trade data', trade);
+      logger.error('[useLineChart] Invalid trade data', trade);
       return;
     }
 
@@ -220,6 +257,55 @@ export function useLineChart({
       tradeData,
     ];
   }, []);
+
+  // Обработка события trade:close — убрать активный overlay и показать результат на 5 секунд
+  const handleTradeClose = useCallback((data: {
+    id: string;
+    direction: 'CALL' | 'PUT';
+    amount: string;
+    entryPrice: string;
+    payout: string;
+    result: 'WIN' | 'LOSS' | 'TIE';
+    openedAt: string;
+    expiresAt: string;
+  }) => {
+    removeTrade(data.id);
+
+    const entryPrice = parseFloat(data.entryPrice);
+    const amount = parseFloat(data.amount);
+    const payout = parseFloat(data.payout);
+    const openedAt = new Date(data.openedAt).getTime();
+    const expiresAt = new Date(data.expiresAt).getTime();
+
+    if (
+      !Number.isFinite(entryPrice) ||
+      !Number.isFinite(amount) ||
+      !Number.isFinite(payout) ||
+      !Number.isFinite(openedAt) ||
+      !Number.isFinite(expiresAt)
+    ) {
+      return;
+    }
+
+    const pnl = payout - amount;
+    const now = Date.now();
+
+    recentClosedTradesRef.current = [
+      ...recentClosedTradesRef.current.filter((t) => t.id !== data.id),
+      {
+        id: data.id,
+        direction: data.direction,
+        entryPrice,
+        openedAt,
+        expiresAt,
+        entryTime: openedAt,
+        amount,
+        result: data.result,
+        pnl,
+        showUntil: now + RECENT_TRADE_DISPLAY_MS,
+      },
+    ];
+  }, [removeTrade]);
 
   // Crosshair для линейного графика
   const getViewportForCrosshair = useCallback(() => {
@@ -308,9 +394,13 @@ export function useLineChart({
       hoveredDrawingModeRef.current = mode;
     },
     onEditStateChange: (editState) => {
+      const wasEditing = isEditingDrawingRef.current;
       selectedDrawingIdRef.current = editState?.drawingId ?? null;
       editStateRef.current = editState ?? null;
       isEditingDrawingRef.current = editState !== null;
+      if (wasEditing && editState === null) {
+        overlayRegistry?.onDrawingEdited?.();
+      }
     },
     getIsEditing: () => isEditingDrawingRef.current,
     onRegisterHitTest: (fn) => { hitTestDrawingRef.current = fn; },
@@ -345,12 +435,16 @@ export function useLineChart({
 
   const handlePriceUpdate = useCallback(
     (price: number, timestamp: number) => {
+      if (!snapshotReadyRef.current) {
+        tickBufferRef.current.push({ price, timestamp });
+        return;
+      }
       lineData.onPriceUpdate(price, timestamp);
-      // onPriceUpdate auto-snap'ит на первом вызове, далее — 80ms easeOut
+      reducedPoints.pushTick({ time: timestamp, price });
       priceAnimator.onPriceUpdate(price);
       onPriceUpdateRef.current?.(price, timestamp);
     },
-    [lineData, priceAnimator]
+    [lineData, reducedPoints, priceAnimator]
   );
 
   // 🔥 FLOW C-INERTIA: Pan inertia для линейного графика
@@ -379,8 +473,8 @@ export function useLineChart({
       isInitialMountRef.current = false;
       
       // Полный reset при первом монтировании (или при пересоздании из-за смены chartType)
-      // Шаг 1: Reset данных точек
       pointStore.reset();
+      reducedPoints.reset();
       setLiveSegment(null);
       
       // Шаг 2: Reset viewport (сброс zoom/pan, autoFollow = true)
@@ -402,11 +496,14 @@ export function useLineChart({
 
   // 🔥 FIX: Ref для render params — RAF loop не перезапускается при каждом re-render.
   // Без ref каждый re-render перезапускал useEffect → teardown/rebuild → frame drops.
+  // Fix #3: All render params through refs to avoid stale closures in RAF loop
   const renderParamsRef = useRef({
     pointStore,
+    reducedPoints,
     viewport,
     crosshair,
     digits,
+    payoutPercent,
     getExpirationTime,
     getTrades,
     drawings,
@@ -420,9 +517,11 @@ export function useLineChart({
   });
   renderParamsRef.current = {
     pointStore,
+    reducedPoints,
     viewport,
     crosshair,
     digits,
+    payoutPercent,
     getExpirationTime,
     getTrades,
     drawings,
@@ -503,6 +602,7 @@ export function useLineChart({
       const { ctx, width, height } = setup;
 
       const historyPoints = r.pointStore.getAll();
+      const historyReduced = r.reducedPoints.getReducedPoints();
       const liveSegment = liveSegmentRef.current;
       const currentViewport = r.viewport.getViewport();
 
@@ -520,51 +620,71 @@ export function useLineChart({
         }
       }
 
-      // 🔥 FLOW CONTINUOUS-FOLLOW: Live-сегмент X = текущее wall time (тот же источник что и viewport)
-      // Раньше X интерполировался отдельно от viewport → рассинхрон → дрожание
-      let visualTime: number | null = null;
-      if (liveSegment) {
-        r.priceAnimator.update(now);
+      // Fix #8: Use calibrated wall time for synthetic segment instead of raw values,
+      // prevents the segment from stretching too far when server/local time diverge.
+      let effectiveSegment = liveSegment;
+      if (!effectiveSegment && historyPoints.length > 0) {
+        const last = historyPoints[historyPoints.length - 1];
         const wallNow = r.viewport.getWallTime(now);
-        visualTime = Math.max(liveSegment.fromTime, wallNow);
+        effectiveSegment = {
+          fromTime: last.time,
+          toTime: Math.max(last.time, wallNow),
+          fromPrice: last.price,
+          startedAt: now,
+        };
+        r.priceAnimator.seedFrom(last.price);
       }
-      const animatedPrice = liveSegment ? r.priceAnimator.getAnimatedPrice() : undefined;
 
-      if (historyPoints.length === 0 && !liveSegment) {
+      if (effectiveSegment) {
+        r.priceAnimator.update(now);
+      }
+
+      if (historyPoints.length === 0 && !effectiveSegment) {
         renderBackground(ctx, width, height);
         renderInstrumentWatermark(ctx, width, height, instrumentRef.current);
         ctx.save();
         ctx.fillStyle = '#888888';
-        ctx.font = '14px sans-serif';
+        ctx.font = `14px system-ui, -apple-system, "Segoe UI", sans-serif`;
         ctx.textAlign = 'center';
         ctx.fillText('Ожидание данных...', width / 2, height / 2);
         ctx.restore();
       } else {
-        // История рисуется полностью, live сегмент ПРОДОЛЖАЕТ её от последней точки
-        const historyPointsForRender = historyPoints;
+        const historyPointsForRender = historyReduced;
 
-        // Целевой диапазон из видимых точек + live цена
         const targetRange = calculatePriceRange(
-          historyPoints,
+          historyReduced,
           currentViewport,
-          liveSegment,
-          animatedPrice
         );
 
         // Asymmetric exponential smoothing:
-        //   расширение — быстро (80ms τ), чтобы spike не уходил за экран
-        //   сужение  — медленно (500ms τ), чтобы шкала не дёргалась
+        //   expand — fast (60ms τ) so spikes don't leave the screen
+        //   shrink — moderate (200ms τ) but snaps when close enough
         if (!smoothedRangeRef.current) {
           smoothedRangeRef.current = { min: targetRange.min, max: targetRange.max };
         } else {
           const dt = Math.min(Math.max(now - lastFrameTimeRef.current, 1), 100);
-          const alphaFast = 1 - Math.exp(-dt / 80);
-          const alphaSlow = 1 - Math.exp(-dt / 500);
+          const alphaFast = 1 - Math.exp(-dt / 90);
+          const alphaSlow = 1 - Math.exp(-dt / 300);
           const sr = smoothedRangeRef.current;
-          sr.min += (targetRange.min - sr.min)
-            * (targetRange.min < sr.min ? alphaFast : alphaSlow);
-          sr.max += (targetRange.max - sr.max)
-            * (targetRange.max > sr.max ? alphaFast : alphaSlow);
+          const fullRange = sr.max - sr.min || 1;
+
+          const minDelta = targetRange.min - sr.min;
+          const maxDelta = targetRange.max - sr.max;
+
+          // Fix #6: Increased from 0.05% to 0.15% — prevents jitter on flat markets
+          const snapThreshold = fullRange * 0.0015;
+
+          if (Math.abs(minDelta) < snapThreshold) {
+            sr.min = targetRange.min;
+          } else {
+            sr.min += minDelta * (minDelta < 0 ? alphaFast : alphaSlow);
+          }
+
+          if (Math.abs(maxDelta) < snapThreshold) {
+            sr.max = targetRange.max;
+          } else {
+            sr.max += maxDelta * (maxDelta > 0 ? alphaFast : alphaSlow);
+          }
         }
         lastFrameTimeRef.current = now;
 
@@ -641,14 +761,13 @@ export function useLineChart({
           height: mainHeight,
         });
         
-        // Live точка для area fill (градиент включает live)
-        const livePointForArea = liveSegment && animatedPrice !== undefined && visualTime !== null
-          ? { time: visualTime, price: animatedPrice }
-          : null;
+        const animatedPrice = r.priceAnimator.getAnimatedPrice();
 
-        // История + area fill (градиент включает live точку)
+        let lineTipX = -1;
+        let lineTipY = -1;
+
         if (historyPointsForRender.length > 0) {
-          renderLine({
+          const tip = renderLine({
             ctx,
             ticks: historyPointsForRender,
             viewport: currentViewport,
@@ -657,48 +776,32 @@ export function useLineChart({
             priceMin: calculatedPriceRange.min,
             priceMax: calculatedPriceRange.max,
             renderAreaFill: true,
-            livePoint: livePointForArea,
           });
-        }
-        
-        // Live сегмент: линия от последней точки к текущей позиции (без area fill — уже нарисован выше)
-        if (liveSegment && animatedPrice !== undefined && visualTime !== null) {
-          renderLiveSegment({
-            ctx,
-            fromTime: liveSegment.fromTime,
-            toTime: visualTime,
-            fromPrice: liveSegment.fromPrice,
-            toPrice: animatedPrice,
-            viewport: currentViewport,
-            width,
-            height: mainHeight,
-            priceMin: calculatedPriceRange.min,
-            priceMax: calculatedPriceRange.max,
-          });
-        }
-
-        // Pulsating Point — на конце live сегмента
-        const pointForPulse = liveSegment && visualTime !== null && animatedPrice !== undefined
-          ? { time: visualTime, price: animatedPrice }
-          : r.pointStore.getLast();
-          
-        if (pointForPulse) {
-          const timeRange = currentViewport.timeEnd - currentViewport.timeStart;
-          if (timeRange > 0) {
-            const pointX = ((pointForPulse.time - currentViewport.timeStart) / timeRange) * width;
-            const priceRangeValue = calculatedPriceRange.max - calculatedPriceRange.min;
-            if (priceRangeValue > 0) {
-              const normalizedPrice = (pointForPulse.price - calculatedPriceRange.min) / priceRangeValue;
-              const pointY = mainHeight - (normalizedPrice * mainHeight);
-              
-              renderPulsatingPoint({
-                ctx,
-                x: pointX,
-                y: pointY,
-                time: performance.now(),
-              });
+          if (tip) {
+            lineTipX = tip.x;
+            // Use animated price for smooth Y on the pulsating dot
+            if (animatedPrice > 0) {
+              const priceRangeValue = calculatedPriceRange.max - calculatedPriceRange.min;
+              if (priceRangeValue > 0) {
+                const norm = (animatedPrice - calculatedPriceRange.min) / priceRangeValue;
+                lineTipY = mainHeight - norm * mainHeight;
+              } else {
+                lineTipY = tip.y;
+              }
+            } else {
+              lineTipY = tip.y;
             }
           }
+        }
+
+        // Pulsating Point — at the last rendered X, with animated Y
+        if (lineTipX >= 0 && lineTipY >= 0) {
+          renderPulsatingPoint({
+            ctx,
+            x: lineTipX,
+            y: lineTipY,
+            time: performance.now(),
+          });
         }
         
         // Expiration Line — как на свечном: кружок с флажком сверху, линия вниз
@@ -796,23 +899,15 @@ export function useLineChart({
         // Hover Highlight
         const hoverAction = hoverActionRef.current;
         if (hoverAction) {
-          const lastHistoryPoint = r.pointStore.getLast();
-          const currentPrice = liveSegment && animatedPrice !== undefined ? animatedPrice : lastHistoryPoint?.price ?? 0;
+          const hoverPrice = animatedPrice > 0 ? animatedPrice : (r.pointStore.getLast()?.price ?? 0);
           
-          if (currentPrice > 0) {
+          if (hoverPrice > 0) {
             const priceRangeValue = calculatedPriceRange.max - calculatedPriceRange.min;
             if (priceRangeValue > 0) {
-              const normalizedPrice = (currentPrice - calculatedPriceRange.min) / priceRangeValue;
+              const normalizedPrice = (hoverPrice - calculatedPriceRange.min) / priceRangeValue;
               const priceY = mainHeight - (normalizedPrice * mainHeight);
               
-              const pointForHover = liveSegment && visualTime !== null
-                ? { time: visualTime }
-                : lastHistoryPoint;
-              
-              const timeRange = currentViewport.timeEnd - currentViewport.timeStart;
-              const lastDataPointX = pointForHover && timeRange > 0
-                ? ((pointForHover.time - currentViewport.timeStart) / timeRange) * width
-                : null;
+              const lastDataPointX = lineTipX >= 0 ? lineTipX : null;
               
               renderHoverHighlight({
                 ctx,
@@ -840,15 +935,17 @@ export function useLineChart({
           }
         }
         const trades = tradesRef.current;
-        if (trades.length > 0) {
+        const recentClosedTrades = getRecentClosedTrades();
+        if (trades.length > 0 || recentClosedTrades.length > 0) {
           renderTrades({
             ctx,
             trades,
+            recentClosedTrades,
             viewport: timePriceViewport,
             width,
             height: mainHeight,
             digits: r.digits,
-            payoutPercent,
+            payoutPercent: r.payoutPercent,
           });
         }
         
@@ -888,9 +985,8 @@ export function useLineChart({
           });
         }
         
-        // Price Line — как на свечном (та же линия и метка)
-        const lastHistoryPoint = r.pointStore.getLast();
-        const currentPrice = liveSegment && animatedPrice !== undefined ? animatedPrice : lastHistoryPoint?.price ?? 0;
+        // Price Line — uses animated price for smooth movement
+        const currentPrice = animatedPrice > 0 ? animatedPrice : (r.pointStore.getLast()?.price ?? 0);
         if (currentPrice > 0 && timePriceViewport) {
           renderPriceLine({
             ctx,
@@ -899,9 +995,7 @@ export function useLineChart({
             width,
             height: mainHeight,
             digits: r.digits,
-            previousPrice: prevPriceRef.current,
           });
-          prevPriceRef.current = currentPrice;
         }
         
         // Price Axis
@@ -1041,7 +1135,10 @@ export function useLineChart({
       return;
     }
 
-    if (!refs.activeRef.current) return;
+    if (!refs.activeRef.current) {
+      lastInertiaTimeRef.current = 0;
+      return;
+    }
 
     const velocity = refs.velocityRef.current;
     const PAN_STOP_EPSILON = 0.02;
@@ -1057,7 +1154,7 @@ export function useLineChart({
     if (!canvas) return;
 
     const dt = lastInertiaTimeRef.current > 0
-      ? Math.min(now - lastInertiaTimeRef.current, 64)
+      ? Math.min(now - lastInertiaTimeRef.current, 32)
       : 16;
     lastInertiaTimeRef.current = now;
 
@@ -1119,10 +1216,13 @@ export function useLineChart({
 
   const reset = useCallback(() => {
     pointStore.reset();
+    reducedPoints.reset();
     setLiveSegment(null);
     priceAnimator.reset();
     smoothedRangeRef.current = null;
-  }, [pointStore, setLiveSegment, priceAnimator]);
+    snapshotReadyRef.current = false;
+    tickBufferRef.current = [];
+  }, [pointStore, reducedPoints, setLiveSegment, priceAnimator]);
 
   const initializeFromSnapshot = useCallback((snapshot: {
     points: Array<{ time: number; price: number }>;
@@ -1130,32 +1230,63 @@ export function useLineChart({
     serverTime: number;
   }) => {
     pointStore.reset();
+    reducedPoints.reset();
     setLiveSegment(null);
     priceAnimator.reset();
     smoothedRangeRef.current = null;
 
     const RIGHT_PADDING = 0.30;
 
-    // FLOW R-LINE-5: Обработка пустого snapshot (нормально для REAL инструментов)
     if (snapshot.points.length === 0) {
-      // Инициализируем viewport от текущего времени (live-only режим)
       const now = snapshot.serverTime || Date.now();
       const rightPadding = DEFAULT_WINDOW_MS * RIGHT_PADDING;
       viewport.setViewport(now + rightPadding - DEFAULT_WINDOW_MS, now + rightPadding, true);
+      snapshotReadyRef.current = true;
+      tickBufferRef.current = [];
       return;
     }
 
-    // Если есть точки, инициализируем с right padding и autoFollow = true
+    if (snapshot.serverTime) {
+      viewport.calibrateTime(snapshot.serverTime);
+    }
+
     pointStore.appendMany(snapshot.points);
-    // Используем serverTime (текущее время), а не lastTime точек
+    reducedPoints.buildFromRaw(snapshot.points);
+
     const now = snapshot.serverTime || Date.now();
     const rightPadding = DEFAULT_WINDOW_MS * RIGHT_PADDING;
     viewport.setViewport(now + rightPadding - DEFAULT_WINDOW_MS, now + rightPadding, true);
-  }, [pointStore, viewport, setLiveSegment, priceAnimator]);
+
+    const lastPoint = snapshot.points[snapshot.points.length - 1];
+    if (lastPoint) {
+      const seg: LiveSegment = {
+        fromTime: lastPoint.time,
+        toTime: now,
+        fromPrice: lastPoint.price,
+        startedAt: performance.now(),
+      };
+      setLiveSegment(seg);
+      priceAnimator.onPriceUpdate(lastPoint.price);
+    }
+
+    // Fix #1: Flush buffered ticks that arrived before snapshot
+    snapshotReadyRef.current = true;
+    const buffered = tickBufferRef.current;
+    tickBufferRef.current = [];
+    const lastSnapshotTime = lastPoint?.time ?? 0;
+    for (const tick of buffered) {
+      if (tick.timestamp > lastSnapshotTime) {
+        lineData.onPriceUpdate(tick.price, tick.timestamp);
+        reducedPoints.pushTick({ time: tick.timestamp, price: tick.price });
+        priceAnimator.onPriceUpdate(tick.price);
+      }
+    }
+  }, [pointStore, reducedPoints, viewport, setLiveSegment, priceAnimator, lineData]);
 
   const prependHistory = useCallback((points: Array<{ time: number; price: number }>) => {
     pointStore.prepend(points);
-  }, [pointStore]);
+    reducedPoints.prependReduced(points);
+  }, [pointStore, reducedPoints]);
 
   const setHoverAction = useCallback((action: HoverAction) => {
     hoverActionRef.current = action;
@@ -1218,6 +1349,7 @@ export function useLineChart({
     setAutoFollow,
     setExpirationSeconds,
     addTradeOverlayFromDTO,
+    handleTradeClose,
     removeDrawing: drawings.removeDrawing,
     getDrawings: drawings.getDrawings,
     addDrawing: drawings.addDrawing,

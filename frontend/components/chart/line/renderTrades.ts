@@ -27,6 +27,17 @@ interface RenderTradesParams {
     entryTime?: number; // Предвычисленное время входа (центр свечи для свечного графика)
     amount?: number;
   }>;
+  recentClosedTrades?: Array<{
+    id: string;
+    direction: 'CALL' | 'PUT';
+    entryPrice: number;
+    openedAt: number;
+    expiresAt: number;
+    entryTime?: number;
+    amount?: number;
+    result: 'WIN' | 'LOSS' | 'TIE';
+    pnl: number;
+  }>;
   viewport: TimePriceViewport;
   width: number;
   height: number;
@@ -69,13 +80,14 @@ function formatCountdown(expiresAt: number): string {
 export function renderTrades({
   ctx,
   trades,
+  recentClosedTrades = [],
   viewport,
   width,
   height,
   digits = 5,
   payoutPercent = 75,
 }: RenderTradesParams): void {
-  if (trades.length === 0) return;
+  if (trades.length === 0 && recentClosedTrades.length === 0) return;
 
   ctx.save();
 
@@ -95,11 +107,6 @@ export function renderTrades({
     return timeVisible;
   });
 
-  if (visibleTrades.length === 0) {
-    ctx.restore();
-    return;
-  }
-
   for (const trade of visibleTrades) {
     
     // Используем entryTime, если есть (для совместимости со свечным графиком),
@@ -116,12 +123,10 @@ export function renderTrades({
     // Вычисляем Y координату
     const entryY = priceToY(entryPrice, viewport, height);
     
-    // Обрезаем координаты по границам canvas
-    const drawStartX = Math.max(0, Math.min(openX, width));
-    const drawEndX = Math.max(0, Math.min(expireX, width));
+    const drawStartX = openX;
+    const drawEndX = expireX;
     const drawY = Math.max(5, Math.min(entryY, height - 5));
 
-    // Проверяем видимость
     const isValidX = !isNaN(drawStartX) && !isNaN(drawEndX) && isFinite(drawStartX) && isFinite(drawEndX);
     const isValidY = !isNaN(drawY) && isFinite(drawY);
     const hasLength = Math.abs(drawEndX - drawStartX) > 1;
@@ -154,7 +159,7 @@ export function renderTrades({
         ? trade.amount + (trade.amount * payoutPercent) / 100
         : 0;
       const payoutText = trade.amount != null ? `+${totalPayout.toFixed(2)} USD` : '— USD';
-      ctx.font = '10px sans-serif';
+      ctx.font = '10px system-ui, -apple-system, "Segoe UI", sans-serif';
       const line1W = ctx.measureText(countdownText).width;
       const line2W = ctx.measureText(payoutText).width;
       const labelW = Math.max(line1W, line2W) + 10;
@@ -178,6 +183,119 @@ export function renderTrades({
       ctx.textBaseline = 'middle';
       ctx.fillText(countdownText, labelX + labelW / 2, labelY + 8);
       ctx.fillText(payoutText, labelX + labelW / 2, labelY + 18);
+    }
+  }
+
+  // Pocket-Option-style result badge for recently closed trades (5 sec)
+  if (recentClosedTrades.length > 0) {
+    const nowMs = Date.now();
+    for (const t of recentClosedTrades) {
+      if (t.expiresAt > nowMs) continue;
+
+      const entryTime = t.entryTime ?? t.openedAt;
+      const openX = timeToX(entryTime, viewport, width);
+      const entryPrice = Number(t.entryPrice);
+      if (!Number.isFinite(entryPrice)) continue;
+
+      const entryY = priceToY(entryPrice, viewport, height);
+      const dotX = Math.max(0, Math.min(openX, width));
+      const dotY = Math.max(5, Math.min(entryY, height - 5));
+
+      const isWin = t.result === 'WIN' || t.pnl > 0;
+      const isLoss = t.result === 'LOSS' || t.pnl < 0;
+      const bgColor = isWin ? '#45b833' : isLoss ? '#ff3d1f' : '#4b5563';
+
+      const sign = t.pnl > 0 ? '+$' : t.pnl < 0 ? '-$' : '$';
+      const amountText = `${sign}${Math.abs(t.pnl).toFixed(0)}`;
+
+      ctx.save();
+
+      const BADGE_H = 28;
+      const BADGE_R = BADGE_H / 2;
+      const ICON_SIZE = 16;
+      const ICON_PAD = 6;
+      const TEXT_PAD_R = 10;
+
+      ctx.font = 'bold 14px system-ui, -apple-system, "Segoe UI", sans-serif';
+      const textW = ctx.measureText(amountText).width;
+      const BADGE_W = ICON_SIZE + ICON_PAD + textW + TEXT_PAD_R + ICON_PAD;
+
+      const rightMargin = 65;
+      const maxX = width - rightMargin;
+      let badgeX = dotX - BADGE_W / 2;
+      if (badgeX + BADGE_W > maxX) badgeX = maxX - BADGE_W;
+      if (badgeX < 4) badgeX = 4;
+      const badgeY = Math.max(4, dotY - BADGE_H - 8);
+
+      // Badge background
+      ctx.fillStyle = bgColor;
+      ctx.beginPath();
+      ctx.roundRect(badgeX, badgeY, BADGE_W, BADGE_H, BADGE_R);
+      ctx.fill();
+
+      // Icon circle (white bg)
+      const iconCX = badgeX + ICON_PAD + ICON_SIZE / 2;
+      const iconCY = badgeY + BADGE_H / 2;
+      const iconR = ICON_SIZE / 2 - 1;
+      ctx.fillStyle = 'rgba(255,255,255,0.95)';
+      ctx.beginPath();
+      ctx.arc(iconCX, iconCY, iconR, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Icon glyph
+      ctx.lineWidth = 2;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      if (isWin) {
+        ctx.strokeStyle = '#45b833';
+        ctx.beginPath();
+        ctx.moveTo(iconCX - 3, iconCY);
+        ctx.lineTo(iconCX - 0.5, iconCY + 3);
+        ctx.lineTo(iconCX + 4, iconCY - 3);
+        ctx.stroke();
+      } else if (isLoss) {
+        ctx.strokeStyle = '#ff3d1f';
+        ctx.beginPath();
+        ctx.moveTo(iconCX - 3, iconCY - 3);
+        ctx.lineTo(iconCX + 3, iconCY + 3);
+        ctx.moveTo(iconCX + 3, iconCY - 3);
+        ctx.lineTo(iconCX - 3, iconCY + 3);
+        ctx.stroke();
+      } else {
+        ctx.strokeStyle = '#4b5563';
+        ctx.beginPath();
+        ctx.moveTo(iconCX - 4, iconCY);
+        ctx.lineTo(iconCX + 4, iconCY);
+        ctx.stroke();
+      }
+
+      // Amount text
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 14px system-ui, -apple-system, "Segoe UI", sans-serif';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(amountText, badgeX + ICON_PAD + ICON_SIZE + ICON_PAD, badgeY + BADGE_H / 2);
+
+      // Connector line from badge bottom to entry dot
+      ctx.strokeStyle = bgColor;
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.moveTo(dotX, badgeY + BADGE_H);
+      ctx.lineTo(dotX, dotY - 4);
+      ctx.stroke();
+
+      // Entry dot
+      ctx.fillStyle = bgColor;
+      ctx.beginPath();
+      ctx.arc(dotX, dotY, 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(dotX, dotY, 2, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
     }
   }
 

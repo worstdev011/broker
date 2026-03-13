@@ -1,26 +1,22 @@
-/**
- * Domain types for Auth
- */
-
 export interface User {
   id: string;
   email: string;
-  password: string; // hashed
+  password: string;
   createdAt: Date;
   updatedAt: Date;
-  // FLOW U1: Base Profile fields
   firstName?: string | null;
   lastName?: string | null;
   nickname?: string | null;
   phone?: string | null;
   country?: string | null;
-  currency?: string | null; // 🔥 Валюта — устанавливается один раз
+  currency?: string | null;
   dateOfBirth?: Date | null;
   avatarUrl?: string | null;
-  // 🔥 FLOW S3: Two-Factor Authentication
   twoFactorSecret?: string | null;
   twoFactorEnabled?: boolean;
-  twoFactorBackupCodes?: string[]; // Array of hashed backup codes
+  twoFactorBackupCodes?: string[];
+  kycStatus?: string | null;
+  kycApplicantId?: string | null;
 }
 
 export interface Session {
@@ -29,7 +25,6 @@ export interface Session {
   tokenHash: string;
   expiresAt: Date;
   createdAt: Date;
-  // 🔥 FLOW S1: Session metadata
   userAgent?: string | null;
   ipAddress?: string | null;
 }
@@ -45,11 +40,10 @@ export interface LoginInput {
 }
 
 export interface AuthResult {
-  user: Omit<User, 'password'>;
+  user: Omit<User, 'password' | 'twoFactorSecret' | 'twoFactorBackupCodes'>;
   sessionToken: string;
 }
 
-// 🔥 FLOW S3: Two-step login result
 export interface AuthResult2FA {
   requires2FA: true;
   tempToken: string;

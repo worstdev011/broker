@@ -1,14 +1,10 @@
-/**
- * WebSocket events bootstrap - connects event sources to WebSocket
- * FLOW P5: events scoped by instrument. Each message: { instrument, type, data }
- */
-
 import { getWebSocketManager } from '../modules/websocket/websocket.routes.js';
 import type { PriceEngineManager } from '../prices/PriceEngineManager.js';
 import { logger } from '../shared/logger.js';
 import type { TradeDTO } from '../domain/trades/TradeTypes.js';
 
 let unsubscribeHandlers: Array<() => void> = [];
+let serverTimeInterval: NodeJS.Timeout | null = null;
 
 export async function bootstrapWebSocketEvents(
   manager: PriceEngineManager,
@@ -18,7 +14,7 @@ export async function bootstrapWebSocketEvents(
     return;
   }
 
-  logger.info('🚀 Bootstrapping WebSocket events (per-instrument)...');
+  logger.info('Bootstrapping WebSocket events...');
 
   const wsManager = getWebSocketManager();
   const instrumentIds = manager.getInstrumentIds();
@@ -27,17 +23,15 @@ export async function bootstrapWebSocketEvents(
     const eventBus = manager.getEventBus(instrumentId);
     if (!eventBus) continue;
 
-    // 🔥 FLOW WS-BINARY: Pre-compute instrument header (constant per instrument)
-    // Binary format: [0x01][instrLen:1][instrument:ASCII][price:Float64BE][timestamp:Float64BE]
-    // Example: EURUSD_OTC → 1 + 1 + 10 + 8 + 8 = 28 bytes (was 112 bytes JSON)
+    // Binary tick format: [0x01][instrLen:1][instrument:ASCII][price:Float64BE][timestamp:Float64BE]
     const instrBuf = Buffer.from(instrumentId, 'ascii');
     const headerSize = 2 + instrBuf.length;
-    const tickBufSize = headerSize + 16; // + price(8) + timestamp(8)
+    const tickBufSize = headerSize + 16;
 
     const unsubTick = eventBus.on('price_tick', (event) => {
       const tick = event.data as { price: number; timestamp: number };
       const buf = Buffer.allocUnsafe(tickBufSize);
-      buf[0] = 0x01; // message type: price tick
+      buf[0] = 0x01;
       buf[1] = instrBuf.length;
       instrBuf.copy(buf, 2);
       buf.writeDoubleBE(tick.price, headerSize);
@@ -45,10 +39,6 @@ export async function bootstrapWebSocketEvents(
       wsManager.broadcastRawToInstrument(instrumentId, buf);
     });
     unsubscribeHandlers.push(unsubTick);
-
-    // 🔥 candle:update НЕ отправляется — фронтенд его не обрабатывает.
-    // Живая свеча обновляется через price:update на стороне клиента.
-    // Это убирает ~50% мусорного WS-трафика (candle:update шёл на каждый тик).
 
     const unsubCandleClose = eventBus.on('candle_closed', (event) => {
       const candle = event.data as {
@@ -59,7 +49,6 @@ export async function bootstrapWebSocketEvents(
         timestamp: number;
         timeframe: string;
       };
-      // 🔥 FLOW WS-TF: Шлём candle:close только клиентам с matching таймфреймом
       wsManager.broadcastCandleToInstrument(instrumentId, candle.timeframe, {
         instrument: instrumentId,
         type: 'candle:close',
@@ -79,17 +68,14 @@ export async function bootstrapWebSocketEvents(
     unsubscribeHandlers.push(unsubCandleClose);
   }
 
-  // Server time (no instrument)
-  const serverTimeInterval = setInterval(() => {
+  serverTimeInterval = setInterval(() => {
     wsManager.broadcast({
       type: 'server:time',
       data: { timestamp: Date.now() },
     });
-  }, 1000);
-  (wsManager as { _serverTimeInterval?: NodeJS.Timeout })._serverTimeInterval =
-    serverTimeInterval;
+  }, 1_000);
 
-  logger.info(`✅ WebSocket events bootstrapped (${instrumentIds.length} instruments)`);
+  logger.info(`WebSocket events bootstrapped (${instrumentIds.length} instruments)`);
 }
 
 export function emitTradeOpen(trade: TradeDTO, userId: string): void {
@@ -112,9 +98,6 @@ export function emitTradeClose(
   });
 }
 
-/**
- * 🔥 FLOW A-ACCOUNT: Emit account snapshot to user
- */
 export function emitAccountSnapshot(
   userId: string,
   snapshot: { accountId: string; type: 'REAL' | 'DEMO'; balance: number; currency: 'USD' | 'RUB' | 'UAH'; updatedAt: number },
@@ -122,23 +105,23 @@ export function emitAccountSnapshot(
   const wsManager = getWebSocketManager();
   wsManager.sendToUser(userId, {
     type: 'account.snapshot',
-    payload: snapshot,
+    data: snapshot,
   });
 }
 
 export async function shutdownWebSocketEvents(): Promise<void> {
-  logger.info('🛑 Shutting down WebSocket events...');
-
-  unsubscribeHandlers.forEach((unsubscribe) => unsubscribe());
+  for (const unsubscribe of unsubscribeHandlers) {
+    unsubscribe();
+  }
   unsubscribeHandlers = [];
+
+  if (serverTimeInterval) {
+    clearInterval(serverTimeInterval);
+    serverTimeInterval = null;
+  }
 
   const wsManager = getWebSocketManager();
   wsManager.stopHeartbeat();
-  const m = wsManager as { _serverTimeInterval?: NodeJS.Timeout };
-  if (m._serverTimeInterval) {
-    clearInterval(m._serverTimeInterval);
-    m._serverTimeInterval = undefined;
-  }
 
-  logger.info('✅ WebSocket events shut down');
+  logger.info('WebSocket events shut down');
 }

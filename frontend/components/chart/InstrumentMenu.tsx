@@ -5,9 +5,12 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { useClickOutside } from '@/lib/hooks/useClickOutside';
+import { useLocalStorageSet } from '@/lib/hooks/useLocalStorageSet';
 import { ChevronDown, ChevronUp, Search, Star } from 'lucide-react';
 import { INSTRUMENTS, getInstrumentOrDefault } from '@/lib/instruments';
 import { api } from '@/lib/api/api';
+import { logger } from '@/lib/logger';
 import ReactCountryFlag from 'react-country-flag';
 
 /**
@@ -52,8 +55,6 @@ interface InstrumentMenuProps {
 
 type Category = 'favorites' | 'all' | 'forex' | 'crypto' | 'otc';
 
-const FAVORITES_STORAGE_KEY = 'instrument-menu-favorites';
-
 type SortOrder = 'asc' | 'desc' | null;
 
 /** REAL-пары закрыты в выходные (суббота, воскресенье). OTC работают 24/7. */
@@ -72,24 +73,7 @@ export function InstrumentMenu({ instrument, onInstrumentChange }: InstrumentMen
   const [selectedCategory, setSelectedCategory] = useState<Category>('all');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [isScrolling, setIsScrolling] = useState(false);
-  const [favorites, setFavorites] = useState<Set<string>>(() => {
-    if (typeof window === 'undefined') return new Set();
-    try {
-      const raw = localStorage.getItem(FAVORITES_STORAGE_KEY);
-      if (!raw) return new Set();
-      const arr = JSON.parse(raw) as string[];
-      return new Set(Array.isArray(arr) ? arr : []);
-    } catch {
-      return new Set();
-    }
-  });
-
-  const persistFavorites = (next: Set<string>) => {
-    setFavorites(next);
-    try {
-      localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify([...next]));
-    } catch {}
-  };
+  const [favorites, toggleFavorite] = useLocalStorageSet('instrument-menu-favorites');
   const menuRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -104,40 +88,24 @@ export function InstrumentMenu({ instrument, onInstrumentChange }: InstrumentMen
         const data = await api<Array<{ id: string; payoutPercent: number }>>('/api/instruments');
         setInstrumentsData(data);
       } catch (error) {
-        console.error('Failed to load instruments:', error);
+        logger.error('Failed to load instruments:', error);
       }
     };
     loadInstruments();
   }, []);
 
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent | TouchEvent) => {
-      const target = event.target as Node;
-      if (target && menuRef.current && !menuRef.current.contains(target)) {
-        setIsOpen(false);
-        setSearchQuery('');
-      }
-    };
+  useClickOutside(menuRef, () => { setIsOpen(false); setSearchQuery(''); }, isOpen);
 
+  useEffect(() => {
     if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside, true);
-      document.addEventListener('touchstart', handleClickOutside, true);
-      // Фокусируем поле поиска при открытии
       setTimeout(() => {
         searchInputRef.current?.focus();
       }, 100);
-      // По умолчанию — сортировка по выплате (по убыванию)
       setSortOrder((prev) => prev ?? 'desc');
     } else {
-      // Сбрасываем фильтры при закрытии (сортировку не сбрасываем — остаётся по выплате)
       setSearchQuery('');
       setSelectedCategory('all');
     }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside, true);
-      document.removeEventListener('touchstart', handleClickOutside, true);
-    };
   }, [isOpen]);
 
   // Определяем категорию инструмента по ID (суффиксы _OTC, _REAL)
@@ -222,7 +190,7 @@ export function InstrumentMenu({ instrument, onInstrumentChange }: InstrumentMen
     <div className="relative" ref={menuRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="px-3.5 py-2 rounded-md text-sm font-semibold transition-colors flex items-center gap-2 text-white md:hover:bg-white/10"
+        className="px-3.5 py-2 rounded-md text-sm font-semibold transition-colors duration-300 ease-in-out flex items-center gap-2 text-white md:hover:bg-white/10"
         style={{ height: '36px', minHeight: '36px', maxHeight: '36px' }}
       >
         {/* Флаги валют */}
@@ -273,13 +241,13 @@ export function InstrumentMenu({ instrument, onInstrumentChange }: InstrumentMen
       </button>
 
       {isOpen && (
-        <div className="absolute top-full left-0 mt-2 rounded-lg shadow-xl w-[380px] max-h-[500px] flex flex-col z-50 overflow-hidden bg-[#091C56] border border-white/5">
+        <div className="absolute top-full left-0 mt-2 rounded-lg shadow-xl w-[380px] max-h-[500px] flex flex-col z-50 overflow-hidden bg-[#1e2a40] border border-white/5">
           {/* Фильтры по категориям */}
           <div className="border-b border-white/10 px-4 py-2.5 flex items-center gap-2 flex-wrap">
             <button
               type="button"
               onClick={() => setSelectedCategory('favorites')}
-              className={`p-1.5 rounded-md text-sm font-medium transition-colors flex items-center ${
+              className={`p-1.5 rounded-md text-sm font-medium transition-colors duration-300 ease-in-out flex items-center ${
                 selectedCategory === 'favorites'
                   ? 'bg-[#3347ff]/20 text-white'
                   : 'text-gray-400 md:hover:text-white md:hover:bg-white/5'
@@ -291,7 +259,7 @@ export function InstrumentMenu({ instrument, onInstrumentChange }: InstrumentMen
             <button
               type="button"
               onClick={() => setSelectedCategory('all')}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors duration-300 ease-in-out ${
                 selectedCategory === 'all'
                   ? 'bg-[#3347ff]/20 text-white'
                   : 'text-gray-400 md:hover:text-white md:hover:bg-white/5'
@@ -302,7 +270,7 @@ export function InstrumentMenu({ instrument, onInstrumentChange }: InstrumentMen
             <button
               type="button"
               onClick={() => setSelectedCategory('forex')}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors duration-300 ease-in-out ${
                 selectedCategory === 'forex'
                   ? 'bg-[#3347ff]/20 text-white'
                   : 'text-gray-400 md:hover:text-white md:hover:bg-white/5'
@@ -313,7 +281,7 @@ export function InstrumentMenu({ instrument, onInstrumentChange }: InstrumentMen
             <button
               type="button"
               onClick={() => setSelectedCategory('crypto')}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors duration-300 ease-in-out ${
                 selectedCategory === 'crypto'
                   ? 'bg-[#3347ff]/20 text-white'
                   : 'text-gray-400 md:hover:text-white md:hover:bg-white/5'
@@ -324,7 +292,7 @@ export function InstrumentMenu({ instrument, onInstrumentChange }: InstrumentMen
             <button
               type="button"
               onClick={() => setSelectedCategory('otc')}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors duration-300 ease-in-out ${
                 selectedCategory === 'otc'
                   ? 'bg-[#3347ff]/20 text-white'
                   : 'text-gray-400 md:hover:text-white md:hover:bg-white/5'
@@ -343,7 +311,7 @@ export function InstrumentMenu({ instrument, onInstrumentChange }: InstrumentMen
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Поиск..."
-                className="w-full pl-10 pr-4 py-1.5 text-sm bg-white/10 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-0 focus:border-white/10 md:hover:border-white/15 transition-colors"
+                className="w-full pl-10 pr-4 py-1.5 text-sm bg-white/10 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-0 focus:border-white/10 md:hover:border-white/15 transition-colors duration-300 ease-in-out"
               />
             </div>
           </div>
@@ -361,7 +329,7 @@ export function InstrumentMenu({ instrument, onInstrumentChange }: InstrumentMen
                   setSortOrder(null);
                 }
               }}
-              className="flex items-center gap-1 md:hover:opacity-80 transition-opacity"
+              className="flex items-center gap-1 md:hover:opacity-80 transition-opacity duration-200 ease-in-out"
             >
               <span className="text-gray-300 font-semibold text-sm">Выплата</span>
               {sortOrder === 'desc' ? (
@@ -402,7 +370,7 @@ export function InstrumentMenu({ instrument, onInstrumentChange }: InstrumentMen
                     onInstrumentChange(inst.id);
                     setIsOpen(false);
                   }}
-                  className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-left text-sm transition-colors ${
+                  className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-left text-sm transition-colors duration-300 ease-in-out duration-300 ease-in-out ${
                     isDisabled
                       ? 'opacity-50 cursor-not-allowed text-gray-500'
                       : isActive
@@ -418,36 +386,20 @@ export function InstrumentMenu({ instrument, onInstrumentChange }: InstrumentMen
                       tabIndex={0}
                       onClick={(e) => {
                         e.stopPropagation();
-                        persistFavorites((() => {
-                          const next = new Set(favorites);
-                          if (next.has(inst.id)) {
-                            next.delete(inst.id);
-                          } else {
-                            next.add(inst.id);
-                          }
-                          return next;
-                        })());
+                        toggleFavorite(inst.id);
                       }}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' || e.key === ' ') {
                           e.preventDefault();
                           e.stopPropagation();
-                          persistFavorites((() => {
-                            const next = new Set(favorites);
-                            if (next.has(inst.id)) {
-                              next.delete(inst.id);
-                            } else {
-                              next.add(inst.id);
-                            }
-                            return next;
-                          })());
+                          toggleFavorite(inst.id);
                         }
                       }}
-                      className="flex-shrink-0 p-0.5 md:hover:bg-white/10 rounded transition-colors cursor-pointer"
+                      className="flex-shrink-0 p-0.5 md:hover:bg-white/10 rounded transition-colors duration-300 ease-in-out cursor-pointer"
                       title={favorites.has(inst.id) ? 'Убрать из избранного' : 'Добавить в избранное'}
                     >
                       <Star
-                        className={`w-3.5 h-3.5 transition-colors ${
+                        className={`w-3.5 h-3.5 transition-colors duration-300 ease-in-out ${
                           favorites.has(inst.id)
                             ? 'fill-yellow-400 text-yellow-400'
                             : 'text-gray-400 md:hover:text-yellow-400'

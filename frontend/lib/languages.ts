@@ -3,7 +3,6 @@
  * flag: локальный путь или код страны для flagcdn
  */
 export const LANGUAGES = [
-  { code: 'RU', label: 'Русский', flag: '/images/flags/ru.svg', flagCode: 'ru' },
   { code: 'UA', label: 'Українська', flag: '/images/flags/ua.svg', flagCode: 'ua' },
   { code: 'EN', label: 'English', flag: '/images/flags/en.svg', flagCode: 'gb' },
   { code: 'DE', label: 'Deutsch', flag: 'https://flagcdn.com/w40/de.png', flagCode: 'de' },
@@ -20,6 +19,7 @@ export const LANGUAGES = [
   { code: 'ZH', label: '中文', flag: 'https://flagcdn.com/w40/cn.png', flagCode: 'cn' },
   { code: 'TM', label: 'Türkmençe', flag: 'https://flagcdn.com/w40/tm.png', flagCode: 'tm' },
   { code: 'MD', label: 'Română', flag: 'https://flagcdn.com/w40/md.png', flagCode: 'md' },
+  { code: 'RU', label: 'Русский', flag: '/images/flags/ru.svg', flagCode: 'ru' },
 ] as const;
 
 export const LANG_STORAGE_KEY = 'profile-lang';

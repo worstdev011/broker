@@ -1,8 +1,3 @@
-/**
- * Domain types for Transactions
- * 🔥 FLOW W1: Deposit/Withdrawal transactions
- */
-
 export enum TransactionType {
   DEPOSIT = 'DEPOSIT',
   WITHDRAW = 'WITHDRAW',
@@ -38,7 +33,7 @@ export interface Transaction {
   accountId: string;
   type: TransactionType;
   status: TransactionStatus;
-  amount: number; // Decimal as number for domain
+  amount: number;
   currency: string;
   paymentMethod: PaymentMethod;
   provider: string | null;

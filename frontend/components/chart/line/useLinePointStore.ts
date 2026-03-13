@@ -31,6 +31,14 @@ export function useLinePointStore() {
         return;
       }
       if (point.time < last.time) return;
+
+      const gapMs = point.time - last.time;
+      if (gapMs > 1000) {
+        const steps = Math.min(Math.floor(gapMs / 1000), 60);
+        for (let i = 1; i <= steps; i++) {
+          arr.push({ time: last.time + i * 1000, price: last.price });
+        }
+      }
     }
 
     arr.push(point);

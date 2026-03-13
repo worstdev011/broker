@@ -1,59 +1,55 @@
-/**
- * Domain errors for Trades
- */
+import { AppError } from '../../shared/errors/AppError.js';
 
-export class TradeError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'TradeError';
-  }
-}
-
-export class TradeNotFoundError extends TradeError {
+export class TradeNotFoundError extends AppError {
   constructor(tradeId?: string) {
-    super(tradeId ? `Trade with id ${tradeId} not found` : 'Trade not found');
-    this.name = 'TradeNotFoundError';
+    super(404, tradeId ? `Trade ${tradeId} not found` : 'Trade not found', 'TRADE_NOT_FOUND');
   }
 }
 
-export class InvalidTradeAmountError extends TradeError {
+export class InvalidTradeAmountError extends AppError {
   constructor() {
-    super('Trade amount must be between 0.01 and 50,000');
-    this.name = 'InvalidTradeAmountError';
+    super(400, 'Trade amount must be between 0.01 and 50,000', 'INVALID_TRADE_AMOUNT');
   }
 }
 
-export class InsufficientBalanceError extends TradeError {
+export class InvalidExpirationError extends AppError {
   constructor() {
-    super('Insufficient balance for this trade');
-    this.name = 'InsufficientBalanceError';
+    super(400, 'Expiration must be a multiple of 5 seconds, between 5 and 300', 'INVALID_EXPIRATION');
   }
 }
 
-export class InvalidExpirationError extends TradeError {
+export class InvalidTradeDirectionError extends AppError {
   constructor() {
-    super('Expiration must be a multiple of 5 seconds, between 5 and 300 seconds');
-    this.name = 'InvalidExpirationError';
+    super(400, 'Direction must be CALL or PUT', 'INVALID_TRADE_DIRECTION');
   }
 }
 
-export class InvalidTradeDirectionError extends TradeError {
+export class UnauthorizedTradeAccessError extends AppError {
   constructor() {
-    super('Invalid trade direction. Must be CALL or PUT');
-    this.name = 'InvalidTradeDirectionError';
+    super(403, 'Unauthorized access to trade', 'UNAUTHORIZED_TRADE_ACCESS');
   }
 }
 
-export class UnauthorizedTradeAccessError extends TradeError {
+export class TradeAlreadyClosedError extends AppError {
   constructor() {
-    super('Unauthorized access to trade');
-    this.name = 'UnauthorizedTradeAccessError';
+    super(400, 'Trade is already closed', 'TRADE_ALREADY_CLOSED');
   }
 }
 
-export class TradeAlreadyClosedError extends TradeError {
+export class InstrumentNotFoundError extends AppError {
+  constructor(instrument: string) {
+    super(400, `Unknown instrument: ${instrument}`, 'INSTRUMENT_NOT_FOUND');
+  }
+}
+
+export class MarketClosedError extends AppError {
   constructor() {
-    super('Trade is already closed');
-    this.name = 'TradeAlreadyClosedError';
+    super(400, 'Market is closed', 'MARKET_CLOSED');
+  }
+}
+
+export class PriceUnavailableError extends AppError {
+  constructor(instrument: string) {
+    super(503, `Price unavailable for ${instrument}`, 'PRICE_UNAVAILABLE');
   }
 }

@@ -6,6 +6,14 @@
  */
 
 import type { TimePriceViewport } from './viewport.types';
+import { getChartSettings } from '@/lib/chartSettings';
+import {
+  LABEL_COLOR,
+  LABEL_FONT,
+  TIME_LABEL_PADDING,
+  TIME_AXIS_HEIGHT,
+  TIME_AXIS_BG,
+} from '../../chartTheme';
 
 interface RenderTimeAxisParams {
   ctx: CanvasRenderingContext2D;
@@ -14,12 +22,7 @@ interface RenderTimeAxisParams {
   height: number;
 }
 
-const LABEL_COLOR = 'rgba(255, 255, 255, 0.45)';
-const LABEL_FONT = '12px sans-serif';
-const LABEL_PADDING = 8; // Точно как в свечном графике (renderAxes.ts)
-const MIN_LABEL_SPACING = 60; // Минимальное расстояние между метками в пикселях
-const TIME_LABEL_BG_HEIGHT = 25;
-const LABEL_BG_COLOR = '#05122a'; // Чуть темнее фона графика
+const MIN_LABEL_SPACING = 60;
 
 /**
  * Конвертирует время в X координату
@@ -31,13 +34,15 @@ function timeToX(time: number, viewport: TimePriceViewport, width: number): numb
 }
 
 /**
- * Форматирует время в HH:mm:ss
+ * Форматирует время в HH:mm:ss с учетом часового пояса из настроек
  */
 function formatTime(timestamp: number): string {
-  const date = new Date(timestamp);
-  const hours = date.getHours().toString().padStart(2, '0');
-  const minutes = date.getMinutes().toString().padStart(2, '0');
-  const seconds = date.getSeconds().toString().padStart(2, '0');
+  const settings = getChartSettings();
+  const adjustedTs = timestamp + settings.timezoneOffset * 60 * 60 * 1000;
+  const date = new Date(adjustedTs);
+  const hours = date.getUTCHours().toString().padStart(2, '0');
+  const minutes = date.getUTCMinutes().toString().padStart(2, '0');
+  const seconds = date.getUTCSeconds().toString().padStart(2, '0');
   return `${hours}:${minutes}:${seconds}`;
 }
 
@@ -81,32 +86,24 @@ export function renderTimeAxis({
 
   ctx.save();
 
-  // Общий фон для меток времени внизу (чуть темнее фона графика)
-  ctx.fillStyle = LABEL_BG_COLOR;
-  ctx.fillRect(0, height - TIME_LABEL_BG_HEIGHT, width, TIME_LABEL_BG_HEIGHT);
+  ctx.fillStyle = TIME_AXIS_BG;
+  ctx.fillRect(0, height - TIME_AXIS_HEIGHT, width, TIME_AXIS_HEIGHT);
 
-  // Настройки текста (точно как в свечном графике)
   ctx.font = LABEL_FONT;
   ctx.fillStyle = LABEL_COLOR;
   ctx.textAlign = 'center';
-  ctx.textBaseline = 'alphabetic'; // Нижняя граница символов на y (как в свечном)
+  ctx.textBaseline = 'alphabetic';
 
-  // Вычисляем шаг времени
   const stepMs = calculateTimeStep(timeRange, width);
-
-  // Начальное время (выравниваем по шагу)
   const startTime = Math.ceil(timeStart / stepMs) * stepMs;
 
-  // Рисуем метки времени (точно как в свечном графике)
-  for (let time = startTime; time <= timeEnd; time += stepMs) {
+  let tCount = 0;
+  for (let time = startTime; time <= timeEnd && tCount < 200; time += stepMs, tCount++) {
     const x = timeToX(time, viewport, width);
-
-    // Проверяем, что метка видна
     if (x < 0 || x > width) continue;
 
-    // Текст метки снизу: y = height - LABEL_PADDING (низ текста в 8px от низа области)
     const timeText = formatTime(time);
-    ctx.fillText(timeText, x, height - LABEL_PADDING);
+    ctx.fillText(timeText, x, height - TIME_LABEL_PADDING);
   }
 
   ctx.restore();

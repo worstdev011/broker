@@ -4,7 +4,8 @@
 
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
+import { useClickOutside } from '@/lib/hooks/useClickOutside';
 import { ChevronDown } from 'lucide-react';
 
 type Timeframe = '5s' | '10s' | '15s' | '30s' | '1m' | '2m' | '3m' | '5m' | '10m' | '15m' | '30m' | '1h' | '4h' | '1d';
@@ -34,25 +35,7 @@ const TIMEFRAMES: { id: Timeframe; label: string; display: string }[] = [
 export function TimeframeMenu({ timeframe, onTimeframeChange }: TimeframeMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent | TouchEvent) => {
-      const target = event.target as Node;
-      if (target && menuRef.current && !menuRef.current.contains(target)) {
-        setIsOpen(false);
-      }
-    };
-
-    if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside, true);
-      document.addEventListener('touchstart', handleClickOutside, true);
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside, true);
-      document.removeEventListener('touchstart', handleClickOutside, true);
-    };
-  }, [isOpen]);
+  useClickOutside(menuRef, () => setIsOpen(false), isOpen);
 
   const currentTimeframe = TIMEFRAMES.find(tf => tf.id === timeframe);
 
@@ -60,7 +43,7 @@ export function TimeframeMenu({ timeframe, onTimeframeChange }: TimeframeMenuPro
     <div className="relative" ref={menuRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="px-3.5 py-2 rounded-md text-sm font-semibold transition-colors flex items-center justify-center text-white md:hover:bg-white/10"
+        className="px-3.5 py-2 rounded-md text-sm font-semibold transition-colors duration-300 ease-in-out flex items-center justify-center text-white md:hover:bg-white/10"
         title="Таймфрейм"
         style={{ width: '44px', height: '36px', minWidth: '44px', maxWidth: '44px' }}
       >
@@ -68,7 +51,7 @@ export function TimeframeMenu({ timeframe, onTimeframeChange }: TimeframeMenuPro
       </button>
 
       {isOpen && (
-        <div className="absolute top-full left-1/2 -translate-x-[calc(50%+36px)] md:-translate-x-1/2 mt-2 rounded-lg shadow-xl z-50 w-[340px] overflow-hidden bg-[#091C56] border border-white/5">
+        <div className="absolute top-full left-1/2 -translate-x-[calc(50%+36px)] md:-translate-x-1/2 mt-2 rounded-lg shadow-xl z-50 w-[340px] overflow-hidden bg-[#1e2a40] border border-white/5">
           <div className="p-2 grid grid-cols-7 gap-1.5">
             {TIMEFRAMES.map((tf) => {
               const isActive = timeframe === tf.id;
@@ -80,7 +63,7 @@ export function TimeframeMenu({ timeframe, onTimeframeChange }: TimeframeMenuPro
                     onTimeframeChange(tf.id);
                     setIsOpen(false);
                   }}
-                  className={`flex items-center justify-center px-1 py-1.5 rounded-lg text-[11px] transition-colors ${
+                  className={`flex items-center justify-center px-1 py-1.5 rounded-lg text-[11px] transition-colors duration-300 ease-in-out ${
                     isActive
                       ? 'bg-[#3347ff] text-white border border-[#3347ff]'
                       : 'bg-white/10 text-gray-300 md:hover:bg-white/15 md:hover:text-white'

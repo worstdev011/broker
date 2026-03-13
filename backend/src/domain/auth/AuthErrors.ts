@@ -1,45 +1,25 @@
-/**
- * Domain errors for Auth
- */
+import { AppError } from '../../shared/errors/AppError.js';
 
-export class AuthError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'AuthError';
+export class InvalidCredentialsError extends AppError {
+  constructor(message = 'Invalid email or password') {
+    super(401, message, 'INVALID_CREDENTIALS');
   }
 }
 
-export class UserNotFoundError extends AuthError {
-  constructor(email?: string) {
-    super(email ? `User with email ${email} not found` : 'User not found');
-    this.name = 'UserNotFoundError';
-  }
-}
-
-export class InvalidCredentialsError extends AuthError {
-  constructor(message?: string) {
-    super(message ?? 'Invalid email or password');
-    this.name = 'InvalidCredentialsError';
-  }
-}
-
-export class UserAlreadyExistsError extends AuthError {
+export class UserAlreadyExistsError extends AppError {
   constructor(email: string) {
-    super(`User with email ${email} already exists`);
-    this.name = 'UserAlreadyExistsError';
+    super(409, `User with email ${email} already exists`, 'USER_ALREADY_EXISTS');
   }
 }
 
-export class SessionNotFoundError extends AuthError {
+export class SessionNotFoundError extends AppError {
   constructor() {
-    super('Session not found or expired');
-    this.name = 'SessionNotFoundError';
+    super(401, 'Session not found or expired', 'SESSION_NOT_FOUND');
   }
 }
 
-export class InvalidSessionError extends AuthError {
-  constructor(message?: string) {
-    super(message ?? 'Invalid or expired session');
-    this.name = 'InvalidSessionError';
+export class InvalidSessionError extends AppError {
+  constructor(message = 'Invalid or expired session') {
+    super(401, message, 'INVALID_SESSION');
   }
 }

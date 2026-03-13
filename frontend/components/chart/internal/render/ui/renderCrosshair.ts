@@ -8,6 +8,16 @@
 import type { TimePriceViewport } from './viewport.types';
 import type { CrosshairState } from '../../crosshair/crosshair.types';
 import type { InteractionZone } from '../../interactions/interaction.types';
+import {
+  CROSSHAIR_LINE_COLOR,
+  CROSSHAIR_LABEL_BG,
+  PRICE_LABEL_FONT,
+  LABEL_BORDER_RADIUS,
+  PRICE_LABEL_HEIGHT,
+  PRICE_AXIS_WIDTH,
+  TIME_AXIS_HEIGHT,
+  LABEL_PADDING,
+} from '../../chartTheme';
 
 interface RenderCrosshairParams {
   ctx: CanvasRenderingContext2D;
@@ -18,13 +28,6 @@ interface RenderCrosshairParams {
   registerInteractionZone?: (zone: InteractionZone) => void;
   digits?: number;
 }
-
-const LINE_COLOR = 'rgba(64, 100, 143, 0.5)';
-const LINE_WIDTH = 1;
-const LABEL_BG_COLOR = '#40648f';
-const LABEL_PADDING = 6;
-const LABEL_FONT = '12px sans-serif';
-const LABEL_BORDER_RADIUS = 6;
 
 /**
  * Конвертирует цену в Y координату
@@ -88,8 +91,8 @@ export function renderCrosshair({
   const cx = Math.round(crosshair.x) + 0.5;
   const cy = Math.round(crosshair.y) + 0.5;
 
-  ctx.strokeStyle = LINE_COLOR;
-  ctx.lineWidth = LINE_WIDTH;
+  ctx.strokeStyle = CROSSHAIR_LINE_COLOR;
+  ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(cx, 0);
   ctx.lineTo(cx, height);
@@ -100,68 +103,55 @@ export function renderCrosshair({
   ctx.lineTo(width, cy);
   ctx.stroke();
 
-  // Метка цены (справа)
   const priceLabel = formatPrice(crosshair.price, digits);
-  ctx.font = LABEL_FONT;
+  ctx.font = PRICE_LABEL_FONT;
   ctx.textBaseline = 'middle';
-  ctx.textAlign = 'left';
-  const priceMetrics = ctx.measureText(priceLabel);
-  const priceLabelWidth = priceMetrics.width;
-  const priceLabelHeight = 20;
-  const priceLabelX = width - priceLabelWidth - LABEL_PADDING * 2;
-  const priceLabelY = Math.max(
-    priceLabelHeight / 2 + LABEL_PADDING,
-    Math.min(crosshair.y, height - priceLabelHeight / 2 - LABEL_PADDING)
-  );
+  ctx.textAlign = 'center';
 
-  // Фон для метки цены
-  // 🔥 FIX: beginPath() перед roundRect — без этого path от линий кроссхейра
-  // остаётся активным и fill() заливает весь накопленный path
+  const priceLabelCenterX = width - PRICE_AXIS_WIDTH / 2;
+  const clampedY = Math.max(
+    PRICE_LABEL_HEIGHT / 2,
+    Math.min(crosshair.y, height - PRICE_LABEL_HEIGHT / 2)
+  );
+  const backgroundTop = clampedY - PRICE_LABEL_HEIGHT / 2;
+  const backgroundCenter = backgroundTop + PRICE_LABEL_HEIGHT / 2;
+
   ctx.beginPath();
-  ctx.fillStyle = LABEL_BG_COLOR;
+  ctx.fillStyle = CROSSHAIR_LABEL_BG;
   ctx.roundRect(
-    priceLabelX - LABEL_PADDING,
-    priceLabelY - priceLabelHeight / 2 - LABEL_PADDING,
-    priceLabelWidth + LABEL_PADDING * 2,
-    priceLabelHeight + LABEL_PADDING * 2,
+    width - PRICE_AXIS_WIDTH,
+    backgroundTop,
+    PRICE_AXIS_WIDTH,
+    PRICE_LABEL_HEIGHT,
     LABEL_BORDER_RADIUS
   );
   ctx.fill();
 
-  // Текст метки цены
-  ctx.font = LABEL_FONT;
-  ctx.textBaseline = 'middle';
-  ctx.textAlign = 'left';
-  ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
-  ctx.lineWidth = 3;
-  ctx.lineJoin = 'round';
-  ctx.miterLimit = 2;
-  ctx.strokeText(priceLabel, priceLabelX, priceLabelY);
   ctx.fillStyle = '#ffffff';
-  ctx.fillText(priceLabel, priceLabelX, priceLabelY);
+  ctx.fillText(priceLabel, priceLabelCenterX, backgroundCenter);
 
-  // Кнопка "+" для алерта (если нужно)
   if (registerInteractionZone) {
-    const plusSize = 16;
+    const plusSize = PRICE_LABEL_HEIGHT - 4;
     const plusPadding = 6;
-    const plusX = priceLabelX - LABEL_PADDING - plusSize - plusPadding;
-    const plusY = priceLabelY - plusSize / 2;
+    const plusX = width - PRICE_AXIS_WIDTH - plusSize - plusPadding;
+    const plusY = clampedY - plusSize / 2;
 
-    ctx.fillStyle = 'rgba(255, 212, 0, 0.25)';
+    ctx.fillStyle = CROSSHAIR_LABEL_BG;
     ctx.beginPath();
-    ctx.roundRect(plusX, plusY, plusSize, plusSize, 4);
+    ctx.roundRect(plusX, plusY, plusSize, plusSize, LABEL_BORDER_RADIUS);
     ctx.fill();
-    ctx.strokeStyle = 'rgba(255, 212, 0, 0.8)';
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
     ctx.lineWidth = 1;
     ctx.stroke();
 
-    ctx.strokeStyle = '#FFD400';
+    const plusIconPadding = 8;
+    ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(plusX + plusSize / 2, plusY + 4);
-    ctx.lineTo(plusX + plusSize / 2, plusY + plusSize - 4);
-    ctx.moveTo(plusX + 4, plusY + plusSize / 2);
-    ctx.lineTo(plusX + plusSize - 4, plusY + plusSize / 2);
+    ctx.moveTo(plusX + plusSize / 2, plusY + plusIconPadding);
+    ctx.lineTo(plusX + plusSize / 2, plusY + plusSize - plusIconPadding);
+    ctx.moveTo(plusX + plusIconPadding, plusY + plusSize / 2);
+    ctx.lineTo(plusX + plusSize - plusIconPadding, plusY + plusSize / 2);
     ctx.stroke();
 
     registerInteractionZone({
@@ -194,42 +184,24 @@ export function renderCrosshairTimeLabel(
 
   ctx.save();
 
-  const TIME_PADDING_H = 8;
-  const TIME_LABEL_AREA_HEIGHT = 25;
-  const TIME_BG = '#40648f';
-  const TIME_BORDER = 'rgba(255,255,255,0.25)';
-  const TIME_TEXT = '#ffffff';
-
-  ctx.font = LABEL_FONT;
+  ctx.font = PRICE_LABEL_FONT;
   ctx.textBaseline = 'middle';
   ctx.textAlign = 'center';
   const tw = ctx.measureText(text).width;
-  const boxW = tw + TIME_PADDING_H * 2;
-  const boxH = 20;
+  const boxW = tw + LABEL_PADDING * 2;
+  const boxH = PRICE_LABEL_HEIGHT;
   let x = crosshair.x - boxW / 2;
   x = Math.max(2, Math.min(x, width - boxW - 2));
+  const y = height - boxH;
 
-  // Фон метки — до самого низа, без отступа
-  ctx.fillStyle = TIME_BG;
-  ctx.strokeStyle = TIME_BORDER;
-  ctx.lineWidth = 1;
+  ctx.fillStyle = CROSSHAIR_LABEL_BG;
   ctx.beginPath();
-  ctx.roundRect(x, height - TIME_LABEL_AREA_HEIGHT, boxW, TIME_LABEL_AREA_HEIGHT, 4);
+  ctx.roundRect(x, y, boxW, boxH, LABEL_BORDER_RADIUS);
   ctx.fill();
-  ctx.stroke();
 
-  // Текст — по центру области
   const textX = x + boxW / 2;
-  const textY = height - TIME_LABEL_AREA_HEIGHT / 2;
-  ctx.font = LABEL_FONT;
-  ctx.textBaseline = 'middle';
-  ctx.textAlign = 'center';
-  ctx.strokeStyle = 'rgba(0,0,0,0.9)';
-  ctx.lineWidth = 2.5;
-  ctx.lineJoin = 'round';
-  ctx.miterLimit = 2;
-  ctx.strokeText(text, textX, textY);
-  ctx.fillStyle = TIME_TEXT;
+  const textY = y + boxH / 2;
+  ctx.fillStyle = '#ffffff';
   ctx.fillText(text, textX, textY);
 
   ctx.restore();

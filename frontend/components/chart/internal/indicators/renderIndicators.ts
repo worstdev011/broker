@@ -6,6 +6,7 @@
 
 import type { IndicatorSeries, IndicatorConfig } from './indicator.types';
 import type { Viewport } from '../viewport.types';
+import { timeToX, priceToY } from '../utils/coords';
 
 interface RenderIndicatorsParams {
   ctx: CanvasRenderingContext2D;
@@ -49,24 +50,6 @@ function hexToRgba(hex: string, alpha: number): string {
   if (!Number.isFinite(g)) g = 0;
   if (!Number.isFinite(b)) b = 0;
   return `rgba(${r},${g},${b},${alpha})`;
-}
-
-/**
- * Конвертирует время в X координату
- */
-function timeToX(time: number, viewport: Viewport, width: number): number {
-  const timeRange = viewport.timeEnd - viewport.timeStart;
-  if (timeRange === 0) return 0;
-  return ((time - viewport.timeStart) / timeRange) * width;
-}
-
-/**
- * Конвертирует цену в Y координату (для основного графика)
- */
-function priceToY(price: number, viewport: Viewport, height: number): number {
-  const priceRange = viewport.priceMax - viewport.priceMin;
-  if (priceRange === 0) return height / 2;
-  return height - ((price - viewport.priceMin) / priceRange) * height;
 }
 
 /**
@@ -741,6 +724,46 @@ export function renderIndicators({
   adxHeight = 0,
 }: RenderIndicatorsParams): void {
   if (indicators.length === 0) return;
+
+  // Тонкий разделитель между основной областью графика и нижними индикаторными зонами
+  const hasBottomZones =
+    rsiHeight > 0 ||
+    stochHeight > 0 ||
+    momentumHeight > 0 ||
+    awesomeOscillatorHeight > 0 ||
+    macdHeight > 0 ||
+    atrHeight > 0 ||
+    adxHeight > 0;
+
+  if (hasBottomZones) {
+    const bottomOffset =
+      rsiHeight +
+      stochHeight +
+      momentumHeight +
+      awesomeOscillatorHeight +
+      macdHeight +
+      atrHeight +
+      adxHeight;
+
+    ctx.save();
+    ctx.strokeStyle = '#202a3b';
+    ctx.lineWidth = 1;
+    const topY = height + 0.5; // верхняя граница индикаторных панелей
+    const bottomY = height + bottomOffset + 0.5; // нижняя граница всего блока индикаторов
+
+    // Линия между графиком и индикаторами
+    ctx.beginPath();
+    ctx.moveTo(0, topY);
+    ctx.lineTo(width, topY);
+    ctx.stroke();
+
+    // Линия под всем блоком индикаторов
+    ctx.beginPath();
+    ctx.moveTo(0, bottomY);
+    ctx.lineTo(width, bottomY);
+    ctx.stroke();
+    ctx.restore();
+  }
 
   // Разделяем индикаторы на SMA/EMA, Bollinger Bands, Keltner, RSI, Stochastic, Momentum, Awesome Oscillator, ATR, ADX и MACD
   const lineIndicators = indicators.filter(i => i.type === 'SMA' || i.type === 'EMA');

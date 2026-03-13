@@ -10,6 +10,7 @@ import { useAuth } from '@/lib/hooks/useAuth'
 import Footer from '@/components/Footer'
 import { SiteHeader } from '@/components/SiteHeader'
 import { INSTRUMENTS } from '@/lib/instruments'
+import { toast } from '@/stores/toast.store'
 
 function getCurrencyCountryCodes(pair: string): [string | null, string | null] {
   const parts = pair.split('/')
@@ -127,8 +128,8 @@ function HomeContent() {
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Header and Hero Section with shared background */}
-      <div className="bg-[#061230] relative overflow-hidden pt-16 sm:pt-20 md:pt-24">
+      {/* Header and Hero Section — ровно на высоту экрана с учётом хедера */}
+      <div className="min-h-screen flex flex-col bg-[#061230] relative overflow-hidden pt-16 sm:pt-20 md:pt-24">
         <div className="absolute inset-0 opacity-85" style={{ backgroundImage: 'url(/images/back1.png)', backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat' }}></div>
         <div className="absolute inset-0 opacity-85" style={{ backgroundImage: 'url(/images/back2.png)', backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat' }}></div>
         
@@ -137,10 +138,10 @@ function HomeContent() {
           onOpenRegister={() => { setPanelMode('register'); setShowRegisterPanel(true); }}
         />
 
-        {/* Hero + Marquee wrapper: 100vh on mobile (header + hero + marquee all visible) */}
-        <div className="min-h-[calc(100vh-4rem)] sm:min-h-[calc(100vh-5rem)] md:min-h-0 flex flex-col md:block">
+        {/* Контент под хедером: заполняет оставшуюся высоту (100vh − хедер) */}
+        <div className="flex-1 flex min-h-0 flex-col">
         {/* Hero Section */}
-        <section className="flex-1 flex flex-col justify-center md:flex-initial md:justify-start py-10 sm:py-16 md:py-32 relative z-10">
+        <section className="flex-1 flex flex-col justify-center py-10 sm:py-16 md:py-20 relative z-10">
           <div className="container mx-auto px-3 sm:px-4">
             <div className="grid md:grid-cols-[1fr_1.25fr] gap-12 items-center">
               {/* Left Column - Text Content */}
@@ -914,8 +915,8 @@ function HomeContent() {
                           return;
                         }
                         setError('');
-                        // TODO: вызвать API восстановления пароля
-                        alert(ta('restore_alert'));
+                        // STUB: вызвать API восстановления пароля когда будет готов эндпоинт
+                        toast(ta('restore_alert'), 'info');
                       }}
                       className="w-full mt-4 py-3.5 rounded-xl btn-accent text-white font-semibold active:scale-[0.99] transition-all shadow-lg shadow-[#3347ff]/20"
                     >

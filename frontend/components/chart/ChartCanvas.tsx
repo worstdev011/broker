@@ -9,17 +9,15 @@
 
 import { useRef, useImperativeHandle, forwardRef } from 'react';
 import { useChart } from './useChart';
-import type { TerminalSnapshot } from '@/types/terminal';
 import type { CandleMode } from './internal/candleModes/candleMode.types';
 import type { IndicatorConfig } from './internal/indicators/indicator.types';
 
 interface ChartCanvasProps {
   className?: string;
   style?: React.CSSProperties;
-  timeframe?: string; // например "5s"
-  snapshot?: TerminalSnapshot | null;
-  indicatorConfigs?: IndicatorConfig[]; // Конфигурация индикаторов
-  drawingMode?: 'horizontal' | 'vertical' | 'trend' | 'rectangle' | 'fibonacci' | 'parallel-channel' | 'ray' | 'arrow' | null; // Режим рисования
+  timeframe?: string;
+  indicatorConfigs?: IndicatorConfig[];
+  drawingMode?: 'horizontal' | 'vertical' | 'trend' | 'rectangle' | 'fibonacci' | 'parallel-channel' | 'ray' | 'arrow' | null;
 }
 
 export interface ChartCanvasRef {
@@ -28,11 +26,10 @@ export interface ChartCanvasRef {
 }
 
 export const ChartCanvas = forwardRef<ChartCanvasRef, ChartCanvasProps>(
-  ({ className, style, timeframe = '5s', snapshot, indicatorConfigs = [], drawingMode = null }, ref) => {
+  ({ className, style, timeframe = '5s', indicatorConfigs = [], drawingMode = null }, ref) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
-    const chartApi = useChart({ canvasRef, timeframe, snapshot, indicatorConfigs, drawingMode });
+    const chartApi = useChart({ canvasRef, timeframe, indicatorConfigs, drawingMode });
 
-    // Экспортируем API через ref
     useImperativeHandle(ref, () => ({
       setCandleMode: chartApi.setCandleMode,
       getCandleMode: chartApi.getCandleMode,

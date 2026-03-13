@@ -1,11 +1,9 @@
 /**
- * FLOW LINE-4: Rendering линейного графика на Canvas
- * 
- * Ответственность:
- * - Отрисовка линии из тиков
- * - Преобразование (time, price) → (x, y)
- * - Binary search для видимых тиков
- * - FLOW L-UI-2: Area fill под линией с градиентом
+ * Rendering линейного графика на Canvas.
+ *
+ * Step-line interpolation (horizontal → vertical) matching the competitor.
+ * Each tick draws a flat line at the previous price, then a vertical jump
+ * to the new price — producing the characteristic "staircase" shape.
  */
 
 import type { PricePoint } from './useLinePointStore';
@@ -21,9 +19,7 @@ interface RenderLineParams {
   priceMax: number;
   color?: string;
   lineWidth?: number;
-  /** FLOW L-UI-2: Рендерить ли area fill под линией */
   renderAreaFill?: boolean;
-  /** Live точка — добавляется в конец для area fill (градиент включает live) */
   livePoint?: { time: number; price: number } | null;
 }
 
@@ -59,6 +55,98 @@ function upperBound(ticks: PricePoint[], target: number): number {
   return lo;
 }
 
+// ─── Step-line path helper ──────────────────────────────────────────
+
+/**
+ * Step-diagonal hybrid: flat at previous price for most of the interval,
+ * then a short diagonal ramp to the new price. This produces the
+ * characteristic shape seen on competitor charts — mostly flat with
+ * quick angled transitions instead of pure vertical jumps.
+ *
+ * TRANSITION_RATIO controls how much of the interval is the diagonal
+ * ramp (0.3 = last 30% of the gap is the transition).
+ */
+const TRANSITION_RATIO = 0.3;
+
+function traceStepPath(
+  ctx: CanvasRenderingContext2D,
+  ticks: PricePoint[],
+  startIdx: number,
+  endIdx: number,
+  timeStart: number,
+  invTimeRange: number,
+  width: number,
+  height: number,
+  priceMin: number,
+  priceMax: number,
+  livePoint: { time: number; price: number } | null,
+) {
+  const count = endIdx - startIdx;
+
+  let firstX = 0;
+  let firstY = 0;
+  let lastX = 0;
+  let lastY = 0;
+  let minY = Infinity;
+  let started = false;
+
+  for (let i = 0; i < count; i++) {
+    const tick = ticks[startIdx + i];
+    const x = (tick.time - timeStart) * invTimeRange * width;
+    const y = priceToY(tick.price, priceMin, priceMax, height);
+
+    if (y < minY) minY = y;
+
+    if (!started) {
+      ctx.moveTo(x, y);
+      firstX = x;
+      firstY = y;
+      started = true;
+    } else {
+      const gap = x - lastX;
+      if (Math.abs(y - lastY) < 0.3 || gap < 2) {
+        ctx.lineTo(x, y);
+      } else {
+        // Flat portion at previous price, then diagonal ramp to new price
+        const rampStart = x - gap * TRANSITION_RATIO;
+        ctx.lineTo(rampStart, lastY);
+        ctx.lineTo(x, y);
+      }
+    }
+    lastX = x;
+    lastY = y;
+  }
+
+  // Live extension: horizontal at last price, then diagonal to animated price
+  if (livePoint && livePoint.time >= timeStart) {
+    const rawX = (livePoint.time - timeStart) * invTimeRange * width;
+    const lx = Math.min(rawX, width);
+    const ly = priceToY(livePoint.price, priceMin, priceMax, height);
+    if (!started) {
+      ctx.moveTo(lx, ly);
+      firstX = lx;
+      firstY = ly;
+      started = true;
+    } else {
+      const gap = lx - lastX;
+      if (Math.abs(ly - lastY) < 0.3 || gap < 2) {
+        ctx.lineTo(lx, ly);
+      } else {
+        const rampStart = lx - gap * TRANSITION_RATIO;
+        ctx.lineTo(rampStart, lastY);
+        ctx.lineTo(lx, ly);
+      }
+    }
+    lastX = lx;
+    lastY = ly;
+    if (ly < minY) minY = ly;
+  }
+
+  return { firstX, firstY, lastX, lastY, minY, started };
+}
+
+// ─── Area fill ─────────────────────────────────────────────────────
+
 function renderAreaFillPath(
   ctx: CanvasRenderingContext2D,
   ticks: PricePoint[],
@@ -71,53 +159,16 @@ function renderAreaFillPath(
   priceMin: number,
   priceMax: number,
   livePoint: { time: number; price: number } | null,
-  liveTimeEnd: number
 ): void {
   if (startIdx >= endIdx && !livePoint) return;
 
-  let minY = Infinity;
-  let firstX = 0;
-  let firstY = 0;
-  let lastX = 0;
-  let lastY = 0;
-
   ctx.beginPath();
+  const { firstX, lastX, minY, started } = traceStepPath(
+    ctx, ticks, startIdx, endIdx, timeStart, invTimeRange,
+    width, height, priceMin, priceMax, livePoint,
+  );
 
-  let pathStarted = false;
-  for (let i = startIdx; i < endIdx; i++) {
-    const tick = ticks[i];
-    const x = (tick.time - timeStart) * invTimeRange * width;
-    const y = priceToY(tick.price, priceMin, priceMax, height);
-    if (!pathStarted) {
-      ctx.moveTo(x, y);
-      firstX = x;
-      firstY = y;
-      pathStarted = true;
-    } else {
-      ctx.lineTo(x, y);
-    }
-    lastX = x;
-    lastY = y;
-    if (y < minY) minY = y;
-  }
-
-  if (livePoint && livePoint.time >= timeStart && livePoint.time <= liveTimeEnd) {
-    const lx = (livePoint.time - timeStart) * invTimeRange * width;
-    const ly = priceToY(livePoint.price, priceMin, priceMax, height);
-    if (!pathStarted) {
-      ctx.moveTo(lx, ly);
-      firstX = lx;
-      firstY = ly;
-      pathStarted = true;
-    } else {
-      ctx.lineTo(lx, ly);
-    }
-    lastX = lx;
-    lastY = ly;
-    if (ly < minY) minY = ly;
-  }
-
-  if (!pathStarted) return;
+  if (!started) return;
 
   ctx.lineTo(lastX, height);
   ctx.lineTo(firstX, height);
@@ -125,15 +176,15 @@ function renderAreaFillPath(
 
   const topY = Math.max(0, Math.min(minY, height));
   const gradient = ctx.createLinearGradient(0, topY, 0, height);
-  gradient.addColorStop(0, 'rgba(59,130,246,0.35)');
+  gradient.addColorStop(0, 'rgba(59,130,246,0.45)');
+  gradient.addColorStop(0.5, 'rgba(59,130,246,0.18)');
   gradient.addColorStop(1, 'rgba(59,130,246,0.02)');
   ctx.fillStyle = gradient;
   ctx.fill();
 }
 
-/**
- * Рендерит линейный график из тиков
- */
+// ─── Main line ─────────────────────────────────────────────────────
+
 export function renderLine({
   ctx,
   ticks,
@@ -143,56 +194,72 @@ export function renderLine({
   priceMin,
   priceMax,
   color = '#4da3ff',
-  lineWidth = 1.3,
+  lineWidth = 1.5,
   renderAreaFill: shouldRenderAreaFill = false,
   livePoint = null,
-}: RenderLineParams): void {
-  if (ticks.length === 0) return;
+}: RenderLineParams): { x: number; y: number } | null {
+  if (ticks.length === 0 && !livePoint) return null;
 
   const { timeStart, timeEnd } = viewport;
   const timeRange = timeEnd - timeStart;
-  if (timeRange <= 0) return;
+  if (timeRange <= 0) return null;
 
-  const startIdx = Math.max(0, lowerBound(ticks, timeStart) - 1);
-  const endIdx = upperBound(ticks, timeEnd);
+  const startIdx = ticks.length > 0 ? Math.max(0, lowerBound(ticks, timeStart) - 1) : 0;
+  const endIdx = ticks.length > 0 ? upperBound(ticks, timeEnd) : 0;
 
-  if (startIdx >= endIdx) return;
+  if (startIdx >= endIdx && !livePoint) return null;
 
   const invTimeRange = 1 / timeRange;
 
   ctx.save();
 
   if (shouldRenderAreaFill) {
-    renderAreaFillPath(ctx, ticks, startIdx, endIdx, timeStart, invTimeRange, width, height, priceMin, priceMax, livePoint, timeEnd);
+    renderAreaFillPath(
+      ctx, ticks, startIdx, endIdx, timeStart, invTimeRange,
+      width, height, priceMin, priceMax, livePoint,
+    );
   }
 
+  // Glow layer: soft wide shadow behind the main line
+  ctx.beginPath();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = lineWidth + 3;
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  ctx.globalAlpha = 0.15;
+
+  traceStepPath(
+    ctx, ticks, startIdx, endIdx, timeStart, invTimeRange,
+    width, height, priceMin, priceMax, livePoint,
+  );
+  ctx.stroke();
+
+  // Main crisp line
+  ctx.globalAlpha = 1;
   ctx.beginPath();
   ctx.strokeStyle = color;
   ctx.lineWidth = lineWidth;
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
 
-  const first = ticks[startIdx];
-  ctx.moveTo((first.time - timeStart) * invTimeRange * width, priceToY(first.price, priceMin, priceMax, height));
-
-  for (let i = startIdx + 1; i < endIdx; i++) {
-    const tick = ticks[i];
-    ctx.lineTo((tick.time - timeStart) * invTimeRange * width, priceToY(tick.price, priceMin, priceMax, height));
-  }
+  const { lastX, lastY } = traceStepPath(
+    ctx, ticks, startIdx, endIdx, timeStart, invTimeRange,
+    width, height, priceMin, priceMax, livePoint,
+  );
 
   ctx.stroke();
   ctx.restore();
+
+  return { x: lastX, y: lastY };
 }
 
-/**
- * Вычисляет min/max цену из тиков в viewport (binary search)
- * Учитывает live сегмент: fromPrice + toPrice
- */
+// ─── Price range calculation ───────────────────────────────────────
+
 export function calculatePriceRange(
   ticks: PricePoint[],
   viewport: LineViewport,
   liveSegment?: { fromPrice: number } | null,
-  toPrice?: number
+  toPrice?: number,
 ): { min: number; max: number } {
   const startIdx = lowerBound(ticks, viewport.timeStart);
   const endIdx = upperBound(ticks, viewport.timeEnd);
@@ -227,76 +294,3 @@ export function calculatePriceRange(
   };
 }
 
-/**
- * Рендерит live сегмент — линия от (fromTime, fromPrice) к (toTime, toPrice).
- */
-export function renderLiveSegment({
-  ctx,
-  fromTime,
-  toTime,
-  fromPrice,
-  toPrice,
-  viewport,
-  width,
-  height,
-  priceMin,
-  priceMax,
-  color = '#4da3ff',
-  lineWidth = 1.3,
-  renderAreaFill: shouldRenderAreaFill = false,
-}: {
-  ctx: CanvasRenderingContext2D;
-  fromTime: number;
-  toTime: number;
-  fromPrice: number;
-  toPrice: number;
-  viewport: LineViewport;
-  width: number;
-  height: number;
-  priceMin: number;
-  priceMax: number;
-  color?: string;
-  lineWidth?: number;
-  renderAreaFill?: boolean;
-}): void {
-  const { timeStart, timeEnd } = viewport;
-  const timeRange = timeEnd - timeStart;
-  if (timeRange <= 0) return;
-
-  ctx.save();
-
-  const invTimeRange = 1 / timeRange;
-  const fromX = (fromTime - timeStart) * invTimeRange * width;
-  const toX = (toTime - timeStart) * invTimeRange * width;
-  const fromY = priceToY(fromPrice, priceMin, priceMax, height);
-  const toY = priceToY(toPrice, priceMin, priceMax, height);
-
-  if (shouldRenderAreaFill) {
-    const minY = Math.min(fromY, toY);
-    const topY = Math.max(0, Math.min(minY, height));
-
-    const gradient = ctx.createLinearGradient(0, topY, 0, height);
-    gradient.addColorStop(0, 'rgba(59,130,246,0.35)');
-    gradient.addColorStop(1, 'rgba(59,130,246,0.02)');
-
-    ctx.beginPath();
-    ctx.moveTo(fromX, fromY);
-    ctx.lineTo(toX, toY);
-    ctx.lineTo(toX, height);
-    ctx.lineTo(fromX, height);
-    ctx.closePath();
-    ctx.fillStyle = gradient;
-    ctx.fill();
-  }
-
-  ctx.beginPath();
-  ctx.strokeStyle = color;
-  ctx.lineWidth = lineWidth;
-  ctx.lineJoin = 'round';
-  ctx.lineCap = 'round';
-  ctx.moveTo(fromX, fromY);
-  ctx.lineTo(toX, toY);
-  ctx.stroke();
-
-  ctx.restore();
-}

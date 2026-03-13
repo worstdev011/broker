@@ -13,6 +13,7 @@ import {
 } from 'recharts';
 import { api } from '@/lib/api/api';
 import { getInstrument } from '@/lib/instruments';
+import type { TradeHistoryItem } from '@/types/trade';
 
 interface BalancePoint {
   date: string;
@@ -40,17 +41,94 @@ interface TradeAnalytics {
   };
 }
 
-interface TradeHistoryItem {
-  id: string;
-  direction: string;
-  instrument: string;
-  amount: string;
-  status: string;
-  openedAt: string;
-  closedAt: string | null;
-  payout: string;
-  entryPrice: string;
-  exitPrice: string | null;
+function TradePageSkeleton() {
+  return (
+    <div className="flex w-full min-h-[calc(100vh-3.5rem)] relative">
+      <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_120%_80%_at_20%_0%,rgba(51,71,255,0.06),transparent_50%)]" />
+      <div className="flex-1 min-w-0 p-3 sm:p-6 md:p-8 overflow-auto relative">
+        <div className="w-full">
+          {/* Header */}
+          <div className="mb-4 sm:mb-10">
+            <div className="h-8 sm:h-9 w-52 bg-white/10 rounded animate-pulse mb-2" />
+            <div className="h-4 w-64 bg-white/5 rounded animate-pulse" />
+          </div>
+
+          {/* 4 stat cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4 mb-4 sm:mb-8">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="rounded-xl border border-white/[0.08] bg-[#030E28] p-4 sm:p-5">
+                <div className="h-3 w-24 bg-white/10 rounded animate-pulse mb-3" />
+                <div className="h-7 w-28 bg-white/10 rounded animate-pulse" />
+              </div>
+            ))}
+          </div>
+
+          {/* Charts row */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-6">
+            {Array.from({ length: 2 }).map((_, i) => (
+              <div key={i} className="rounded-xl sm:rounded-2xl border border-white/[0.08] bg-[#030E28] p-4 sm:p-6">
+                <div className="h-5 w-40 bg-white/10 rounded animate-pulse mb-4" />
+                <div className="flex gap-2 mb-4">
+                  {[80, 80, 96].map((w, j) => (
+                    <div key={j} className="h-8 bg-white/5 rounded-lg animate-pulse" style={{ width: w }} />
+                  ))}
+                </div>
+                <div className="h-[220px] sm:h-[260px] rounded-xl bg-white/5 animate-pulse" />
+              </div>
+            ))}
+          </div>
+
+          {/* Trades table */}
+          <div className="rounded-xl sm:rounded-2xl border border-white/[0.08] bg-[#030E28] p-4 sm:p-6">
+            <div className="h-5 w-36 bg-white/10 rounded animate-pulse mb-4" />
+            <TradesTableSkeleton rows={6} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ChartSkeleton() {
+  return (
+    <div className="h-full w-full rounded-xl bg-white/5 overflow-hidden relative">
+      <div className="absolute inset-x-6 top-5 h-4 bg-white/10 rounded-full animate-pulse" />
+      <div className="absolute inset-x-4 bottom-6 space-y-2">
+        {Array.from({ length: 4 }).map((_, idx) => (
+          <div key={idx} className="h-3 w-full bg-white/5 rounded animate-pulse" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TradesTableSkeleton({ rows = 6 }: { rows?: number }) {
+  return (
+    <div className="overflow-x-auto scrollbar-dropdown">
+      <table className="w-full text-sm min-w-[400px]">
+        <thead>
+          <tr className="border-b border-white/[0.06]">
+            {Array.from({ length: 5 }).map((_, idx) => (
+              <th key={idx} className="text-left py-3 px-4">
+                <div className="h-3 w-20 bg-white/10 rounded animate-pulse" />
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {Array.from({ length: rows }).map((_, idx) => (
+            <tr key={idx} className="border-b border-white/[0.04] last:border-0">
+              {Array.from({ length: 5 }).map((__, j) => (
+                <td key={j} className="py-3 px-4">
+                  <div className="h-3 w-full bg-white/5 rounded animate-pulse" />
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
 const PRESET_INTERVALS = [
@@ -189,6 +267,10 @@ export function TradeProfileTab() {
     return dateStr >= startStr && dateStr <= endStr;
   });
 
+  if (loading && chartLoading && analyticsLoading && tradesLoading) {
+    return <TradePageSkeleton />;
+  }
+
   return (
     <div className="flex w-full min-h-[calc(100vh-3.5rem)] relative">
       {/* Фоновый градиент */}
@@ -257,7 +339,7 @@ export function TradeProfileTab() {
             <div className="rounded-xl sm:rounded-2xl border border-white/[0.08] bg-[#030E28] p-4 sm:p-6">
               <h2 className="text-base font-semibold text-white mb-4">Динамика баланса</h2>
               <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3 mb-4">
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   {PRESET_INTERVALS.map((i) => (
                     <button
                       key={i.id}
@@ -313,9 +395,7 @@ export function TradeProfileTab() {
 
               <div className="h-[220px] sm:h-[260px]">
                 {chartLoading ? (
-                  <div className="h-full flex items-center justify-center">
-                    <div className="w-10 h-10 border-2 border-white/20 border-t-[#3347ff] rounded-full animate-spin" />
-                  </div>
+                  <ChartSkeleton />
                 ) : chartData.length === 0 ? (
                   <div className="h-full flex items-center justify-center text-white/40 text-sm">
                     Нет данных за выбранный период
@@ -368,8 +448,8 @@ export function TradeProfileTab() {
             <div className="rounded-xl sm:rounded-2xl border border-white/[0.08] bg-[#030E28] p-4 sm:p-6">
               <h2 className="text-base font-semibold text-white mb-4">Распределение по активам</h2>
               {analyticsLoading ? (
-                <div className="h-[260px] flex items-center justify-center">
-                  <div className="w-8 h-8 border-2 border-white/20 border-t-[#3347ff] rounded-full animate-spin" />
+                <div className="h-[260px]">
+                  <ChartSkeleton />
                 </div>
               ) : !analytics?.byInstrument?.length ? (
                 <div className="h-[260px] flex items-center justify-center text-white/40 text-sm">
@@ -426,23 +506,21 @@ export function TradeProfileTab() {
           <div className="rounded-xl sm:rounded-2xl border border-white/[0.08] bg-[#030E28] p-4 sm:p-6">
             <h2 className="text-base font-semibold text-white mb-4">История сделок</h2>
             {tradesLoading ? (
-              <div className="h-[120px] flex items-center justify-center">
-                <div className="w-8 h-8 border-2 border-white/20 border-t-[#3347ff] rounded-full animate-spin" />
-              </div>
+              <TradesTableSkeleton />
             ) : filteredTrades.length === 0 ? (
               <div className="h-[120px] flex items-center justify-center text-white/40 text-sm">
                 Нет данных за выбранный период
               </div>
             ) : (
-              <div className="overflow-x-auto scrollbar-dropdown">
-                <table className="w-full text-sm min-w-[400px]">
+              <div className="overflow-x-auto scrollbar-dropdown -mx-4 sm:mx-0 px-4 sm:px-0">
+                <table className="w-full text-sm min-w-[380px]">
                   <thead>
                     <tr className="border-b border-white/[0.06]">
-                      <th className="text-left py-3 px-4 text-white/50 font-medium">Дата</th>
-                      <th className="text-left py-3 px-4 text-white/50 font-medium">Актив</th>
-                      <th className="text-left py-3 px-4 text-white/50 font-medium">Направление</th>
-                      <th className="text-left py-3 px-4 text-white/50 font-medium">Статус</th>
-                      <th className="text-right py-3 px-4 text-white/50 font-medium">Результат</th>
+                      <th className="text-left py-3 px-3 sm:px-4 text-white/50 font-medium">Дата</th>
+                      <th className="text-left py-3 px-3 sm:px-4 text-white/50 font-medium">Актив</th>
+                      <th className="text-left py-3 px-3 sm:px-4 text-white/50 font-medium">Напр.</th>
+                      <th className="text-left py-3 px-3 sm:px-4 text-white/50 font-medium">Статус</th>
+                      <th className="text-right py-3 px-3 sm:px-4 text-white/50 font-medium">Итог</th>
                     </tr>
                   </thead>
                   <tbody>

@@ -1,7 +1,3 @@
-/**
- * WebSocket routes
- */
-
 import type { FastifyInstance } from 'fastify';
 import { WebSocketManager } from '../../shared/websocket/WebSocketManager.js';
 import { WsClient } from '../../shared/websocket/WsClient.js';
@@ -9,6 +5,11 @@ import { authenticateWebSocket } from '../../infrastructure/websocket/WsAuthAdap
 import { logger } from '../../shared/logger.js';
 import { WS_RATE_LIMIT_MAX, WS_RATE_LIMIT_WINDOW_MS } from '../../config/constants.js';
 import { getPriceEngineManager } from '../../bootstrap/prices.bootstrap.js';
+import { getTimeframeMs } from '../../prices/PriceTypes.js';
+import type { Timeframe } from '../../prices/PriceTypes.js';
+import type { ChartInitCandle } from '../../shared/websocket/WsEvents.js';
+import { getInstrumentOrDefault } from '../../config/instruments.js';
+import { getMarketStatus } from '../../domain/terminal/MarketStatus.js';
 
 let wsManager: WebSocketManager | null = null;
 
@@ -25,7 +26,6 @@ export async function registerWebSocketRoutes(app: FastifyInstance): Promise<voi
   app.get('/ws', { websocket: true }, async (socket, request) => {
     const client = new WsClient(socket);
 
-    // Authenticate
     const userId = await authenticateWebSocket(request);
     if (!userId) {
       logger.warn('WebSocket connection rejected: authentication failed');
@@ -33,16 +33,12 @@ export async function registerWebSocketRoutes(app: FastifyInstance): Promise<voi
       return;
     }
 
-    // Set user ID and authenticate
     client.userId = userId;
     client.isAuthenticated = true;
-
-    // Register client
     manager.register(client);
 
-    logger.info(`WebSocket client connected: ${userId}, sessionId: ${client.sessionId}`);
+    logger.info({ userId, sessionId: client.sessionId }, 'WebSocket client connected');
 
-    // FLOW WS-1.0: Отправляем ws:ready сразу после регистрации
     try {
       client.send({
         type: 'ws:ready',
@@ -50,22 +46,19 @@ export async function registerWebSocketRoutes(app: FastifyInstance): Promise<voi
         serverTime: Date.now(),
       });
     } catch (error) {
-      logger.error('Failed to send ws:ready:', error);
+      logger.error({ err: error }, 'Failed to send ws:ready');
     }
 
-    // Handle messages
     socket.on('message', (message: Buffer) => {
       try {
         const rawMessage = message.toString();
         const data = JSON.parse(rawMessage) as import('../../shared/websocket/WsEvents.js').WsClientMessage;
 
-        // Handle ping (doesn't count toward rate limit - keep-alive)
         if (data.type === 'ping') {
           client.send({ type: 'server:time', data: { timestamp: Date.now() } });
           return;
         }
 
-        // Rate limit: check message count per client (excluding ping)
         const now = Date.now();
         if (now - client.rateLimitWindowStart > WS_RATE_LIMIT_WINDOW_MS) {
           client.messageCount = 0;
@@ -73,82 +66,72 @@ export async function registerWebSocketRoutes(app: FastifyInstance): Promise<voi
         }
         client.messageCount++;
         if (client.messageCount > WS_RATE_LIMIT_MAX) {
-          logger.warn(`WebSocket rate limit exceeded for user ${userId}`);
+          logger.warn({ userId }, 'WebSocket rate limit exceeded');
           client.send({ type: 'error', message: 'Rate limit exceeded. Please slow down.' });
           return;
         }
 
-        // FLOW WS-1.1: subscribe - добавляем в Set подписок
         if (data.type === 'subscribe' && typeof data.instrument === 'string') {
           client.subscriptions.add(data.instrument);
-          // 🔥 FLOW WS-TF: Сохраняем активный таймфрейм (для фильтрации candle:close и snapshot)
           if (typeof data.timeframe === 'string') {
             client.activeTimeframe = data.timeframe;
           }
-          
-          logger.debug(`🔔 Client ${userId} subscribed to ${data.instrument} (tf: ${client.activeTimeframe ?? 'all'})`);
-          
-          // Отправляем подтверждение подписки
-          client.send({ 
-            type: 'subscribed', 
+
+          logger.debug({ userId, instrument: data.instrument, timeframe: client.activeTimeframe }, 'Client subscribed');
+
+          client.send({
+            type: 'subscribed',
             instrument: data.instrument,
           });
 
-          // FLOW CANDLE-SNAPSHOT: Отправляем снапшот активной свечи при подписке
-          // 🔥 FLOW WS-TF: Только для активного таймфрейма (если указан)
-          sendActiveCandleSnapshot(client, data.instrument, client.activeTimeframe).catch((error) => {
-            logger.error(`Failed to send candle snapshot for ${data.instrument}:`, error);
+          sendChartInit(client, data.instrument, client.activeTimeframe).catch((error) => {
+            logger.error({ err: error, instrument: data.instrument }, 'Failed to send chart:init');
           });
           return;
         }
-        
-        // FLOW WS-1.1: unsubscribe - удаляем из Set
+
         if (data.type === 'unsubscribe' && typeof data.instrument === 'string') {
           client.subscriptions.delete(data.instrument);
           if (client.subscriptions.size === 0) {
             client.activeTimeframe = null;
           }
-          
-          logger.debug(`🔕 Client ${userId} unsubscribed from ${data.instrument}`);
-          
+
+          logger.debug({ userId, instrument: data.instrument }, 'Client unsubscribed');
+
           client.send({
             type: 'unsubscribed',
             instrument: data.instrument,
           });
           return;
         }
-        
-        // FLOW WS-1.1: unsubscribe_all - очищаем все подписки
+
         if (data.type === 'unsubscribe_all') {
           const instruments = Array.from(client.subscriptions);
           client.subscriptions.clear();
           client.activeTimeframe = null;
-          
-          logger.debug(`🔕 Client ${userId} unsubscribed from all instruments`);
-          
-          // Отправляем подтверждения для каждого инструмента
-          instruments.forEach(instrument => {
+
+          logger.debug({ userId }, 'Client unsubscribed from all instruments');
+
+          for (const instrument of instruments) {
             client.send({
               type: 'unsubscribed',
               instrument,
             });
-          });
+          }
           return;
         }
       } catch (error) {
-        logger.error('Failed to parse WS message:', error);
+        logger.error({ err: error }, 'Failed to parse WebSocket message');
       }
     });
 
-    // Handle close
     socket.on('close', () => {
-      logger.info(`WebSocket client disconnected: ${userId}, sessionId: ${client.sessionId}`);
+      logger.info({ userId, sessionId: client.sessionId }, 'WebSocket client disconnected');
       manager.unregister(client);
     });
 
-    // Handle error
     socket.on('error', (error: Error) => {
-      logger.error(`WebSocket error for user ${userId}:`, error);
+      logger.error({ err: error, userId }, 'WebSocket error');
       manager.unregister(client);
     });
   });
@@ -156,39 +139,77 @@ export async function registerWebSocketRoutes(app: FastifyInstance): Promise<voi
   logger.info('WebSocket routes registered');
 }
 
-/**
- * FLOW CANDLE-SNAPSHOT: Отправляет снапшот активной (незакрытой) свечи клиенту
- * 🔥 FLOW WS-TF: Если указан timeframe — отправляет только эту свечу (не все таймфреймы)
- */
-async function sendActiveCandleSnapshot(client: WsClient, instrument: string, timeframe: string | null): Promise<void> {
-  try {
-    const manager = getPriceEngineManager();
-    const activeCandles = await manager.getActiveCandles(instrument);
+async function sendChartInit(
+  client: WsClient,
+  instrument: string,
+  timeframe: string | null,
+): Promise<void> {
+  const engineManager = getPriceEngineManager();
+  const tf = (timeframe || '5s') as Timeframe;
+  const tfMs = getTimeframeMs(tf);
+  const serverTime = Date.now();
 
-    if (activeCandles.size === 0) {
-      return; // Нет активных свечей — ничего отправлять
-    }
+  const config = getInstrumentOrDefault(instrument);
+  const marketStatus = getMarketStatus(config.source, instrument, serverTime);
 
-    // 🔥 FLOW WS-TF: Фильтруем по таймфрейму — отправляем только нужную свечу
-    let candlesArray: Array<{ timeframe: string; candle: any }>;
-    if (timeframe && activeCandles.has(timeframe)) {
-      candlesArray = [{ timeframe, candle: activeCandles.get(timeframe)! }];
-    } else {
-      // Fallback: если таймфрейм не указан или нет такой свечи — отправляем все
-      candlesArray = Array.from(activeCandles.entries()).map(([tf, candle]) => ({
-        timeframe: tf,
-        candle,
-      }));
-    }
+  const [rawCandles, priceData] = await Promise.all([
+    engineManager.getCandles(instrument, tf, 100),
+    marketStatus.marketOpen ? engineManager.getCurrentPrice(instrument) : Promise.resolve(null),
+  ]);
 
-    client.send({
-      instrument,
-      type: 'candle:snapshot',
-      data: { candles: candlesArray },
-    });
+  const candles: ChartInitCandle[] = rawCandles.map((candle) => {
+    const ts = typeof candle.timestamp === 'number'
+      ? candle.timestamp
+      : new Date(candle.timestamp).getTime();
+    return {
+      open: Number(candle.open),
+      high: Number(candle.high),
+      low: Number(candle.low),
+      close: Number(candle.close),
+      startTime: ts,
+      endTime: ts + tfMs,
+    };
+  });
 
-    logger.debug(`📸 Sent candle snapshot to client for ${instrument}: ${candlesArray.map(c => c.timeframe).join(', ')}`);
-  } catch (error) {
-    logger.warn(`[sendActiveCandleSnapshot] Failed for ${instrument}:`, error);
+  const activeCandles = engineManager.getActiveCandles(instrument);
+  const rawActive = activeCandles.get(tf) ?? null;
+  let activeCandle: ChartInitCandle | null = null;
+  if (rawActive) {
+    const ts = typeof rawActive.timestamp === 'number'
+      ? rawActive.timestamp
+      : new Date(rawActive.timestamp).getTime();
+    activeCandle = {
+      open: Number(rawActive.open),
+      high: Number(rawActive.high),
+      low: Number(rawActive.low),
+      close: Number(rawActive.close),
+      startTime: ts,
+      endTime: ts + tfMs,
+    };
   }
+  const price = priceData
+    ? { value: priceData.price, timestamp: priceData.timestamp }
+    : null;
+
+  client.send({
+    instrument,
+    type: 'chart:init',
+    data: {
+      instrument,
+      timeframe: tf,
+      candles,
+      activeCandle,
+      price,
+      serverTime,
+      marketOpen: marketStatus.marketOpen,
+      marketStatus: marketStatus.marketStatus,
+      nextMarketOpenAt: marketStatus.nextMarketOpenAt,
+      topAlternatives: marketStatus.topAlternatives,
+    },
+  });
+
+  logger.debug(
+    { instrument, timeframe: tf, candleCount: candles.length, hasActiveCandle: !!activeCandle },
+    'Sent chart:init',
+  );
 }

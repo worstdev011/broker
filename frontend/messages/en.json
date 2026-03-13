@@ -20,7 +20,7 @@
     "subscribe": "Subscribe",
     "create_account": "Create Account",
     "open_demo": "Open Demo",
-    "all_rights": "© 2024 Comfortrade. All rights reserved.",
+    "all_rights": "© 2026 Comfortrade LTD. All rights reserved.",
     "enter_email": "Enter Email",
     "enter_password": "Enter password",
     "enter_promo": "Enter promo code",
@@ -350,5 +350,19 @@
     "description": "Trade currency pairs, cryptocurrencies and other assets. Modern platform with intuitive interface, technical indicators and analysis tools.",
     "og_title": "COMFORTRADE - Financial Market Trading",
     "og_description": "Trade currency pairs, cryptocurrencies and other assets."
+  },
+  "currencyModal": {
+    "title": "Welcome!",
+    "subtitle": "Select your country and account currency to get started.",
+    "warning": "Currency cannot be changed later.",
+    "label_country": "Country",
+    "label_currency": "Currency",
+    "placeholder_country": "Select your country",
+    "placeholder_currency": "Select currency",
+    "search_placeholder": "Search...",
+    "nothing_found": "Nothing found",
+    "btn_continue": "Continue",
+    "btn_saving": "Saving...",
+    "error_default": "Something went wrong. Please try again."
   }
 }

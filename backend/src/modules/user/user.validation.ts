@@ -1,8 +1,3 @@
-/**
- * User validation schemas using Zod
- * Provides type-safe validation and input sanitization (XSS protection)
- */
-
 import { z } from 'zod';
 import {
   nicknameSchema,
@@ -14,7 +9,6 @@ import {
 } from '../../shared/validation/schemas.js';
 import { sanitizeHtml } from '../../shared/validation/sanitize.js';
 
-/** Optional name - valid name or empty/whitespace (clears to null) */
 const optionalNameSchema = z
   .union([
     firstNameSchema,
@@ -39,10 +33,6 @@ const optionalNicknameSchema = z
   .optional()
   .nullable();
 
-/**
- * Schema for updating user profile
- * All user-generated content is sanitized
- */
 export const updateProfileSchema = z.object({
   firstName: optionalNameSchema,
   lastName: optionalLastNameSchema,
@@ -68,11 +58,8 @@ export const updateProfileSchema = z.object({
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date of birth must be in YYYY-MM-DD format')
     .refine(
-      (date) => {
-        const d = new Date(date);
-        return !isNaN(d.getTime());
-      },
-      { message: 'Invalid date' }
+      (date) => !isNaN(new Date(date).getTime()),
+      { message: 'Invalid date' },
     )
     .optional()
     .nullable(),
@@ -81,9 +68,6 @@ export const updateProfileSchema = z.object({
 
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 
-/**
- * Schema for changing password
- */
 export const changePasswordSchema = z.object({
   currentPassword: passwordSchema,
   newPassword: passwordStrongSchema,
@@ -91,34 +75,18 @@ export const changePasswordSchema = z.object({
 
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
 
-/**
- * Schema for deleting profile (requires password confirmation)
- */
 export const deleteProfileSchema = z.object({
   password: passwordSchema,
 });
 
 export type DeleteProfileInput = z.infer<typeof deleteProfileSchema>;
 
-/**
- * Schema for enabling 2FA (no body required)
- */
-export const enable2FASchema = z.object({});
-
-export type Enable2FAInput = z.infer<typeof enable2FASchema>;
-
-/**
- * Schema for verifying 2FA during setup
- */
 export const verify2FASetupSchema = z.object({
   code: z.string().length(6, '2FA code must be 6 digits').regex(/^\d{6}$/, '2FA code must contain only digits'),
 });
 
 export type Verify2FASetupInput = z.infer<typeof verify2FASetupSchema>;
 
-/**
- * Schema for disabling 2FA
- */
 export const disable2FASchema = z.object({
   password: passwordSchema,
   code: z.string().length(6, '2FA code must be 6 digits').regex(/^\d{6}$/, '2FA code must contain only digits'),

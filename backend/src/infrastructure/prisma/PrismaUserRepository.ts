@@ -56,6 +56,8 @@ export class PrismaUserRepository implements UserRepository {
     twoFactorSecret: string | null;
     twoFactorEnabled: boolean;
     twoFactorBackupCodes: string[];
+    kycStatus: string | null;
+    kycApplicantId: string | null;
   }): User {
     return {
       id: user.id,
@@ -74,6 +76,8 @@ export class PrismaUserRepository implements UserRepository {
       twoFactorSecret: user.twoFactorSecret,
       twoFactorEnabled: user.twoFactorEnabled,
       twoFactorBackupCodes: user.twoFactorBackupCodes,
+      kycStatus: user.kycStatus,
+      kycApplicantId: user.kycApplicantId,
     };
   }
 

@@ -232,7 +232,7 @@ export function useChartInteractions({
     inertiaActiveRef.current = false;
     panVelocityPxPerMsRef.current = 0;
     emaVelocityRef.current = 0;
-    lastMoveTimeRef.current = null;
+    lastMoveTimeRef.current = performance.now();
 
     // FLOW G16: Если идет редактирование drawing, не начинаем pan
     if (h.getIsEditingDrawing?.()) return;
@@ -490,7 +490,8 @@ export function useChartInteractions({
       touchStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
       inertiaActiveRef.current = false;
       panVelocityPxPerMsRef.current = 0;
-      lastMoveTimeRef.current = null;
+      emaVelocityRef.current = 0;
+      lastMoveTimeRef.current = performance.now();
     } else if (e.touches.length === 2) {
       const [t1, t2] = [e.touches[0], e.touches[1]];
       touchModeRef.current = 'pinch';

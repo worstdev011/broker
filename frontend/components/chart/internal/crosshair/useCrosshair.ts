@@ -18,6 +18,7 @@
 import { useRef, useEffect, RefObject } from 'react';
 import type { Viewport } from '../viewport.types';
 import type { CrosshairState } from './crosshair.types';
+import { timeToX } from '../utils/coords';
 
 interface UseCrosshairParams {
   canvasRef: RefObject<HTMLCanvasElement>;
@@ -37,15 +38,6 @@ function mapXToTime(x: number, viewport: Viewport, width: number): number {
   const timeRange = viewport.timeEnd - viewport.timeStart;
   if (timeRange === 0) return viewport.timeStart;
   return viewport.timeStart + (x / width) * timeRange;
-}
-
-/**
- * Конвертирует время в X (для отрисовки кроссхейра по снэпнутому времени)
- */
-function timeToX(time: number, viewport: Viewport, width: number): number {
-  const timeRange = viewport.timeEnd - viewport.timeStart;
-  if (timeRange === 0) return 0;
-  return ((time - viewport.timeStart) / timeRange) * width;
 }
 
 /**

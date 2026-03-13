@@ -1,12 +1,14 @@
-/**
- * Withdraw domain service - pure business logic
- * 🔥 FLOW W1: Withdraw transactions
- */
-
 import type { AccountRepository } from '../../ports/repositories/AccountRepository.js';
 import type { TransactionRepository } from '../../ports/repositories/TransactionRepository.js';
 import { TransactionType, TransactionStatus, PaymentMethod } from './TransactionTypes.js';
+import { InvalidAmountError, TransactionNotFoundError } from './FinanceErrors.js';
+import { InsufficientBalanceError } from '../accounts/AccountErrors.js';
 import { logger } from '../../shared/logger.js';
+import {
+  WITHDRAW_MIN_AMOUNT,
+  WITHDRAW_MAX_AMOUNT,
+  DEFAULT_FIAT_CURRENCY,
+} from '../../config/constants.js';
 
 export class WithdrawService {
   constructor(
@@ -21,17 +23,17 @@ export class WithdrawService {
   }: {
     userId: string;
     amount: number;
-    paymentMethod: string;
+    paymentMethod: PaymentMethod;
   }) {
-    if (amount < 200 || amount > 1000) {
-      throw new Error('Сумма вывода: от 200 до 1000 ₴');
+    if (amount < WITHDRAW_MIN_AMOUNT || amount > WITHDRAW_MAX_AMOUNT) {
+      throw new InvalidAmountError(WITHDRAW_MIN_AMOUNT, WITHDRAW_MAX_AMOUNT, DEFAULT_FIAT_CURRENCY);
     }
 
     const account = await this.accountRepository.getRealAccount(userId);
     const balance = await this.transactionRepository.getBalance(account.id);
 
     if (balance < amount) {
-      throw new Error('Insufficient balance');
+      throw new InsufficientBalanceError();
     }
 
     const transaction = await this.transactionRepository.create({
@@ -40,20 +42,21 @@ export class WithdrawService {
       type: TransactionType.WITHDRAW,
       status: TransactionStatus.PENDING,
       amount: -amount,
-      currency: 'UAH',
-      paymentMethod: paymentMethod as PaymentMethod,
+      currency: DEFAULT_FIAT_CURRENCY,
+      paymentMethod,
       provider: 'manual',
     });
 
+    // TODO: integrate real payment provider
     await this.transactionRepository.confirm(transaction.id);
-
-    // Sync Account.balance so it matches transaction-based balance
     await this.accountRepository.updateBalance(account.id, -amount);
 
-    logger.info(`Withdraw created: userId=${userId}, amount=${amount}, transactionId=${transaction.id}`);
+    logger.info(`Withdraw created: userId=${userId}, amount=${amount}, txId=${transaction.id}`);
 
     const confirmed = await this.transactionRepository.findById(transaction.id);
-    if (!confirmed) throw new Error('Failed to retrieve confirmed transaction');
+    if (!confirmed) {
+      throw new TransactionNotFoundError(transaction.id);
+    }
 
     return { ...confirmed, amount: Math.abs(confirmed.amount) };
   }

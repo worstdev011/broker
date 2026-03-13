@@ -39,3 +39,28 @@ export interface PriceEvent {
   data: PriceTick | Candle;
   timestamp: number;
 }
+
+const TIMEFRAME_SECONDS: Record<Timeframe, number> = {
+  '5s': 5,
+  '10s': 10,
+  '15s': 15,
+  '30s': 30,
+  '1m': 60,
+  '2m': 120,
+  '3m': 180,
+  '5m': 300,
+  '10m': 600,
+  '15m': 900,
+  '30m': 1_800,
+  '1h': 3_600,
+  '4h': 14_400,
+  '1d': 86_400,
+};
+
+export function getTimeframeMs(timeframe: Timeframe): number {
+  return TIMEFRAME_SECONDS[timeframe] * 1_000;
+}
+
+export function getTimeframeSeconds(timeframe: Timeframe): number {
+  return TIMEFRAME_SECONDS[timeframe];
+}

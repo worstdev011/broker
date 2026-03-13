@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { logger } from '@/lib/logger';
 
 interface Props {
   children: React.ReactNode;
@@ -26,7 +27,7 @@ export class ChartErrorBoundary extends React.Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
-    console.error('[ChartErrorBoundary] Chart crashed:', error, errorInfo);
+    logger.error('[ChartErrorBoundary] Chart crashed:', error, errorInfo);
   }
 
   handleRetry = (): void => {

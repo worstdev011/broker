@@ -8,6 +8,8 @@ import { useTranslations } from 'next-intl';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { api } from '@/lib/api/api';
 import { useAccountStore } from '@/stores/account.store';
+import { useAccountSwitch } from '@/lib/hooks/useAccountSwitch';
+import { formatCurrencySymbol } from '@/lib/formatCurrency';
 import type { AccountSnapshot } from '@/types/account';
 
 export function AppHeader() {
@@ -17,6 +19,7 @@ export function AppHeader() {
   const isProfilePage = pathname?.startsWith('/profile');
   const { logout, user } = useAuth();
   const snapshot = useAccountStore((s) => s.snapshot);
+  const { switchAccount } = useAccountSwitch();
   const [accountType, setAccountType] = useState<'demo' | 'real'>('demo');
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showAccountModal, setShowAccountModal] = useState(false);
@@ -106,7 +109,6 @@ export function AppHeader() {
     router.push('/');
   };
 
-  const formatCur = (c: string) => (c === 'USD' ? 'USD' : c === 'RUB' ? '₽' : c === 'UAH' ? 'UAH' : c);
 
   return (
     <header className="bg-[#05122a] border-b border-white/10 shrink-0">
@@ -160,7 +162,7 @@ export function AppHeader() {
                       <div>
                         <div className="text-white/60 text-xs mb-0.5">{t('balance')}</div>
                         <div className="text-white font-semibold text-base">
-                          {hideBalance ? '••••••' : snapshot ? `${displayedBalance} ${formatCur(snapshot.currency)}` : '...'}
+                          {hideBalance ? '••••••' : snapshot ? `${displayedBalance} ${formatCurrencySymbol(snapshot.currency)}` : '...'}
                         </div>
                       </div>
                       <Link href="/profile?tab=wallet" onClick={() => setShowProfileModal(false)} className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-gradient-to-r from-[#3347ff] to-[#1e2fcc] text-white text-xs font-semibold md:hover:from-[#3347ff]/90 md:hover:to-[#1e2fcc]/90 transition-all shadow-lg shadow-[#3347ff]/20">
@@ -205,19 +207,19 @@ export function AppHeader() {
                 <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
               </div>
               <div className="text-base font-semibold text-white">
-                {hideBalance ? '••••••' : snapshot ? `${displayedBalance} ${formatCur(snapshot.currency)}` : '...'}
+                {hideBalance ? '••••••' : snapshot ? `${displayedBalance} ${formatCurrencySymbol(snapshot.currency)}` : '...'}
               </div>
               {showAccountModal && (
                 <>
                   <div className="fixed inset-0 z-[140]" onClick={() => setShowAccountModal(false)} />
                   <div className="absolute top-full right-0 left-auto mt-2 w-72 bg-[#1a2438] border border-white/5 rounded-lg shadow-xl z-[150] md:left-1/2 md:right-auto md:-translate-x-1/2" data-account-modal>
                     <div className="p-3 space-y-2.5">
-                      <div className={`flex items-start gap-2.5 p-2.5 rounded-lg cursor-pointer transition-colors ${accountType === 'real' ? 'bg-white/10' : 'md:hover:bg-white/5'}`} onClick={async () => { try { const r = await api<{ accounts: Array<{ id: string; type: string }> }>('/api/accounts'); const a = r.accounts.find((x) => x.type === 'real'); if (a) { await api('/api/accounts/switch', { method: 'POST', body: JSON.stringify({ accountId: a.id }) }); } setShowAccountModal(false); } catch (e) { console.error(e); alert('Не удалось переключить аккаунт'); } }}>
+                      <div className={`flex items-start gap-2.5 p-2.5 rounded-lg cursor-pointer transition-colors ${accountType === 'real' ? 'bg-white/10' : 'md:hover:bg-white/5'}`} onClick={async () => { await switchAccount('REAL'); setShowAccountModal(false); }}>
                         <div className="mt-0.5">{accountType === 'real' ? <div className="w-4 h-4 rounded-full bg-[#3347ff] flex items-center justify-center"><div className="w-1.5 h-1.5 rounded-full bg-[#061230]" /></div> : <div className="w-4 h-4 rounded-full border-2 border-[#3347ff]" />}</div>
                         <div className="flex-1 min-w-0 flex items-center justify-between gap-2">
                           <div>
                             <div className="text-white font-medium mb-0.5 text-sm">{t('real_account')}</div>
-                            <div className="text-white/60 text-xs">{hideBalance ? '••••••' : (modalBalances.real ? `${modalBalances.real.balance} ${formatCur(modalBalances.real.currency)}` : (snapshot?.type === 'REAL' ? `${getCurrentBalance().balance} ${formatCur(getCurrentBalance().currency)}` : '...'))}</div>
+                            <div className="text-white/60 text-xs">{hideBalance ? '••••••' : (modalBalances.real ? `${modalBalances.real.balance} ${formatCurrencySymbol(modalBalances.real.currency)}` : (snapshot?.type === 'REAL' ? `${getCurrentBalance().balance} ${formatCurrencySymbol(getCurrentBalance().currency)}` : '...'))}</div>
                           </div>
                           <Link href="/profile?tab=wallet" onClick={(e) => e.stopPropagation()} className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-gradient-to-r from-[#3347ff] to-[#1e2fcc] text-white text-xs font-semibold md:hover:from-[#3347ff]/90 md:hover:to-[#1e2fcc]/90 transition-all shadow-md shadow-[#3347ff]/20">
                             <PlusCircle className="w-3.5 h-3.5" />
@@ -225,11 +227,11 @@ export function AppHeader() {
                           </Link>
                         </div>
                       </div>
-                      <div className={`flex items-start gap-2.5 p-2.5 rounded-lg cursor-pointer transition-colors ${accountType === 'demo' ? 'bg-white/10' : 'md:hover:bg-white/5'}`} onClick={async () => { try { const r = await api<{ accounts: Array<{ id: string; type: string }> }>('/api/accounts'); const a = r.accounts.find((x) => x.type === 'demo'); if (a) { await api('/api/accounts/switch', { method: 'POST', body: JSON.stringify({ accountId: a.id }) }); } setShowAccountModal(false); } catch (e) { console.error(e); alert('Не удалось переключить аккаунт'); } }}>
+                      <div className={`flex items-start gap-2.5 p-2.5 rounded-lg cursor-pointer transition-colors ${accountType === 'demo' ? 'bg-white/10' : 'md:hover:bg-white/5'}`} onClick={async () => { await switchAccount('DEMO'); setShowAccountModal(false); }}>
                         <div className="mt-0.5">{accountType === 'demo' ? <div className="w-4 h-4 rounded-full bg-[#3347ff] flex items-center justify-center"><div className="w-1.5 h-1.5 rounded-full bg-[#061230]" /></div> : <div className="w-4 h-4 rounded-full border-2 border-[#3347ff]" />}</div>
                         <div className="flex-1 min-w-0">
                           <div className="text-white font-medium mb-0.5 text-sm">{t('demo_account')}</div>
-                          <div className="text-white/60 text-xs">{hideBalance ? '••••••' : (modalBalances.demo ? `${modalBalances.demo.balance} ${formatCur(modalBalances.demo.currency)}` : (snapshot?.type === 'DEMO' ? `${getCurrentBalance().balance} ${formatCur(getCurrentBalance().currency)}` : '...'))}</div>
+                          <div className="text-white/60 text-xs">{hideBalance ? '••••••' : (modalBalances.demo ? `${modalBalances.demo.balance} ${formatCurrencySymbol(modalBalances.demo.currency)}` : (snapshot?.type === 'DEMO' ? `${getCurrentBalance().balance} ${formatCurrencySymbol(getCurrentBalance().currency)}` : '...'))}</div>
                         </div>
                       </div>
                     </div>

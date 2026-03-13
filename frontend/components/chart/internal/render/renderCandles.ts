@@ -10,6 +10,7 @@
 import type { Viewport } from '../viewport.types';
 import type { Candle } from '../chart.types';
 import type { CandleMode } from '../candleModes/candleMode.types';
+import { timeToX, priceToY, snap } from '../utils/coords';
 
 interface RenderCandlesParams {
   ctx: CanvasRenderingContext2D;
@@ -33,23 +34,6 @@ function getBodyWidthRatio(candleWidth: number): number {
   const targetGap = Math.min(MAX_GAP_PX, Math.max(MIN_GAP_PX, candleWidth * 0.04));
   const ratio = (candleWidth - targetGap) / candleWidth;
   return Math.max(0.7, Math.min(0.96, ratio));
-}
-
-/** Sub-pixel aligned coordinate for crisp 1px lines */
-function snap(v: number): number {
-  return Math.round(v) + 0.5;
-}
-
-function timeToX(time: number, viewport: Viewport, width: number): number {
-  const timeRange = viewport.timeEnd - viewport.timeStart;
-  if (timeRange === 0) return 0;
-  return ((time - viewport.timeStart) / timeRange) * width;
-}
-
-function priceToY(price: number, viewport: Viewport, height: number): number {
-  const priceRange = viewport.priceMax - viewport.priceMin;
-  if (priceRange === 0) return height / 2;
-  return height - ((price - viewport.priceMin) / priceRange) * height;
 }
 
 /**

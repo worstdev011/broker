@@ -1,8 +1,3 @@
-/**
- * Bull queue definitions
- * Trade closing, email, reports, cleanup - all use Redis-backed queues
- */
-
 import Bull from 'bull';
 import { env } from '../config/env.js';
 import { logger } from '../shared/logger.js';
@@ -14,12 +9,8 @@ export const QUEUE_NAMES = {
   CLEANUP: 'cleanup',
 } as const;
 
-/** All queues for Bull Board - populated when Redis is available */
 const queues: Bull.Queue[] = [];
 
-/**
- * Create trade closing queue (repeatable job every 1s)
- */
 export function createTradeClosingQueue(): Bull.Queue | null {
   if (!env.REDIS_URL) return null;
 
@@ -32,22 +23,19 @@ export function createTradeClosingQueue(): Bull.Queue | null {
       },
     });
 
-    queue.on('error', (err) => logger.error('Trade closing queue error:', err));
+    queue.on('error', (err) => logger.error({ err }, 'Trade closing queue error'));
     queue.on('failed', (job, err) =>
-      logger.error(`Trade closing job ${job?.id} failed:`, err)
+      logger.error({ err, jobId: job?.id }, 'Trade closing job failed'),
     );
 
     queues.push(queue);
     return queue;
   } catch (err) {
-    logger.error('Failed to create trade closing queue:', err);
+    logger.error({ err }, 'Failed to create trade closing queue');
     return null;
   }
 }
 
-/**
- * Create email queue (for async email sending)
- */
 export function createEmailQueue(): Bull.Queue | null {
   if (!env.REDIS_URL) return null;
 
@@ -62,14 +50,11 @@ export function createEmailQueue(): Bull.Queue | null {
     queues.push(queue);
     return queue;
   } catch (err) {
-    logger.error('Failed to create email queue:', err);
+    logger.error({ err }, 'Failed to create email queue');
     return null;
   }
 }
 
-/**
- * Create cleanup queue (old sessions, candles, temp tokens)
- */
 export function createCleanupQueue(): Bull.Queue | null {
   if (!env.REDIS_URL) return null;
 
@@ -84,21 +69,15 @@ export function createCleanupQueue(): Bull.Queue | null {
     queues.push(queue);
     return queue;
   } catch (err) {
-    logger.error('Failed to create cleanup queue:', err);
+    logger.error({ err }, 'Failed to create cleanup queue');
     return null;
   }
 }
 
-/**
- * Get all queues for Bull Board
- */
 export function getQueues(): Bull.Queue[] {
   return queues;
 }
 
-/**
- * Close all queues (graceful shutdown)
- */
 export async function closeAllQueues(): Promise<void> {
   await Promise.all(queues.map((q) => q.close()));
   queues.length = 0;

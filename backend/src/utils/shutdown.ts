@@ -1,10 +1,5 @@
-/**
- * Graceful shutdown utility
- */
-
 import type { FastifyInstance } from 'fastify';
-import { shutdownAll } from '../bootstrap/index.js';
-import { getWebSocketManager } from '../modules/websocket/websocket.routes.js';
+import { shutdownWithTimeout } from '../bootstrap/index.js';
 import { logger } from '../shared/logger.js';
 
 export function setupGracefulShutdown(app: FastifyInstance): void {
@@ -17,39 +12,35 @@ export function setupGracefulShutdown(app: FastifyInstance): void {
     logger.info(`Received ${signal}, starting graceful shutdown...`);
 
     try {
-      // 1. Close all WebSocket connections (send shutdown message, then close)
-      const wsManager = getWebSocketManager();
-      wsManager.closeAll();
+      // Best-effort: close WS connections if manager is available
+      try {
+        const { getWebSocketManager } = await import('../modules/websocket/websocket.routes.js');
+        getWebSocketManager().closeAll();
+      } catch {
+        // WebSocket may not have been initialized
+      }
 
-      // 2. Shutdown event handlers, prices, trades, etc. (before app.close)
-      await shutdownAll();
-
-      // 3. Close Fastify HTTP server
+      await shutdownWithTimeout();
       await app.close();
 
-      logger.info('✅ Graceful shutdown completed');
+      logger.info('Graceful shutdown completed');
       process.exit(0);
     } catch (error) {
-      logger.error('❌ Error during graceful shutdown:', error);
+      logger.error({ err: error }, 'Error during graceful shutdown');
       process.exit(1);
     }
   };
 
-  // Handle SIGTERM (Docker, Kubernetes, etc.)
   process.on('SIGTERM', () => shutdown('SIGTERM'));
-
-  // Handle SIGINT (Ctrl+C)
   process.on('SIGINT', () => shutdown('SIGINT'));
 
-  // Handle uncaught exceptions
   process.on('uncaughtException', (error) => {
-    logger.error('Uncaught exception:', error);
-    shutdown('uncaughtException');
+    logger.error({ err: error }, 'Uncaught exception — exiting');
+    process.exit(1);
   });
 
-  // Handle unhandled promise rejections
-  process.on('unhandledRejection', (reason, promise) => {
-    logger.error('Unhandled rejection at:', promise, 'reason:', reason);
+  process.on('unhandledRejection', (reason) => {
+    logger.error({ err: reason }, 'Unhandled promise rejection');
     shutdown('unhandledRejection');
   });
 }

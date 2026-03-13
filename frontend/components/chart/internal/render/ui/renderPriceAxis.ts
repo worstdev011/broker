@@ -6,6 +6,7 @@
  */
 
 import type { TimePriceViewport } from './viewport.types';
+import { LABEL_COLOR, LABEL_FONT } from '../../chartTheme';
 
 interface RenderPriceAxisParams {
   ctx: CanvasRenderingContext2D;
@@ -16,10 +17,8 @@ interface RenderPriceAxisParams {
   digits?: number;
 }
 
-const LABEL_COLOR = 'rgba(255, 255, 255, 0.45)';
-const LABEL_FONT = '12px sans-serif';
 const LABEL_PADDING_RIGHT = 4;
-const PRICE_LABEL_OFFSET_ABOVE_GRID = 12; // Смещение метки вверх от линии сетки (≈ половина высоты шрифта + зазор)
+const PRICE_LABEL_OFFSET_ABOVE_GRID = 12;
 
 /**
  * Конвертирует цену в Y координату
@@ -91,13 +90,12 @@ export function renderPriceAxis({
   const startPrice = Math.ceil(priceMin / priceStep) * priceStep;
 
   // Рисуем метки цены (БЕЗ горизонтальных линий - они уже нарисованы в renderGrid)
-  for (let price = startPrice; price <= priceMax; price += priceStep) {
+  let pCount = 0;
+  for (let price = startPrice; price <= priceMax && pCount < 200; price += priceStep, pCount++) {
     const y = priceToY(price, viewport, height);
 
-    // Проверяем, что метка видна
     if (y < 0 || y > height) continue;
 
-    // Только текст метки справа (без линии - линия уже в renderGrid)
     const priceText = formatPrice(price, digits);
     ctx.fillText(priceText, width - LABEL_PADDING_RIGHT, y - PRICE_LABEL_OFFSET_ABOVE_GRID);
   }

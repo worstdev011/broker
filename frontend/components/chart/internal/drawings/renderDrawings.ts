@@ -10,6 +10,7 @@
 
 import type { Drawing } from './drawing.types';
 import type { Viewport } from '../viewport.types';
+import { timeToX, priceToY } from '../utils/coords';
 
 interface RenderDrawingsParams {
   ctx: CanvasRenderingContext2D;
@@ -26,24 +27,6 @@ const LINE_WIDTH_SELECTED = 2.5; // FLOW G16: Толще для выбранно
 const LINE_OPACITY = 0.8;
 const LINE_OPACITY_HOVER = 1.0; // FLOW G16: Ярче при hover
 const POINT_RADIUS = 4; // FLOW G16: Радиус точек для trend line
-
-/**
- * Конвертирует time в X координату
- */
-function timeToX(time: number, viewport: Viewport, width: number): number {
-  const timeRange = viewport.timeEnd - viewport.timeStart;
-  if (timeRange === 0) return 0;
-  return ((time - viewport.timeStart) / timeRange) * width;
-}
-
-/**
- * Конвертирует price в Y координату
- */
-function priceToY(price: number, viewport: Viewport, height: number): number {
-  const priceRange = viewport.priceMax - viewport.priceMin;
-  if (priceRange === 0) return height / 2;
-  return height - ((price - viewport.priceMin) / priceRange) * height;
-}
 
 /**
  * Рисует горизонтальную линию

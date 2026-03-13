@@ -65,7 +65,17 @@ export function SiteHeader({ activeNav, onOpenLogin, onOpenRegister }: SiteHeade
     return (
       <Link
         href={href}
-        className={isActive ? 'text-white font-medium' : 'text-gray-300 hover:text-white transition-colors'}
+        className={`
+          relative inline-block pb-0.5
+          ${isActive ? 'text-white font-medium' : 'text-gray-300 hover:text-white'}
+          transition-colors duration-200
+          after:content-[''] after:absolute after:left-1/2 after:bottom-0 after:w-full after:h-0.5 after:bg-white
+          after:-translate-x-1/2 after:translate-y-1 after:opacity-0
+          after:origin-center after:scale-x-0
+          after:transition-[transform,opacity] after:duration-300 after:ease-out
+          hover:after:scale-x-100 hover:after:translate-y-0 hover:after:opacity-100
+          ${isActive ? 'after:scale-x-100 after:translate-y-0 after:opacity-100' : ''}
+        `}
       >
         {label}
       </Link>
@@ -141,8 +151,8 @@ export function SiteHeader({ activeNav, onOpenLogin, onOpenRegister }: SiteHeade
                       <button
                         key={lang.code}
                         onClick={() => handleLanguageSwitch(lang.code)}
-                        className={`text-center px-2 py-2 rounded-lg text-sm font-medium transition-colors flex flex-col items-center gap-1.5 ${
-                          currentLanguageCode === lang.code ? 'bg-[#3347ff]/10 text-[#3347ff]' : 'text-gray-700 hover:bg-gray-50'
+                        className={`text-center px-2 py-2 rounded-lg text-sm font-medium flex flex-col items-center gap-1.5 transition-colors duration-150 ease-out ${
+                          currentLanguageCode === lang.code ? 'bg-[#3347ff]/10 text-[#3347ff]' : 'text-gray-700 hover:bg-[#3347ff]/5 hover:text-[#3347ff]/80'
                         }`}
                       >
                         <div className="w-7 h-7 rounded-full overflow-hidden relative flex-shrink-0">

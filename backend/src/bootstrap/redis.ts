@@ -1,14 +1,9 @@
-/**
- * Redis key-value store для цен и активных свечей.
- * PriceStore (текущая цена), CandleStore (активная свеча).
- */
-
 import Redis from 'ioredis';
 import { env } from '../config/env.js';
 import { logger } from '../shared/logger.js';
 
 export type KeyValueStore = {
-  set(key: string, value: string): Promise<void>;
+  set(key: string, value: string, ex?: 'EX', seconds?: number): Promise<void>;
   get(key: string): Promise<string | null>;
   del(key: string): Promise<void>;
 };
@@ -16,12 +11,14 @@ export type KeyValueStore = {
 let redis: Redis | null = null;
 let store: KeyValueStore | null = null;
 
-const DEFAULT_REDIS_URL = 'redis://127.0.0.1:6379';
-
 function createKeyValueStore(client: Redis): KeyValueStore {
   return {
-    async set(key: string, value: string): Promise<void> {
-      await client.set(key, value);
+    async set(key: string, value: string, ex?: 'EX', seconds?: number): Promise<void> {
+      if (ex === 'EX' && seconds != null) {
+        await client.set(key, value, 'EX', seconds);
+      } else {
+        await client.set(key, value);
+      }
     },
     async get(key: string): Promise<string | null> {
       return await client.get(key);
@@ -37,22 +34,27 @@ export async function connectRedis(): Promise<KeyValueStore> {
     return store;
   }
 
-  const url = env.REDIS_URL || DEFAULT_REDIS_URL;
-  redis = new Redis(url);
+  const url = env.REDIS_URL || 'redis://127.0.0.1:6379';
+  if (!env.REDIS_URL) {
+    logger.warn('REDIS_URL not set — connecting to local Redis at 127.0.0.1:6379');
+  }
 
-  redis.on('connect', () => {
-    logger.info(`Connected to Redis at ${url}`);
-  });
+  redis = new Redis(url, { lazyConnect: true });
 
   redis.on('error', (err) => {
-    logger.error('Redis error:', err);
+    logger.error({ err }, 'Redis error');
   });
 
-  await new Promise<void>((resolve, reject) => {
-    if (!redis) return reject(new Error('Redis client not created'));
-    redis.once('ready', resolve);
-    redis.once('error', reject);
+  redis.on('connect', () => {
+    logger.info('Redis connected');
   });
+
+  try {
+    await redis.connect();
+  } catch (error) {
+    logger.error({ err: error }, 'Failed to connect to Redis');
+    throw error;
+  }
 
   store = createKeyValueStore(redis);
   return store;
@@ -67,10 +69,9 @@ export async function disconnectRedis(): Promise<void> {
   }
 }
 
-/** Возвращает Redis store. Вызывать после connectRedis(). */
 export function getRedisClient(): KeyValueStore {
   if (!store) {
-    throw new Error('Store not initialized. Call connectRedis() first.');
+    throw new Error('Redis not initialized. Call connectRedis() first.');
   }
   return store;
 }

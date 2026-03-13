@@ -1,7 +1,3 @@
-/**
- * Bull Board - UI for monitoring job queues
- */
-
 import type { FastifyInstance } from 'fastify';
 import { createBullBoard } from '@bull-board/api';
 import { BullAdapter } from '@bull-board/api/bullAdapter';
@@ -12,7 +8,7 @@ import { logger } from '../shared/logger.js';
 export async function registerBullBoard(app: FastifyInstance): Promise<void> {
   const queues = getQueues();
   if (queues.length === 0) {
-    logger.info('Bull Board skipped - no queues (REDIS_URL not set)');
+    logger.info('Bull Board skipped — no queues');
     return;
   }
 

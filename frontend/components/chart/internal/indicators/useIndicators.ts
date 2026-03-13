@@ -95,6 +95,7 @@ export function useIndicators({
   // Кеш результатов через useRef
   const seriesCacheRef = useRef<IndicatorSeries[]>([]);
   const lastCandlesLengthRef = useRef<number>(0);
+  const lastCandleEndTimeRef = useRef<number>(0);
   const configsRef = useRef<IndicatorConfig[]>(indicatorConfigs);
 
   // Обновляем configs ref
@@ -197,6 +198,7 @@ export function useIndicators({
 
     seriesCacheRef.current = series;
     lastCandlesLengthRef.current = closedCandles.length;
+    lastCandleEndTimeRef.current = closedCandles.length > 0 ? closedCandles[closedCandles.length - 1].endTime : 0;
   };
 
   /**
@@ -206,8 +208,8 @@ export function useIndicators({
     const candles = getCandles();
     const closedCandles = candles.filter(c => c.isClosed);
 
-    // Пересчитываем, если количество свечей изменилось или конфигурация
-    if (closedCandles.length !== lastCandlesLengthRef.current) {
+    const lastEndTime = closedCandles.length > 0 ? closedCandles[closedCandles.length - 1].endTime : 0;
+    if (closedCandles.length !== lastCandlesLengthRef.current || lastEndTime !== lastCandleEndTimeRef.current) {
       recalculateIndicators();
     }
 

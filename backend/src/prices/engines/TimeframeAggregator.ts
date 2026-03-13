@@ -1,7 +1,3 @@
-/**
- * Timeframe Aggregator - aggregates 5s candles into other timeframes
- */
-
 import type { Candle, Timeframe, PriceEvent } from '../PriceTypes.js';
 import { CandleStore } from '../store/CandleStore.js';
 import { PriceEventBus } from '../events/PriceEventBus.js';
@@ -18,41 +14,38 @@ const TIMEFRAME_SECONDS: Record<Timeframe, number> = {
   '5m': 300,
   '10m': 600,
   '15m': 900,
-  '30m': 1800,
-  '1h': 3600,
-  '4h': 14400,
-  '1d': 86400,
+  '30m': 1_800,
+  '1h': 3_600,
+  '4h': 14_400,
+  '1d': 86_400,
 };
 
 export class TimeframeAggregator {
   private aggregators: Map<Timeframe, Candle | null> = new Map();
+  private lastClosedCandles: Map<Timeframe, Candle> = new Map();
   private unsubscribeCandleClosed: (() => void) | null = null;
   private isRunning = false;
 
   constructor(
-    private instrumentId: string, // instrumentId для агрегации (EURUSD, EURUSD_REAL)
+    private instrumentId: string,
     private timeframes: Timeframe[],
     private candleStore: CandleStore,
     private eventBus: PriceEventBus,
   ) {
-    this.timeframes.forEach((tf) => {
+    for (const tf of this.timeframes) {
       this.aggregators.set(tf, null);
-    });
+    }
   }
 
-  /**
-   * Start aggregator
-   */
   start(): void {
     if (this.isRunning) {
-      logger.warn('Timeframe aggregator is already running');
+      logger.warn('Timeframe aggregator already running');
       return;
     }
 
-    logger.info(`Starting timeframe aggregator for: ${this.timeframes.join(', ')}`);
+    logger.info({ timeframes: this.timeframes.join(', ') }, 'Starting timeframe aggregator');
     this.isRunning = true;
 
-    // Subscribe to closed 5s candles
     this.unsubscribeCandleClosed = this.eventBus.on('candle_closed', (event) => {
       const candle = event.data as Candle;
       if (candle.timeframe === '5s') {
@@ -61,28 +54,21 @@ export class TimeframeAggregator {
     });
   }
 
-  /**
-   * FLOW CANDLE-SNAPSHOT: Получить активную (незакрытую) свечу для таймфрейма
-   * Используется для отправки snapshot при подключении клиента
-   */
   getActiveCandle(timeframe: Timeframe): Candle | null {
     return this.aggregators.get(timeframe) ?? null;
   }
 
-  /**
-   * FLOW CANDLE-SNAPSHOT: Получить все активные свечи для всех таймфреймов
-   */
   getAllActiveCandles(): Map<Timeframe, Candle | null> {
     return new Map(this.aggregators);
   }
 
-  /**
-   * Stop aggregator
-   */
+  /** Returns the last closed candle for a timeframe (may not be in DB yet). */
+  getLastClosedCandle(timeframe: Timeframe): Candle | null {
+    return this.lastClosedCandles.get(timeframe) ?? null;
+  }
+
   stop(): void {
-    if (!this.isRunning) {
-      return;
-    }
+    if (!this.isRunning) return;
 
     logger.info('Stopping timeframe aggregator');
     this.isRunning = false;
@@ -92,55 +78,40 @@ export class TimeframeAggregator {
       this.unsubscribeCandleClosed = null;
     }
 
-    // Clear all aggregators
     this.aggregators.clear();
-    this.timeframes.forEach((tf) => {
+    for (const tf of this.timeframes) {
       this.aggregators.set(tf, null);
-    });
+    }
   }
 
-  /**
-   * Handle base candle (5s)
-   */
   private handleBaseCandle(baseCandle: Candle): void {
-    this.timeframes.forEach((timeframe) => {
+    for (const timeframe of this.timeframes) {
       this.aggregateCandle(baseCandle, timeframe);
-    });
+    }
   }
 
   /**
-   * Aggregate candle into timeframe
-   * 
-   * FLOW TIMEFRAME-CLOSE: Закрытие агрегированной свечи происходит когда
-   * последняя 5s свеча периода закрывается (её endTime достигает границы)
+   * Aggregated candle closes when the last 5s candle of the period ends
+   * (its endTime reaches the aggregated period boundary).
    */
   private aggregateCandle(baseCandle: Candle, timeframe: Timeframe): void {
     const timeframeSeconds = TIMEFRAME_SECONDS[timeframe];
-    const timeframeMs = timeframeSeconds * 1000;
-    const baseTimeframeMs = 5000; // 5s base
+    const timeframeMs = timeframeSeconds * 1_000;
+    const baseTimeframeMs = 5_000;
 
-    // Calculate candle start timestamp for this timeframe
     const candleStart = Math.floor(baseCandle.timestamp / timeframeMs) * timeframeMs;
-    
-    // 🔥 FIX: Вычисляем END TIME базовой свечи (timestamp + duration)
     const baseCandleEndTime = baseCandle.timestamp + baseTimeframeMs;
-    
-    // Вычисляем конец текущего агрегированного периода
     const aggregatedCandleEndTime = candleStart + timeframeMs;
 
     let aggregator = this.aggregators.get(timeframe);
 
     if (!aggregator || aggregator.timestamp !== candleStart) {
-      // New candle for this timeframe
       if (aggregator) {
-        // Close previous candle
         this.closeAggregatedCandle(aggregator);
       }
 
-      // Open new candle
-      // Rule: open[n] = close[n-1]
       const previousClose = aggregator ? aggregator.close : baseCandle.open;
-      
+
       aggregator = {
         open: previousClose,
         high: baseCandle.high,
@@ -152,7 +123,6 @@ export class TimeframeAggregator {
 
       this.aggregators.set(timeframe, aggregator);
     } else {
-      // Update existing candle
       aggregator.high = Math.max(aggregator.high, baseCandle.high);
       aggregator.low = Math.min(aggregator.low, baseCandle.low);
       aggregator.close = baseCandle.close;
@@ -160,10 +130,7 @@ export class TimeframeAggregator {
       this.aggregators.set(timeframe, aggregator);
     }
 
-    // 🔥 FIX: Проверяем, достигла ли базовая свеча конца агрегированного периода
-    // Например: 5s свеча :05 имеет endTime = :10, что равно концу 10s свечи :00
     if (baseCandleEndTime >= aggregatedCandleEndTime) {
-      // Базовая свеча завершает агрегированный период — закрываем!
       if (aggregator) {
         this.closeAggregatedCandle(aggregator);
         this.aggregators.set(timeframe, null);
@@ -171,28 +138,22 @@ export class TimeframeAggregator {
     }
   }
 
-  /**
-   * Close aggregated candle (per symbol)
-   */
   private closeAggregatedCandle(candle: Candle): void {
-    // Сохраняем в БД
+    this.lastClosedCandles.set(candle.timeframe as Timeframe, { ...candle });
+
     this.candleStore.addClosedCandle(this.instrumentId, candle).catch((error) => {
-      logger.error(`Failed to store closed ${candle.timeframe} candle:`, error);
+      logger.error({ err: error, timeframe: candle.timeframe }, 'Failed to store closed candle');
     });
 
-    // 🔥 EMIT candle_closed EVENT для WebSocket
-    // Без этого фронтенд не получает candle:close для таймфреймов кроме 5s
     const timeframeSeconds = TIMEFRAME_SECONDS[candle.timeframe as Timeframe];
-    const slotEnd = candle.timestamp + (timeframeSeconds * 1000);
-    
+    const slotEnd = candle.timestamp + (timeframeSeconds * 1_000);
+
     const event: PriceEvent = {
       type: 'candle_closed',
       data: candle,
       timestamp: slotEnd,
     };
-    
+
     this.eventBus.emit(event);
-    
-    logger.debug(`Emitted candle_closed for ${candle.timeframe} at ${new Date(candle.timestamp).toISOString()}`);
   }
 }

@@ -2,6 +2,7 @@
  * API client with cookie-based auth + CSRF
  */
 
+import { logger } from '@/lib/logger';
 import { getCsrfToken, setCsrfToken, clearCsrfToken } from './csrf';
 
 // Пустая строка = same-origin (через Next.js rewrites), иначе кросс-домен (cookies не работают)
@@ -51,7 +52,7 @@ export async function apiRequest<T>(
         requestHeaders['csrf-token'] = await getCsrfToken();
       } catch (e) {
         if (process.env.NODE_ENV === 'development') {
-          console.warn('[API] CSRF token fetch failed:', e);
+          logger.warn('[API] CSRF token fetch failed:', e);
         }
       }
     }
@@ -59,7 +60,7 @@ export async function apiRequest<T>(
 
   // Debug logging in development (только на клиенте)
   if (process.env.NODE_ENV === 'development') {
-    console.log(`[API] ${method} ${url}`);
+    logger.debug(`[API] ${method} ${url}`);
   }
 
   const controller = new AbortController();
@@ -89,7 +90,7 @@ export async function apiRequest<T>(
         errorData = { error: response.statusText };
       }
       if (process.env.NODE_ENV === 'development' && response.status === 400) {
-        console.warn('[API] 400 Bad Request:', errorData);
+        logger.warn('[API] 400 Bad Request:', errorData);
       }
       throw new ApiError(response.status, errorData);
     }
@@ -116,6 +117,18 @@ export async function apiRequest<T>(
     throw new ApiError(0, { error: err.message || 'Network error' }, err.message || 'Network error');
   }
 }
+
+// KYC endpoints
+export const kycApi = {
+  /**
+   * Create (or reuse) a Sumsub applicant and get a fresh WebSDK access token.
+   */
+  init: (userId: string) =>
+    apiRequest<{ token: string; applicantId: string | null }>('/api/kyc/init', {
+      method: 'POST',
+      body: { userId },
+    }),
+};
 
 // Auth endpoints
 export const authApi = {

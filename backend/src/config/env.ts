@@ -1,141 +1,128 @@
 /**
- * Environment configuration and validation
- * All critical variables are validated at startup - app fails fast if misconfigured.
+ * Environment configuration and validation.
+ * Fails fast at startup if required variables are missing.
  */
 
 interface EnvConfig {
   PORT: number;
   DATABASE_URL: string;
   NODE_ENV: 'development' | 'production' | 'test';
-  /** Cookie signing secret - required in production */
   COOKIE_SECRET: string;
-  /** Frontend origin for CORS - required in production */
   FRONTEND_URL: string;
-  /** API key for Real market prices (xchangeapi.com) - required in production */
   XCHANGE_API_KEY: string;
-  /** Max file upload size in bytes (avatars) - default 5MB */
   MAX_UPLOAD_SIZE: number;
-  /** Database connection pool size - appended to DATABASE_URL if set */
   DATABASE_POOL_SIZE: number;
-  /** Database pool timeout (seconds) - wait for connection from pool */
   DATABASE_POOL_TIMEOUT: number;
-  /** Database connect timeout (seconds) - establish new connection */
   DATABASE_CONNECT_TIMEOUT: number;
-  /** Redis URL for Bull queues - when set, use Bull; otherwise fallback to setInterval */
   REDIS_URL: string | null;
+  ADMIN_EMAILS: string[];
+  SUMSUB_APP_TOKEN: string;
+  SUMSUB_SECRET_KEY: string;
+  WEBHOOK_SECRET_KEY: string;
 }
 
-const DEFAULT_MAX_UPLOAD_SIZE = 5 * 1024 * 1024; // 5MB
+const DEFAULT_MAX_UPLOAD_SIZE = 5 * 1024 * 1024;
 const DEFAULT_DATABASE_POOL_SIZE = 10;
-const DEFAULT_DATABASE_POOL_TIMEOUT = 20; // seconds
-const DEFAULT_DATABASE_CONNECT_TIMEOUT = 10; // seconds
+const DEFAULT_DATABASE_POOL_TIMEOUT = 20;
+const DEFAULT_DATABASE_CONNECT_TIMEOUT = 10;
 const DEV_COOKIE_SECRET = 'dev-secret-not-for-production';
 const DEV_FRONTEND_URL = 'http://localhost:3000';
 
+function parseIntEnv(name: string, defaultValue: number, min: number, max: number): number {
+  const raw = process.env[name];
+  if (!raw) return defaultValue;
+
+  const parsed = parseInt(raw, 10);
+  if (isNaN(parsed) || parsed < min || parsed > max) {
+    console.warn(
+      `[env] Invalid ${name}="${raw}" (must be ${min}–${max}), using default ${defaultValue}`,
+    );
+    return defaultValue;
+  }
+  return parsed;
+}
+
+function buildDatabaseUrl(baseUrl: string, poolSize: number, poolTimeout: number, connectTimeout: number): string {
+  const params: string[] = [];
+  if (!baseUrl.includes('connection_limit')) {
+    params.push(`connection_limit=${poolSize}`);
+  }
+  if (!baseUrl.includes('pool_timeout')) {
+    params.push(`pool_timeout=${poolTimeout}`);
+  }
+  if (!baseUrl.includes('connect_timeout')) {
+    params.push(`connect_timeout=${connectTimeout}`);
+  }
+  if (params.length === 0) return baseUrl;
+
+  const separator = baseUrl.includes('?') ? '&' : '?';
+  return `${baseUrl}${separator}${params.join('&')}`;
+}
+
 function validateEnv(): EnvConfig {
-  const nodeEnv = process.env.NODE_ENV || 'development';
+  const nodeEnv = (process.env.NODE_ENV || 'development') as string;
   const isProduction = nodeEnv === 'production';
 
-  // Base required vars (all environments)
-  const baseRequired = ['PORT', 'DATABASE_URL', 'NODE_ENV'] as const;
-  const missing: string[] = [];
-
-  for (const varName of baseRequired) {
-    if (!process.env[varName]) {
-      missing.push(varName);
-    }
+  if (!['development', 'production', 'test'].includes(nodeEnv)) {
+    throw new Error(`Invalid NODE_ENV="${nodeEnv}". Must be: development, production, test.`);
   }
 
-  // Production-only required vars
+  const missing: string[] = [];
+
+  if (!process.env.PORT) missing.push('PORT');
+  if (!process.env.DATABASE_URL) missing.push('DATABASE_URL');
+
   if (isProduction) {
-    if (!process.env.COOKIE_SECRET?.trim()) {
-      missing.push('COOKIE_SECRET');
-    }
-    if (!process.env.FRONTEND_URL?.trim()) {
-      missing.push('FRONTEND_URL');
-    }
-    if (!process.env.XCHANGE_API_KEY?.trim()) {
-      missing.push('XCHANGE_API_KEY');
-    }
+    if (!process.env.COOKIE_SECRET?.trim()) missing.push('COOKIE_SECRET');
+    if (!process.env.FRONTEND_URL?.trim()) missing.push('FRONTEND_URL');
+    if (!process.env.XCHANGE_API_KEY?.trim()) missing.push('XCHANGE_API_KEY');
   }
 
   if (missing.length > 0) {
     throw new Error(
-      `Missing required environment variables: ${missing.join(', ')}\n` +
-        'Please check your .env file. In production, COOKIE_SECRET, FRONTEND_URL, and XCHANGE_API_KEY are required.'
+      `Missing required environment variables: ${missing.join(', ')}.\n` +
+        'In production COOKIE_SECRET, FRONTEND_URL, and XCHANGE_API_KEY are also required.',
     );
   }
 
   const port = parseInt(process.env.PORT!, 10);
   if (isNaN(port) || port < 1 || port > 65535) {
-    throw new Error(`Invalid PORT value: ${process.env.PORT}. Must be a number between 1 and 65535.`);
+    throw new Error(`Invalid PORT="${process.env.PORT}". Must be 1–65535.`);
   }
 
-  if (!['development', 'production', 'test'].includes(nodeEnv)) {
-    throw new Error(`Invalid NODE_ENV value: ${nodeEnv}. Must be one of: development, production, test.`);
-  }
+  const maxUploadSize = parseIntEnv('MAX_UPLOAD_SIZE', DEFAULT_MAX_UPLOAD_SIZE, 1, 50 * 1024 * 1024);
+  const databasePoolSize = parseIntEnv('DATABASE_POOL_SIZE', DEFAULT_DATABASE_POOL_SIZE, 1, 100);
+  const databasePoolTimeout = parseIntEnv('DATABASE_POOL_TIMEOUT', DEFAULT_DATABASE_POOL_TIMEOUT, 1, 120);
+  const databaseConnectTimeout = parseIntEnv('DATABASE_CONNECT_TIMEOUT', DEFAULT_DATABASE_CONNECT_TIMEOUT, 1, 60);
 
-  // MAX_UPLOAD_SIZE - optional, default 5MB
-  let maxUploadSize = DEFAULT_MAX_UPLOAD_SIZE;
-  if (process.env.MAX_UPLOAD_SIZE) {
-    const parsed = parseInt(process.env.MAX_UPLOAD_SIZE, 10);
-    if (!isNaN(parsed) && parsed > 0 && parsed <= 50 * 1024 * 1024) {
-      maxUploadSize = parsed;
-    }
-  }
+  const databaseUrl = buildDatabaseUrl(
+    process.env.DATABASE_URL!,
+    databasePoolSize,
+    databasePoolTimeout,
+    databaseConnectTimeout,
+  );
 
-  // DATABASE_POOL_SIZE - optional, default 10
-  let databasePoolSize = DEFAULT_DATABASE_POOL_SIZE;
-  if (process.env.DATABASE_POOL_SIZE) {
-    const parsed = parseInt(process.env.DATABASE_POOL_SIZE, 10);
-    if (!isNaN(parsed) && parsed >= 1 && parsed <= 100) {
-      databasePoolSize = parsed;
-    }
-  }
-
-  // DATABASE_POOL_TIMEOUT - optional, default 20 seconds
-  let databasePoolTimeout = DEFAULT_DATABASE_POOL_TIMEOUT;
-  if (process.env.DATABASE_POOL_TIMEOUT) {
-    const parsed = parseInt(process.env.DATABASE_POOL_TIMEOUT, 10);
-    if (!isNaN(parsed) && parsed >= 1 && parsed <= 120) {
-      databasePoolTimeout = parsed;
-    }
-  }
-
-  // DATABASE_CONNECT_TIMEOUT - optional, default 10 seconds
-  let databaseConnectTimeout = DEFAULT_DATABASE_CONNECT_TIMEOUT;
-  if (process.env.DATABASE_CONNECT_TIMEOUT) {
-    const parsed = parseInt(process.env.DATABASE_CONNECT_TIMEOUT, 10);
-    if (!isNaN(parsed) && parsed >= 1 && parsed <= 60) {
-      databaseConnectTimeout = parsed;
-    }
-  }
-
-  // Append connection pool params to DATABASE_URL if not already present
-  let databaseUrl = process.env.DATABASE_URL!;
-  const urlParams: string[] = [];
-  if (!databaseUrl.includes('connection_limit')) {
-    urlParams.push(`connection_limit=${databasePoolSize}`);
-  }
-  if (!databaseUrl.includes('pool_timeout')) {
-    urlParams.push(`pool_timeout=${databasePoolTimeout}`);
-  }
-  if (!databaseUrl.includes('connect_timeout')) {
-    urlParams.push(`connect_timeout=${databaseConnectTimeout}`);
-  }
-  if (urlParams.length > 0) {
-    const separator = databaseUrl.includes('?') ? '&' : '?';
-    databaseUrl = `${databaseUrl}${separator}${urlParams.join('&')}`;
-    process.env.DATABASE_URL = databaseUrl;
-  }
-
-  // REDIS_URL - optional, for Bull job queues (redis://localhost:6379 or Upstash Redis URL)
   const redisUrl = process.env.REDIS_URL?.trim() || null;
+
+  const adminEmails = (process.env.ADMIN_EMAILS ?? '')
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+
+  const sumsubAppToken = process.env.SUMSUB_APP_TOKEN?.trim() ?? '';
+  const sumsubSecretKey = process.env.SUMSUB_SECRET_KEY?.trim() ?? '';
+  const webhookSecretKey = process.env.WEBHOOK_SECRET_KEY?.trim() ?? '';
+
+  if (!sumsubAppToken || !sumsubSecretKey || !webhookSecretKey) {
+    console.warn(
+      '[env] Sumsub KYC vars (SUMSUB_APP_TOKEN, SUMSUB_SECRET_KEY, WEBHOOK_SECRET_KEY) are not set — KYC endpoints will fail at runtime.',
+    );
+  }
 
   return {
     PORT: port,
     DATABASE_URL: databaseUrl,
-    NODE_ENV: nodeEnv as 'development' | 'production' | 'test',
+    NODE_ENV: nodeEnv as EnvConfig['NODE_ENV'],
     COOKIE_SECRET: isProduction
       ? process.env.COOKIE_SECRET!.trim()
       : (process.env.COOKIE_SECRET?.trim() || DEV_COOKIE_SECRET),
@@ -150,6 +137,10 @@ function validateEnv(): EnvConfig {
     DATABASE_POOL_TIMEOUT: databasePoolTimeout,
     DATABASE_CONNECT_TIMEOUT: databaseConnectTimeout,
     REDIS_URL: redisUrl,
+    ADMIN_EMAILS: adminEmails,
+    SUMSUB_APP_TOKEN: sumsubAppToken,
+    SUMSUB_SECRET_KEY: sumsubSecretKey,
+    WEBHOOK_SECRET_KEY: webhookSecretKey,
   };
 }
 

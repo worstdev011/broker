@@ -17,6 +17,7 @@
  */
 
 import { useEffect, useRef, RefObject } from 'react';
+import { logger } from '@/lib/logger';
 
 interface UseCanvasInfrastructureParams {
   canvasRef: RefObject<HTMLCanvasElement>;
@@ -41,7 +42,7 @@ export function useCanvasInfrastructure({ canvasRef }: UseCanvasInfrastructurePa
     const ctx = canvas.getContext('2d');
     if (!ctx) {
       // Fail silently - no crash
-      console.warn('Failed to get 2d context for canvas');
+      logger.warn('Failed to get 2d context for canvas');
       return;
     }
 

@@ -3,6 +3,8 @@
  * Сохраняются в localStorage и применяются ко всем компонентам графика
  */
 
+import { logger } from '@/lib/logger';
+
 export interface ChartSettings {
   // Цвета свечей
   bullishColor: string; // Цвет бычьей свечи (растущей)
@@ -53,7 +55,7 @@ export function loadChartSettings(): ChartSettings {
       return { ...DEFAULT_SETTINGS, ...parsed };
     }
   } catch (error) {
-    console.error('Failed to load chart settings:', error);
+    logger.error('Failed to load chart settings:', error);
   }
   
   return DEFAULT_SETTINGS;
@@ -72,7 +74,7 @@ export function saveChartSettings(settings: ChartSettings): void {
     _cachedSettings = { ...settings };
     _cacheTime = Date.now();
   } catch (error) {
-    console.error('Failed to save chart settings:', error);
+    logger.error('Failed to save chart settings:', error);
   }
 }
 

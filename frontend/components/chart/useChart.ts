@@ -9,6 +9,7 @@
  */
 
 import { RefObject, useRef, useEffect, useCallback } from 'react';
+import { logger } from '@/lib/logger';
 import { useCanvasInfrastructure } from './internal/useCanvasInfrastructure';
 import { useChartData } from './internal/useChartData';
 import { useViewport } from './internal/useViewport';
@@ -29,11 +30,10 @@ import { DEFAULT_INSTRUMENT_ID } from '@/lib/instruments';
 import { dismissToastByKey, showTradeOpenToast, showTradeCloseToast } from '@/stores/toast.store';
 import { parseTimeframeToMs } from './internal/utils/timeframe';
 import { zoomViewportTime } from './internal/interactions/math';
-import { api } from '@/lib/api/api';
 import { formatServerTime } from './internal/utils/formatServerTime';
 import type { PriceAlert } from './internal/alerts/priceAlerts.types';
 import type { InteractionZone } from './internal/interactions/interaction.types';
-import type { TerminalSnapshot } from '@/types/terminal';
+import type { ChartSnapshot } from '@/types/terminal';
 import type { IndicatorConfig } from './internal/indicators/indicator.types';
 import type { Viewport } from './internal/viewport.types';
 
@@ -42,12 +42,12 @@ export interface OverlayRegistryParams {
   getVisibleOverlayIds?: () => Set<string>;
   onDrawingAdded?: (overlay: import('./internal/overlay/overlay.types').DrawingOverlay) => void;
   onTradeAdded?: (overlay: import('./internal/overlay/overlay.types').TradeOverlay) => void;
+  onDrawingEdited?: () => void;
 }
 
 interface UseChartParams {
   canvasRef: RefObject<HTMLCanvasElement>;
   timeframe?: string;
-  snapshot?: TerminalSnapshot | null;
   instrument?: string;
   payoutPercent?: number;
   digits?: number;
@@ -55,12 +55,33 @@ interface UseChartParams {
   indicatorConfigs?: IndicatorConfig[];
   drawingMode?: 'horizontal' | 'vertical' | 'trend' | 'rectangle' | 'fibonacci' | 'parallel-channel' | 'ray' | 'arrow' | null;
   overlayRegistry?: OverlayRegistryParams;
-  onInstrumentChange?: (instrumentId: string) => void; // FLOW C-MARKET-ALTERNATIVES: Callback для переключения инструмента
-  /** Режим свечей при монтировании (восстанавливается из localStorage) */
+  onInstrumentChange?: (instrumentId: string) => void;
   candleMode?: 'classic' | 'heikin_ashi' | 'bars';
+  onReady?: () => void;
 }
 
 export type HoverAction = 'CALL' | 'PUT' | null;
+
+/** Snap a timestamp to the visual center of the candle that contains it. */
+function snapToCandleCenter(
+  time: number,
+  candles: Array<{ startTime: number; endTime: number }>,
+  liveCandle: { startTime: number; endTime: number } | null,
+  timeframeMs: number,
+): number {
+  if (liveCandle && time >= liveCandle.startTime) {
+    return liveCandle.startTime + timeframeMs / 2;
+  }
+  for (let i = candles.length - 1; i >= 0; i--) {
+    const c = candles[i];
+    if (time >= c.startTime && time < c.endTime) {
+      return c.startTime + timeframeMs / 2;
+    }
+  }
+  // Fallback: align to the nearest timeframe slot center
+  const slot = Math.floor(time / timeframeMs) * timeframeMs;
+  return slot + timeframeMs / 2;
+}
 
 interface UseChartReturn {
   setCandleMode: (mode: 'classic' | 'heikin_ashi' | 'bars') => void;
@@ -103,7 +124,7 @@ interface UseChartReturn {
   handleAlternativeHover: (mouseX: number, mouseY: number) => number | null;
 }
 
-export function useChart({ canvasRef, timeframe = '5s', snapshot, instrument, payoutPercent = 75, digits, activeInstrumentRef, indicatorConfigs = [], drawingMode = null, overlayRegistry, onInstrumentChange, candleMode: initialCandleMode = 'classic' }: UseChartParams): UseChartReturn {
+export function useChart({ canvasRef, timeframe = '5s', instrument, payoutPercent = 75, digits, activeInstrumentRef, indicatorConfigs = [], drawingMode = null, overlayRegistry, onInstrumentChange, candleMode: initialCandleMode = 'classic', onReady }: UseChartParams): UseChartReturn {
   // FLOW G1: инициализация инфраструктуры canvas
   useCanvasInfrastructure({ canvasRef });
 
@@ -199,15 +220,48 @@ export function useChart({ canvasRef, timeframe = '5s', snapshot, instrument, pa
     entryPrice: number;
     openedAt: number;
     expiresAt: number;
-    amount?: number; // Сумма сделки для расчета прибыли
+    amount?: number;
+    snappedEntryTime?: number;
+  }>>([]);
+
+  const lastTradeCleanupRef = useRef(0);
+
+  // Кратковременные метки результата сделки (после закрытия, ~5 секунд)
+  const RECENT_TRADE_DISPLAY_MS = 5000;
+  const recentClosedTradesRef = useRef<Array<{
+    id: string;
+    direction: 'CALL' | 'PUT';
+    entryPrice: number;
+    openedAt: number;
+    expiresAt: number;
+    snappedEntryTime?: number;
+    amount?: number;
+    result: 'WIN' | 'LOSS' | 'TIE';
+    pnl: number;
+    showUntil: number;
   }>>([]);
 
   const getTrades = (): typeof tradesRef.current => {
+    const now = Date.now();
+    if (now - lastTradeCleanupRef.current > 5000 && tradesRef.current.length > 0) {
+      lastTradeCleanupRef.current = now;
+      tradesRef.current = tradesRef.current.filter((t) => t.expiresAt > now);
+    }
     return tradesRef.current;
   };
 
   const removeTrade = (id: string): void => {
     tradesRef.current = tradesRef.current.filter((t) => t.id !== id);
+  };
+
+  const getRecentClosedTrades = (): typeof recentClosedTradesRef.current => {
+    const now = Date.now();
+    if (recentClosedTradesRef.current.length > 0) {
+      recentClosedTradesRef.current = recentClosedTradesRef.current.filter(
+        (t) => t.showUntil > now,
+      );
+    }
+    return recentClosedTradesRef.current;
   };
 
   const addPriceAlert = (price: number): void => {
@@ -298,6 +352,10 @@ export function useChart({ canvasRef, timeframe = '5s', snapshot, instrument, pa
     mode: drawingMode || null,
     addDrawing: addDrawingWithOverlay,
   });
+
+  // onReady callback ref (stable across renders)
+  const onReadyRef = useRef(onReady);
+  onReadyRef.current = onReady;
 
   // FLOW T1/T4: Server time — refs, без state/setInterval. Drift compensation через performance.now()
   const serverTimeRef = useRef<{ timestamp: number; utcOffsetMinutes: number } | null>(null);
@@ -392,9 +450,13 @@ export function useChart({ canvasRef, timeframe = '5s', snapshot, instrument, pa
       hoveredDrawingModeRef.current = mode;
     },
     onEditStateChange: (editState) => {
+      const wasEditing = isEditingDrawingRef.current;
       selectedDrawingIdRef.current = editState?.drawingId ?? null;
       editStateRef.current = editState ?? null;
       isEditingDrawingRef.current = editState !== null;
+      if (wasEditing && editState === null) {
+        overlayRegistry?.onDrawingEdited?.();
+      }
     },
     getIsEditing: () => isEditingDrawingRef.current,
     onRegisterHitTest: (fn) => { hitTestDrawingRef.current = fn; },
@@ -424,12 +486,16 @@ export function useChart({ canvasRef, timeframe = '5s', snapshot, instrument, pa
   }, []);
 
   // FLOW E3: единственный источник truth по времени экспирации (в мс)
+  // Anchored to the right edge of the live candle so the line never
+  // overlaps the candle body on large timeframes.
   const getExpirationTime = useCallback((): number | null => {
     const s = serverTimeRef.current;
     if (!s) return null;
     const now = s.timestamp + (performance.now() - lastSyncTimeRef.current);
-    return now + expirationSecondsRef.current * 1000;
-  }, []);
+    const liveCandle = chartData.getLiveCandle();
+    const anchor = liveCandle ? Math.max(now, liveCandle.startTime + timeframeMs) : now;
+    return anchor + expirationSecondsRef.current * 1000;
+  }, [chartData, timeframeMs]);
 
   // Получение секунд экспирации для отображения метки
   const getExpirationSeconds = useCallback((): number => {
@@ -481,6 +547,7 @@ export function useChart({ canvasRef, timeframe = '5s', snapshot, instrument, pa
     getExpirationTime,
     getExpirationSeconds,
     getTrades,
+    getRecentClosedTrades,
     getPayoutPercent: () => payoutPercent,
     getTimeframeLabel: candleCountdown.getTimeframeLabel,
     getFormattedCountdown: candleCountdown.getFormattedTime,
@@ -584,102 +651,101 @@ export function useChart({ canvasRef, timeframe = '5s', snapshot, instrument, pa
     }
   }, []); // Пустой массив зависимостей - только при монтировании
 
-  // FLOW T1 + P8: Инициализация из snapshot; при смене instrument/timeframe — полный reset
-  // FLOW P8: если snapshot не для текущего инструмента — только reset, не инициализируем
-  // 🔥 FLOW: Timeframe Switch Reset - полный reset при смене timeframe
-  const previousTimeframeRef = useRef<string>(timeframe);
-  
-  useEffect(() => {
-    // Проверяем изменение timeframe
-    const timeframeChanged = previousTimeframeRef.current !== timeframe;
-    if (timeframeChanged) {
-      previousTimeframeRef.current = timeframe;
-      
-      // 🔥 FLOW: Полный reset при смене timeframe
-      // Шаг 1: Reset viewport (сброс zoom/pan, follow mode = true)
-      viewport.reset();
-      
-      // Шаг 2: Reset interactions (сброс pan/zoom состояния)
-      chartInteractions.reset();
-      
-      // Шаг 3: Reset данных свечей
-      chartData.reset();
-      
-      // Шаг 4: Reset анимации
-      candleAnimator.reset();
-      
-      // Шаг 5: Reset history loader
-      historyLoader.reset();
-      
-      // Шаг 6: Reset countdown timer (FLOW C6)
-      candleCountdown.reset();
-    }
-    
-    if (!snapshot) return;
-    if (instrument && snapshot.instrument !== instrument) {
-      // Если snapshot не для текущего инструмента — только reset
-      if (!timeframeChanged) {
-        chartData.reset();
-        candleAnimator.reset();
-        historyLoader.reset();
-        candleCountdown.reset();
-      }
-      return;
-    }
+  // Chart initialization from WS chart:init (single source of truth for chart data)
+  const initializeChart = useCallback((chartSnapshot: ChartSnapshot) => {
+    if (instrument && chartSnapshot.instrument !== instrument) return;
 
-    // Если timeframe не изменился, но snapshot изменился (например, при загрузке)
-    if (!timeframeChanged) {
-      chartData.reset();
-      candleAnimator.reset();
-      historyLoader.reset();
-      candleCountdown.reset();
-    }
+    chartData.reset();
+    candleAnimator.reset();
+    historyLoader.reset();
+    candleCountdown.reset();
 
-    const candles = snapshot.candles.items;
-    // FLOW C-MARKET-CLOSED: price может быть null когда рынок закрыт
-    const currentPrice = snapshot.price?.value ?? null;
-    const currentTime = snapshot.price?.timestamp ?? snapshot.serverTime;
+    const candles = chartSnapshot.candles;
+    const currentPrice = chartSnapshot.price?.value ?? null;
+    const currentTime = chartSnapshot.price?.timestamp ?? chartSnapshot.serverTime;
+    const tfMs = parseTimeframeToMs(chartSnapshot.timeframe);
 
     chartData.initializeFromSnapshot(
-      candles, 
-      currentPrice, 
-      currentTime, 
-      timeframeMs,
-      snapshot.marketStatus, // FLOW C-MARKET-CLOSED: передаем статус рынка
-      snapshot.nextMarketOpenAt, // FLOW C-MARKET-COUNTDOWN: передаем время следующего открытия
-      snapshot.topAlternatives ?? [] // FLOW C-MARKET-ALTERNATIVES: передаем альтернативные пары
+      candles,
+      currentPrice,
+      currentTime,
+      tfMs,
+      chartSnapshot.marketStatus,
+      chartSnapshot.nextMarketOpenAt,
+      chartSnapshot.topAlternatives ?? [],
+      chartSnapshot.activeCandle ?? null,
     );
 
-    // FLOW T2: init server time из snapshot (baseline), drift compensation — lastSyncTime
     serverTimeRef.current = {
-      timestamp: snapshot.serverTime,
+      timestamp: chartSnapshot.serverTime,
       utcOffsetMinutes: -new Date().getTimezoneOffset(),
     };
     lastSyncTimeRef.current = performance.now();
 
-    const tid = setTimeout(() => {
-      viewport.recalculateViewport();
-      viewport.setLatestCandleTime(chartData.getLiveCandle()?.endTime ?? currentTime);
-      
+    viewport.skipNextFollowAnimation();
+    viewport.recalculateViewport();
+    viewport.setLatestCandleTime(chartData.getLiveCandle()?.endTime ?? currentTime);
+
+    requestAnimationFrame(() => {
+      onReadyRef.current?.();
       const currentViewport = viewport.getViewport();
       if (currentViewport && chartData.getCandles().length > 0) {
         historyLoader.maybeLoadMore(currentViewport);
       }
-      deferredTimersRef.current = deferredTimersRef.current.filter(t => t !== tid);
-    }, 0);
-    deferredTimersRef.current.push(tid);
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [snapshot, timeframe, instrument]);
+  }, [instrument]);
 
-  // FLOW P5/P8 + T3: WebSocket — price/candle + server:time (источник истины для времени)
-  // 🔥 ИСПРАВЛЕНО: enabled должен быть true всегда, когда есть instrument и activeInstrumentRef
-  // snapshot нужен только для инициализации данных, но WebSocket должен работать и без него
+  // WebSocket — single source of truth for chart data + real-time updates
   useWebSocket({
     activeInstrumentRef,
-    activeTimeframeRef, // 🔥 FLOW WS-TF: Сервер фильтрует candle:close и snapshot по этому таймфрейму
+    activeTimeframeRef,
     onTradeOpen: (data) => showTradeOpenToast(data),
     onTradeClose: (data: TradeClosePayload) => {
+      // Удаляем активный оверлей сделки и добавляем краткосрочную метку результата
       removeTrade(data.id);
+
+      const entryPrice = parseFloat(data.entryPrice);
+      const amount = parseFloat(data.amount);
+      const payout = parseFloat(data.payout);
+      const openedAt = new Date(data.openedAt).getTime();
+      const expiresAt = new Date(data.expiresAt).getTime();
+
+      if (
+        Number.isFinite(entryPrice) &&
+        Number.isFinite(amount) &&
+        Number.isFinite(payout) &&
+        Number.isFinite(openedAt) &&
+        Number.isFinite(expiresAt)
+      ) {
+        const candles = chartData.getCandles();
+        const liveCandle = chartData.getLiveCandle();
+        const snappedEntryTime = snapToCandleCenter(
+          openedAt,
+          candles,
+          liveCandle,
+          timeframeMs,
+        );
+        const pnl = payout - amount;
+        const now = Date.now();
+
+        recentClosedTradesRef.current = [
+          ...recentClosedTradesRef.current.filter((t) => t.id !== data.id),
+          {
+            id: data.id,
+            direction: data.direction,
+            entryPrice,
+            openedAt,
+            expiresAt,
+            snappedEntryTime,
+            amount,
+            result: data.result,
+            pnl,
+            showUntil: now + RECENT_TRADE_DISPLAY_MS,
+          },
+        ];
+      }
+
       dismissToastByKey(data.id);
       showTradeCloseToast(data);
     },
@@ -687,13 +753,12 @@ export function useChart({ canvasRef, timeframe = '5s', snapshot, instrument, pa
       if (serverTimeRef.current) serverTimeRef.current.timestamp = timestamp;
       lastSyncTimeRef.current = performance.now();
     },
+    onChartInit: initializeChart,
     onPriceUpdate: (price, timestamp) => {
       chartData.handlePriceUpdate(price, timestamp);
-      // FLOW F3: якорь «текущее время» для кнопки «Вернуться к текущим»
       viewport.setLatestCandleTime(chartData.getLiveCandle()?.endTime ?? timestamp);
       candleAnimator.onPriceUpdate(price);
 
-      // FLOW A5: Alert Trigger Check
       const prev = lastPriceRef.current;
       lastPriceRef.current = price;
       if (prev === null || !Number.isFinite(prev) || !Number.isFinite(price)) {
@@ -713,7 +778,6 @@ export function useChart({ canvasRef, timeframe = '5s', snapshot, instrument, pa
 
         if (crossed) {
           priceAlert.triggered = true;
-          // Простое уведомление (frontend-only)
           // eslint-disable-next-line no-alert
           window.alert(`Цена пересекла уровень ${priceAlert.price.toFixed(2)}`);
         }
@@ -726,26 +790,10 @@ export function useChart({ canvasRef, timeframe = '5s', snapshot, instrument, pa
       const liveCandle = chartData.getLiveCandle();
       const tfMs = parseTimeframeToMs(timeframe);
 
-      if (liveCandle && match.candle.timestamp > liveCandle.startTime + tfMs * 1.5 && instrument) {
-        api<TerminalSnapshot>(
-          `/api/terminal/snapshot?instrument=${encodeURIComponent(instrument)}&timeframe=${encodeURIComponent(timeframe)}`,
-        ).then((snap) => {
-          if (!snap?.candles?.items?.length) return;
-          const price = snap.price?.value ?? null;
-          const time = snap.price?.timestamp ?? snap.serverTime;
-          chartData.reset();
-          candleAnimator.reset();
-          chartData.initializeFromSnapshot(
-            snap.candles.items, price, time, tfMs,
-            snap.marketStatus,
-            snap.nextMarketOpenAt,
-            snap.topAlternatives ?? [],
-          );
-          viewport.recalculateViewport();
-          viewport.setLatestCandleTime(chartData.getLiveCandle()?.endTime ?? time);
-        }).catch((err) => {
-          console.error('[useChart] Failed to backfill missed candles:', err);
-        });
+      if (liveCandle && match.candle.timestamp > liveCandle.startTime + tfMs * 1.5) {
+        // Gap detected — WS will send a fresh chart:init on next subscribe cycle
+        chartData.applyActiveCandleSnapshot(match.candle);
+        viewport.recalculateYOnly();
       } else {
         chartData.applyActiveCandleSnapshot(match.candle);
         viewport.recalculateYOnly();
@@ -756,9 +804,6 @@ export function useChart({ canvasRef, timeframe = '5s', snapshot, instrument, pa
         return;
       }
 
-      // Конвертируем формат WebSocket candle в SnapshotCandle
-      // WebSocket candle имеет: timestamp (startTime), timeframe
-      // Нужно вычислить endTime на основе timeframe
       const timeframeMs = parseTimeframeToMs(timeframeStr);
 
       const snapshotCandle = {
@@ -780,10 +825,9 @@ export function useChart({ canvasRef, timeframe = '5s', snapshot, instrument, pa
         viewport.recalculateYOnly();
       }
     },
-    enabled: !!(activeInstrumentRef && instrument), // FLOW WS-1: WebSocket управляет своим состоянием
+    enabled: !!(activeInstrumentRef && instrument),
   });
 
-  // Cleanup deferred timers on unmount
   useEffect(() => {
     return () => {
       deferredTimersRef.current.forEach(clearTimeout);
@@ -812,7 +856,7 @@ export function useChart({ canvasRef, timeframe = '5s', snapshot, instrument, pa
     const amount = trade.amount ? parseFloat(trade.amount) : undefined;
 
     if (!Number.isFinite(entryPrice) || !Number.isFinite(openedAt) || !Number.isFinite(expiresAt)) {
-      console.error('[useChart] Invalid trade data', trade, {
+      logger.error('[useChart] Invalid trade data', trade, {
         entryPrice,
         openedAt,
         expiresAt,
@@ -822,6 +866,11 @@ export function useChart({ canvasRef, timeframe = '5s', snapshot, instrument, pa
     }
     
 
+    // Snap entry to the center of the candle where the trade was opened
+    const candles = chartData.getCandles();
+    const liveCandle = chartData.getLiveCandle();
+    const snappedEntryTime = snapToCandleCenter(openedAt, candles, liveCandle, timeframeMs);
+
     const tradeData = {
       id: trade.id,
       direction: trade.direction,
@@ -829,9 +878,9 @@ export function useChart({ canvasRef, timeframe = '5s', snapshot, instrument, pa
       openedAt,
       expiresAt,
       amount,
+      snappedEntryTime,
     };
 
-    // Добавляем trade в хранилище
     tradesRef.current = [
       ...tradesRef.current.filter(t => t.id !== trade.id),
       tradeData,
@@ -912,6 +961,15 @@ export function useChart({ canvasRef, timeframe = '5s', snapshot, instrument, pa
 
   const zoomIn = useCallback(() => animateZoom(1 - BUTTON_ZOOM_STEP), [animateZoom]);
   const zoomOut = useCallback(() => animateZoom(1 + BUTTON_ZOOM_STEP), [animateZoom]);
+
+  useEffect(() => {
+    return () => {
+      if (zoomAnimRef.current) {
+        cancelAnimationFrame(zoomAnimRef.current);
+        zoomAnimRef.current = null;
+      }
+    };
+  }, []);
 
   return {
     setCandleMode: candleMode.setMode,

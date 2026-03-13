@@ -10,6 +10,7 @@
 
 import type { PriceAlert } from './priceAlerts.types';
 import type { Viewport } from '../viewport.types';
+import { priceToY } from '../utils/coords';
 
 interface RenderPriceAlertsParams {
   ctx: CanvasRenderingContext2D;
@@ -22,17 +23,6 @@ interface RenderPriceAlertsParams {
 const ALERT_COLOR_ACTIVE = '#40648f'; // Цвет как у фона плюсика (LABEL_BG_COLOR)
 const ALERT_LINE_WIDTH = 1;
 const ALERT_DASH: number[] = [4, 4]; // Пунктир
-
-/**
- * Конвертирует цену в Y-координату в пределах основной области графика
- */
-function mapPriceToY(price: number, viewport: Viewport, height: number): number {
-  const priceRange = viewport.priceMax - viewport.priceMin;
-  if (priceRange === 0) return height / 2;
-
-  const t = (viewport.priceMax - price) / priceRange;
-  return t * height;
-}
 
 export function renderPriceAlerts({
   ctx,
@@ -53,7 +43,7 @@ export function renderPriceAlerts({
       continue;
     }
 
-    const y = Math.round(mapPriceToY(alert.price, viewport, height)) + 0.5;
+    const y = Math.round(priceToY(alert.price, viewport, height)) + 0.5;
 
     ctx.beginPath();
     ctx.strokeStyle = ALERT_COLOR_ACTIVE;

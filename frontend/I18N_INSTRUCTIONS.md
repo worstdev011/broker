@@ -36,7 +36,7 @@ export default function Footer() {
   return (
     <footer>
       <h3>Быстрые ссылки</h3>
-      <p>© 2024 Comfortrade. Все права защищены.</p>
+      <p>© 2026 Comfortrade LTD. Все права защищены.</p>
     </footer>
   )
 }
@@ -68,7 +68,7 @@ export default function Footer() {
     "quick_links": "Быстрые ссылки"
   },
   "common": {
-    "all_rights": "© 2024 Comfortrade. Все права защищены."
+    "all_rights": "© 2026 Comfortrade LTD. Все права защищены."
   }
 }
 ```

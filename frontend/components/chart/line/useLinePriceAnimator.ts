@@ -8,7 +8,7 @@
 
 import { useRef } from 'react';
 
-const DURATION_MS = 80;
+const DURATION_MS = 150;
 
 const clamp = (v: number, min: number, max: number): number =>
   Math.max(min, Math.min(max, v));

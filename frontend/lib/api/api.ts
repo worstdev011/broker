@@ -1,11 +1,7 @@
-/**
- * Simple API client - all requests with cookies + CSRF for mutating
- */
-
 import { getCsrfToken } from './csrf';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? '';
-const REQUEST_TIMEOUT_MS = 15000; // 15 сек — чтобы не зависать при недоступном бэкенде
+const REQUEST_TIMEOUT_MS = 15_000;
 
 const MUTATING_METHODS = ['POST', 'PUT', 'PATCH', 'DELETE'];
 
@@ -32,8 +28,6 @@ export async function api<T>(url: string, options: RequestInit = {}): Promise<T>
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
-  // 🔥 FIX: Поддержка внешнего AbortSignal (например из useHistoryLoader)
-  // При abort внешнего signal — пробрасываем abort в наш controller
   const externalSignal = options.signal;
   let isExternalAbort = false;
   if (externalSignal) {
@@ -61,7 +55,9 @@ export async function api<T>(url: string, options: RequestInit = {}): Promise<T>
       let errorData: unknown = null;
       try {
         errorData = await response.json();
-        errorMessage = (errorData as { error?: string; message?: string })?.error ?? (errorData as { error?: string; message?: string })?.message ?? errorMessage;
+        errorMessage = (errorData as { error?: string; message?: string })?.error
+          ?? (errorData as { error?: string; message?: string })?.message
+          ?? errorMessage;
       } catch {
         errorMessage = response.statusText || errorMessage;
       }
@@ -78,11 +74,10 @@ export async function api<T>(url: string, options: RequestInit = {}): Promise<T>
   } catch (err) {
     clearTimeout(timeoutId);
     if (err instanceof Error && err.name === 'AbortError') {
-      // 🔥 FIX: Внешний abort → пробрасываем AbortError как есть (не маскируем под timeout)
       if (isExternalAbort) {
         throw new DOMException('The operation was aborted.', 'AbortError');
       }
-      const timeoutErr = new Error('Сервер не отвечает. Проверьте, что бэкенд запущен (npm run dev в папке backend).') as Error & { response?: { status: number; statusText: string; data: unknown } };
+      const timeoutErr = new Error('Server not responding. Check that backend is running.') as Error & { response?: { status: number; statusText: string; data: unknown } };
       timeoutErr.response = { status: 408, statusText: 'Request Timeout', data: { message: 'Request timeout' } };
       throw timeoutErr;
     }

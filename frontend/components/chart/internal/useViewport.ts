@@ -1,21 +1,4 @@
-/**
- * useViewport - ядро FLOW G3
- * 
- * Ответственность:
- * - Хранение viewport
- * - Инициализация на основе данных
- * - Auto-fit по Y (обязательно)
- * - Пересчет при изменении данных
- * 
- * ❌ ЗАПРЕЩЕНО:
- * - follow mode
- * - pan / zoom
- * - canvas
- * - render
- * - websocket
- * - useState
- * - side-effects вне хука
- */
+/** Viewport state management: pan, zoom, follow mode, Y-scale, and auto-fit. */
 
 import { useRef, useEffect } from 'react';
 import type React from 'react';
@@ -29,14 +12,11 @@ interface UseViewportParams {
   timeframeMs: number;
   canvasRef?: React.RefObject<HTMLCanvasElement>;
   config?: Partial<ViewportConfig>;
-  // 🔥 FLOW C-INERTIA: Pan inertia refs (опционально, для совместимости)
   panInertiaRefs?: {
     velocityRef: React.MutableRefObject<number>;
     activeRef: React.MutableRefObject<boolean>;
   };
-  // 🔥 FLOW C-INERTIA: Callback для изменения viewport (для загрузки истории)
   onViewportChangeRef?: React.MutableRefObject<((viewport: Viewport) => void) | null>;
-  // FLOW C-MARKET-CLOSED: останавливать инерцию когда рынок закрыт
   getMarketStatus?: () => 'OPEN' | 'WEEKEND' | 'MAINTENANCE' | 'HOLIDAY';
 }
 
@@ -46,7 +26,7 @@ const MIN_VISIBLE_CANDLES = 35; // Минимум свечей (ограниче
 const MAX_VISIBLE_CANDLES = 300; // Максимум свечей на экране
 const BASE_TIMEFRAME_MS = 5000; // Базовый таймфрейм (5s) в миллисекундах
 
-const FOLLOW_SHIFT_DURATION_MS = 200;
+const FOLLOW_SHIFT_DURATION_MS = 350;
 const easeOutCubic = (t: number): number => 1 - Math.pow(1 - t, 3);
 const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
 
@@ -76,6 +56,7 @@ interface UseViewportReturn {
   resetYScale: () => void;
   // 🔥 FLOW: Timeframe Switch Reset - полный сброс viewport
   reset: () => void;
+  skipNextFollowAnimation: () => void;
   // 🔥 FLOW C-INERTIA: Pan inertia API
   advancePanInertia: (now: number) => void;
   // 🔥 FLOW Y-SMOOTH: Плавная анимация Y-оси
@@ -107,20 +88,19 @@ const DEFAULT_CONFIG: ViewportConfig = {
  */
 function calculateVisibleCandles(canvasWidth: number | null, timeframeMs: number): number {
   if (!canvasWidth || canvasWidth <= 0) {
-    // Если canvas еще не готов, используем дефолтное значение
     return DEFAULT_CONFIG.visibleCandles;
   }
-  
+
   // Базовое количество свечей для базового таймфрейма (5s)
   const baseVisible = canvasWidth / TARGET_CANDLE_PX;
-  
-  // Коэффициент таймфрейма: во сколько раз текущий ТФ больше базового
-  const timeframeMultiplier = timeframeMs / BASE_TIMEFRAME_MS;
-  
-  // Умножаем на коэффициент: большие ТФ автоматически "отодвигаются назад"
+
+  // Логарифмический множитель: плавно увеличиваем глубину для больших ТФ,
+  // но не линейно (иначе 1h показывал бы 720x свечей)
+  const ratio = timeframeMs / BASE_TIMEFRAME_MS;
+  const timeframeMultiplier = ratio <= 1 ? 1 : 1 + Math.log2(ratio);
+
   const rawVisible = baseVisible * timeframeMultiplier;
-  
-  // Ограничиваем минимальным и максимальным количеством
+
   return Math.max(
     MIN_VISIBLE_CANDLES,
     Math.min(MAX_VISIBLE_CANDLES, Math.round(rawVisible))
@@ -268,8 +248,14 @@ export function useViewport({
   } | null>(null);
 
   const yScaleFactorRef = useRef<number>(1.0);
-  /** Timestamp of the last Y-lerp step for time-based interpolation */
-  const lastYLerpTimeRef = useRef<number>(0);
+
+  // 🔥 FLOW Y-SMOOTH: Continuous Y-axis animation state
+  const yTargetMinRef = useRef<number | null>(null);
+  const yTargetMaxRef = useRef<number | null>(null);
+  const lastYAnimTimeRef = useRef<number>(0);
+
+  // When > 0, recalculateViewport will snap instead of animating until this timestamp
+  const skipFollowAnimationUntilRef = useRef<number>(0);
 
   const returnToFollowTimerRef = useRef<NodeJS.Timeout | null>(null);
   const RETURN_TO_FOLLOW_DELAY_MS = 3000;
@@ -358,7 +344,18 @@ export function useViewport({
       };
 
       const current = viewportRef.current;
+      // Keep Y targets in sync so advanceYAnimation stays consistent after follow ends
+      yTargetMinRef.current = priceMin;
+      yTargetMaxRef.current = priceMax;
+
       if (!current) {
+        viewportRef.current = { ...target };
+        targetViewportRef.current = null;
+        followAnimationStartRef.current = null;
+        return;
+      }
+
+      if (performance.now() < skipFollowAnimationUntilRef.current) {
         viewportRef.current = { ...target };
         targetViewportRef.current = null;
         followAnimationStartRef.current = null;
@@ -466,40 +463,45 @@ export function useViewport({
     const liveCandle = getLiveCandle();
     const { yPaddingRatio } = configRef.current;
 
-    // Получаем видимые свечи в текущем viewport (X не меняется!)
-    const visibleCandles = getVisibleCandles(
-      candles,
-      liveCandle,
-      currentViewport.timeStart,
-      currentViewport.timeEnd
-    );
+    // If follow-animation is active, use the target viewport's X range
+    // so Y is computed for where we're heading, not where we are mid-lerp
+    const target = targetViewportRef.current;
+    const animating = !!(target && followAnimationStartRef.current);
+    const xStart = animating ? target.timeStart : currentViewport.timeStart;
+    const xEnd = animating ? target.timeEnd : currentViewport.timeEnd;
 
-    // Auto-fit по Y: вычисляем priceMin и priceMax
+    const visibleCandles = getVisibleCandles(candles, liveCandle, xStart, xEnd);
+
     const priceRange = calculatePriceRange(visibleCandles, yPaddingRatio);
 
     if (!priceRange) {
-      return; // Не меняем viewport если нет видимых свечей
-    }
-
-    // 🔥 FLOW Y2: Если manual — применяем yScaleFactor к авто-диапазону
-    if (currentViewport.yMode === 'manual') {
-      const scaled = applyYScaleFactor(priceRange, yScaleFactorRef.current);
-      viewportRef.current = {
-        ...currentViewport,
-        priceMin: scaled.priceMin,
-        priceMax: scaled.priceMax,
-        yMode: 'manual',
-      };
       return;
     }
 
-    // Обновляем ТОЛЬКО Y, X остается прежним
-    viewportRef.current = {
-      ...currentViewport,
-      priceMin: priceRange.priceMin,
-      priceMax: priceRange.priceMax,
-      yMode: 'auto', // Остается auto
-    };
+    let priceMin: number;
+    let priceMax: number;
+
+    if (currentViewport.yMode === 'manual') {
+      const scaled = applyYScaleFactor(priceRange, yScaleFactorRef.current);
+      priceMin = scaled.priceMin;
+      priceMax = scaled.priceMax;
+    } else {
+      priceMin = priceRange.priceMin;
+      priceMax = priceRange.priceMax;
+    }
+
+    // During follow-animation, update the target instead of viewport directly
+    // so the lerp stays smooth and doesn't "jump" on incoming ticks
+    if (animating && target) {
+      targetViewportRef.current = { ...target, priceMin, priceMax };
+      yTargetMinRef.current = priceMin;
+      yTargetMaxRef.current = priceMax;
+      return;
+    }
+
+    // Update Y targets for smooth animation via advanceYAnimation
+    yTargetMinRef.current = priceMin;
+    yTargetMaxRef.current = priceMax;
   };
 
   /**
@@ -561,8 +563,7 @@ export function useViewport({
       return;
     }
 
-    // 🔥 FLOW Y2: manual → авто-диапазон * yScaleFactor (с lerp для плавности)
-    // Целевые значения Y
+    // 🔥 FLOW Y2: manual → авто-диапазон * yScaleFactor
     let targetMin: number;
     let targetMax: number;
     if (currentYMode === 'manual') {
@@ -574,39 +575,69 @@ export function useViewport({
       targetMax = priceRange.priceMax;
     }
 
-    const currentMin = currentViewport?.priceMin ?? targetMin;
-    const currentMax = currentViewport?.priceMax ?? targetMax;
-    
-    const EPSILON = 0.0001;
-    const minDiff = Math.abs(currentMin - targetMin);
-    const maxDiff = Math.abs(currentMax - targetMax);
-    const alreadyAtTarget = minDiff < EPSILON && maxDiff < EPSILON;
+    // Store targets for continuous animation in advanceYAnimation
+    yTargetMinRef.current = targetMin;
+    yTargetMaxRef.current = targetMax;
 
-    // Time-based smoothing: consistent across all refresh rates (60/120/144hz)
-    const now = performance.now();
-    const dt = now - (lastYLerpTimeRef.current || now);
-    lastYLerpTimeRef.current = now;
-    const BASE_SMOOTH = 0.3;
-    const smoothFactor = alreadyAtTarget ? 1 : 1 - Math.pow(1 - BASE_SMOOTH, dt / 16.67);
-    const smoothedMin = lerp(currentMin, targetMin, smoothFactor);
-    const smoothedMax = lerp(currentMax, targetMax, smoothFactor);
+    // Use current Y if available, otherwise snap to target immediately
+    const priceMin = currentViewport?.priceMin ?? targetMin;
+    const priceMax = currentViewport?.priceMax ?? targetMax;
 
-    // Обновляем viewport с плавным Y
     viewportRef.current = {
       timeStart: vp.timeStart,
       timeEnd: vp.timeEnd,
-      priceMin: smoothedMin,
-      priceMax: smoothedMax,
+      priceMin,
+      priceMax,
       yMode: currentYMode,
     };
   };
 
   /**
-   * 🔥 FLOW Y-SMOOTH: Плавная анимация Y-оси (stub - не используется в простом режиме)
+   * 🔥 FLOW Y-SMOOTH: Continuous Y-axis animation.
+   * Called every frame from the render loop. Smoothly interpolates priceMin/priceMax
+   * towards the target values using frame-rate independent exponential decay.
    */
-  const advanceYAnimation = (_now: number): void => {
-    // Простой lerp в updateViewport делает всю работу
-    // Эта функция оставлена для совместимости API
+  const Y_SMOOTH_SPEED = 20; // Higher = faster convergence (units: 1/second)
+  const Y_SNAP_EPSILON = 1e-8;
+
+  const advanceYAnimation = (now: number): void => {
+    const vp = viewportRef.current;
+    if (!vp) return;
+
+    const targetMin = yTargetMinRef.current;
+    const targetMax = yTargetMaxRef.current;
+    if (targetMin === null || targetMax === null) return;
+
+    // Don't animate during active Y-drag
+    if (yDragRef.current) return;
+
+    // Skip if follow-animation is active (it handles its own Y lerp)
+    if (targetViewportRef.current && followAnimationStartRef.current) return;
+
+    const dt = lastYAnimTimeRef.current > 0
+      ? Math.min(now - lastYAnimTimeRef.current, 32) // Cap at ~2 frames to avoid jumps
+      : 16;
+    lastYAnimTimeRef.current = now;
+
+    const minDiff = Math.abs(vp.priceMin - targetMin);
+    const maxDiff = Math.abs(vp.priceMax - targetMax);
+    const range = Math.abs(targetMax - targetMin) || 1;
+
+    // Snap when close enough (relative to the price range)
+    if (minDiff / range < Y_SNAP_EPSILON && maxDiff / range < Y_SNAP_EPSILON) {
+      if (vp.priceMin !== targetMin || vp.priceMax !== targetMax) {
+        viewportRef.current = { ...vp, priceMin: targetMin, priceMax: targetMax };
+      }
+      return;
+    }
+
+    // Exponential decay: t = 1 - e^(-speed * dt/1000)
+    // This is frame-rate independent and feels smooth on 60/120/144hz
+    const t = 1 - Math.exp(-Y_SMOOTH_SPEED * dt / 1000);
+    const newMin = lerp(vp.priceMin, targetMin, t);
+    const newMax = lerp(vp.priceMax, targetMax, t);
+
+    viewportRef.current = { ...vp, priceMin: newMin, priceMax: newMax };
   };
 
   /** Плавный сдвиг viewport к цели. Вызывать каждый кадр из render loop при follow mode. */
@@ -642,6 +673,9 @@ export function useViewport({
 
     if (progress >= 1) {
       viewportRef.current = { ...target };
+      // Sync Y targets so advanceYAnimation doesn't snap back
+      yTargetMinRef.current = target.priceMin;
+      yTargetMaxRef.current = target.priceMax;
       targetViewportRef.current = null;
       followAnimationStartRef.current = null;
     }
@@ -717,14 +751,16 @@ export function useViewport({
     followAnimationStartRef.current = { viewport: current, time: 0 };
   };
 
-  /** FLOW F8: показывать кнопку «Вернуться к текущим», если пользователь уехал влево или выключил follow */
-  const EPS_MS = 50;
+  /** FLOW F8: показывать кнопку «Вернуться к текущим» только когда live-свеча за пределами экрана */
   const shouldShowReturnToLatest = (): boolean => {
-    if (!followModeRef.current) return true;
     const vp = viewportRef.current;
-    const latest = latestCandleTimeRef.current;
-    if (vp && latest != null && vp.timeEnd < latest - EPS_MS) return true;
-    return false;
+    if (!vp) return false;
+
+    const liveCandle = getLiveCandle();
+    if (!liveCandle) return false;
+
+    // Live candle is off-screen to the right or left → show button
+    return liveCandle.startTime >= vp.timeEnd || liveCandle.endTime <= vp.timeStart;
   };
 
   // 🔥 FLOW RETURN-TO-FOLLOW: Отмена автовозврата
@@ -892,14 +928,16 @@ export function useViewport({
     // Чувствительность: drag вниз (dy > 0) = сжатие, drag вверх (dy < 0) = растягивание
     const scaleFactor = 1 + dy * 0.005; // Вниз = уменьшение, вверх = увеличение
 
-    // Ограничения: относительные к начальному диапазону (чтобы работало на любых парах — BTC, forex и т.д.)
-    const minRange = Math.max(1e-10, dragState.startRange * 0.01); // не уже 1% от стартового
-    const maxRange = dragState.startRange * 100; // не шире чем в 100 раз
+    // Auto-fit range is the maximum stretch (minimum range value).
+    // User can only shrink the chart (increase range), not stretch beyond auto-fit.
+    const minRange = dragState.autoRange;
+    const maxRange = dragState.startRange * 100;
     
     const newRange = Math.max(minRange, Math.min(maxRange, dragState.startRange * scaleFactor));
 
     // 🔥 FLOW Y2: Обновляем yScaleFactor = newRange / autoRange
-    yScaleFactorRef.current = newRange / dragState.autoRange;
+    // Clamp >= 1.0: auto-fit is the maximum stretch, only shrinking allowed
+    yScaleFactorRef.current = Math.max(1.0, newRange / dragState.autoRange);
 
     // Центр масштабирования - середина текущего диапазона
     const mid = (viewport.priceMin + viewport.priceMax) / 2;
@@ -916,6 +954,13 @@ export function useViewport({
   };
 
   const endYScaleDrag = (): void => {
+    // Sync Y targets to where the drag left the viewport,
+    // so advanceYAnimation doesn't snap back to pre-drag values
+    const vp = viewportRef.current;
+    if (vp) {
+      yTargetMinRef.current = vp.priceMin;
+      yTargetMaxRef.current = vp.priceMax;
+    }
     yDragRef.current = null;
   };
 
@@ -971,6 +1016,12 @@ export function useViewport({
    * 🔥 FLOW: Timeframe Switch Reset - полный сброс viewport
    * Сбрасывает viewport в дефолтное состояние при смене timeframe
    */
+  const SKIP_FOLLOW_ANIM_WINDOW_MS = 600;
+
+  const skipNextFollowAnimation = (): void => {
+    skipFollowAnimationUntilRef.current = performance.now() + SKIP_FOLLOW_ANIM_WINDOW_MS;
+  };
+
   const reset = (): void => {
     // Сбрасываем viewport в null (будет пересчитан при следующем recalculateViewport)
     viewportRef.current = null;
@@ -985,6 +1036,13 @@ export function useViewport({
     // Очищаем Y-scale drag и сбрасываем масштаб
     yDragRef.current = null;
     yScaleFactorRef.current = 1.0;
+    
+    // Очищаем Y-animation targets
+    yTargetMinRef.current = null;
+    yTargetMaxRef.current = null;
+    lastYAnimTimeRef.current = 0;
+
+    skipFollowAnimationUntilRef.current = 0;
     
     // Очищаем якорь времени
     latestCandleTimeRef.current = null;
@@ -1012,21 +1070,27 @@ export function useViewport({
     if (getMarketStatus && getMarketStatus() !== 'OPEN') {
       panInertiaRefs.activeRef.current = false;
       panInertiaRefs.velocityRef.current = 0;
+      lastInertiaTimeRef.current = 0;
       return;
     }
 
     if (followModeRef.current) {
       panInertiaRefs.activeRef.current = false;
       panInertiaRefs.velocityRef.current = 0;
+      lastInertiaTimeRef.current = 0;
       return;
     }
 
-    if (!panInertiaRefs.activeRef.current) return;
+    if (!panInertiaRefs.activeRef.current) {
+      lastInertiaTimeRef.current = 0;
+      return;
+    }
 
     const velocity = panInertiaRefs.velocityRef.current;
     if (Math.abs(velocity) < PAN_STOP_EPSILON) {
       panInertiaRefs.activeRef.current = false;
       panInertiaRefs.velocityRef.current = 0;
+      lastInertiaTimeRef.current = 0;
       return;
     }
 
@@ -1036,9 +1100,9 @@ export function useViewport({
     const canvas = canvasRef?.current;
     if (!canvas) return;
 
-    // Real delta-time for frame-rate independent inertia
-    const prev = lastInertiaTimeRef.current || now;
-    const dt = Math.min(now - prev, 64); // cap to avoid spiral after tab switch
+    const dt = lastInertiaTimeRef.current > 0
+      ? Math.min(now - lastInertiaTimeRef.current, 32)
+      : 16;
     lastInertiaTimeRef.current = now;
     const deltaX = velocity * dt;
 
@@ -1102,6 +1166,7 @@ export function useViewport({
     resetYScale,
     // 🔥 FLOW: Timeframe Switch Reset
     reset,
+    skipNextFollowAnimation,
     // 🔥 FLOW C-INERTIA: Pan inertia API
     advancePanInertia,
     // 🔥 FLOW Y-SMOOTH: Y-axis animation API

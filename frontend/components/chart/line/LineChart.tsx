@@ -7,8 +7,9 @@
 'use client';
 
 import { forwardRef, useRef, useEffect, useImperativeHandle } from 'react';
+import { logger } from '@/lib/logger';
 import { useLineChart } from './useLineChart';
-import { useWebSocket } from '@/lib/hooks/useWebSocket';
+import { useWebSocket, type TradeClosePayload } from '@/lib/hooks/useWebSocket';
 import { dismissToastByKey, showTradeOpenToast, showTradeCloseToast } from '@/stores/toast.store';
 import { api } from '@/lib/api/api';
 import type { IndicatorConfig } from '../internal/indicators/indicator.types';
@@ -67,6 +68,7 @@ export interface LineChartRef {
   zoomOut: () => void;
   shouldShowReturnToLatest: () => boolean;
   followLatest: () => void;
+  handleTradeClose: (data: TradeClosePayload) => void;
 }
 
 export const LineChart = forwardRef<LineChartRef, LineChartProps>(
@@ -103,7 +105,7 @@ export const LineChart = forwardRef<LineChartRef, LineChartProps>(
       onServerTime: lineChart.handleServerTime,
       onTradeOpen: (data) => showTradeOpenToast(data),
       onTradeClose: (data) => {
-        lineChart.removeTrade(data.id);
+        lineChart.handleTradeClose(data);
         dismissToastByKey(data.id);
         showTradeCloseToast(data);
       },
@@ -128,8 +130,14 @@ export const LineChart = forwardRef<LineChartRef, LineChartProps>(
       setHoverAction: lineChart.setHoverAction,
       zoomIn: lineChart.zoomInAnimated,
       zoomOut: lineChart.zoomOutAnimated,
-      shouldShowReturnToLatest: () => !lineChart.getViewport().autoFollow,
+      shouldShowReturnToLatest: () => {
+        const vp = lineChart.getViewport();
+        const points = lineChart.getPoints();
+        const lastTime = points.length > 0 ? points[points.length - 1].time : Date.now();
+        return lastTime < vp.timeStart || lastTime > vp.timeEnd;
+      },
       followLatest: lineChart.resetFollow,
+      handleTradeClose: lineChart.handleTradeClose,
     }));
 
     // FLOW LP-3: Загрузка snapshot при монтировании и смене инструмента
@@ -170,7 +178,7 @@ export const LineChart = forwardRef<LineChartRef, LineChartProps>(
           lineChartRef.current.initializeFromSnapshot(snapshot);
           onReady?.();
         } catch (error) {
-          console.error('[LineChart] Error loading snapshot:', error);
+          logger.error('[LineChart] Error loading snapshot:', error);
           lastLoadedInstrumentRef.current = null;
         } finally {
           isLoadingSnapshotRef.current = false;
@@ -212,7 +220,7 @@ export const LineChart = forwardRef<LineChartRef, LineChartProps>(
                 lineChartRef.current.prependHistory(historyPoints);
               }
             } catch (error) {
-              console.error('[LineChart] Error loading history:', error);
+              logger.error('[LineChart] Error loading history:', error);
               lastHistoryEdgeRef.current = 0;
             } finally {
               isLoadingHistoryRef.current = false;
@@ -281,8 +289,8 @@ export const LineChart = forwardRef<LineChartRef, LineChartProps>(
         
         panInertiaRefs.activeRef.current = false;
         panInertiaRefs.velocityRef.current = 0;
-        lastMoveTimeRef.current = null;
         emaVelocityRef.current = 0;
+        lastMoveTimeRef.current = performance.now();
         
         e.preventDefault();
         isPanningRef.current = true;
@@ -380,7 +388,7 @@ export const LineChart = forwardRef<LineChartRef, LineChartProps>(
           panInertiaRefs.activeRef.current = false;
           panInertiaRefs.velocityRef.current = 0;
           emaVelocityRef.current = 0;
-          lastMoveTimeRef.current = null;
+          lastMoveTimeRef.current = performance.now();
         } else if (e.touches.length === 2) {
           const [t1, t2] = [e.touches[0], e.touches[1]];
           touchModeRef.current = 'pinch';

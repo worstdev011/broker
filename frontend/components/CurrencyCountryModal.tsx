@@ -2,6 +2,8 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { ChevronDown, Search, Check, Globe, Banknote } from 'lucide-react';
+import { useTranslations } from 'next-intl';
+import ReactCountryFlag from 'react-country-flag';
 import { api } from '@/lib/api/api';
 
 const COUNTRIES = [
@@ -112,6 +114,8 @@ function SearchableDropdown({
   renderItem,
   renderSelected,
   placeholder,
+  searchPlaceholder,
+  nothingFound,
 }: {
   label: string;
   icon: React.ReactNode;
@@ -121,16 +125,23 @@ function SearchableDropdown({
   renderItem: (key: string, isSelected: boolean) => React.ReactNode;
   renderSelected: (key: string) => React.ReactNode;
   placeholder: string;
+  searchPlaceholder: string;
+  nothingFound: string;
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+      if (
+        triggerRef.current && !triggerRef.current.contains(e.target as Node) &&
+        listRef.current && !listRef.current.contains(e.target as Node)
+      ) {
         setOpen(false);
         setSearch('');
       }
@@ -145,6 +156,21 @@ function SearchableDropdown({
     }
   }, [open]);
 
+  const handleOpen = () => {
+    if (!open && triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      setDropdownStyle({
+        position: 'fixed',
+        top: rect.bottom + 8,
+        left: rect.left,
+        width: rect.width,
+        zIndex: 9999,
+      });
+    }
+    setOpen((v) => !v);
+    setSearch('');
+  };
+
   const filtered = items.filter((item) =>
     item.searchText.toLowerCase().includes(search.toLowerCase())
   );
@@ -155,10 +181,11 @@ function SearchableDropdown({
         {icon}
         {label}
       </label>
-      <div ref={dropdownRef} className="relative">
+      <div className="relative">
         <button
+          ref={triggerRef}
           type="button"
-          onClick={() => { setOpen(!open); setSearch(''); }}
+          onClick={handleOpen}
           className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-white/5 border border-white/10 hover:border-[#3347ff]/40 focus:border-[#3347ff]/50 transition-all text-left"
         >
           {value ? (
@@ -170,7 +197,11 @@ function SearchableDropdown({
         </button>
 
         {open && (
-          <div className="absolute z-[60] mt-2 w-full bg-[#061230] border border-white/10 rounded-xl shadow-2xl overflow-hidden ring-1 ring-white/5">
+          <div
+            ref={listRef}
+            style={dropdownStyle}
+            className="bg-[#061230] border border-white/10 rounded-xl shadow-2xl overflow-hidden ring-1 ring-white/5"
+          >
             <div className="p-2 border-b border-white/10">
               <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-white/5 border border-white/10">
                 <Search className="w-4 h-4 text-gray-500 shrink-0" />
@@ -179,14 +210,14 @@ function SearchableDropdown({
                   type="text"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search..."
+                  placeholder={searchPlaceholder}
                   className="w-full bg-transparent text-sm text-white placeholder-gray-500 outline-none"
                 />
               </div>
             </div>
             <div className="max-h-[240px] overflow-y-auto scrollbar-dropdown">
               {filtered.length === 0 ? (
-                <div className="px-4 py-6 text-sm text-gray-500 text-center">Nothing found</div>
+                <div className="px-4 py-6 text-sm text-gray-500 text-center">{nothingFound}</div>
               ) : (
                 filtered.map((item) => (
                   <button
@@ -221,6 +252,7 @@ interface CurrencyCountryModalProps {
 }
 
 export function CurrencyCountryModal({ onComplete }: CurrencyCountryModalProps) {
+  const t = useTranslations('currencyModal');
   const [country, setCountry] = useState('');
   const [currency, setCurrency] = useState('');
   const [loading, setLoading] = useState(false);
@@ -249,7 +281,7 @@ export function CurrencyCountryModal({ onComplete }: CurrencyCountryModalProps) 
       });
       onComplete();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
+      setError(err instanceof Error ? err.message : t('error_default'));
     } finally {
       setLoading(false);
     }
@@ -287,40 +319,51 @@ export function CurrencyCountryModal({ onComplete }: CurrencyCountryModalProps) 
               <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-[#3347ff]/20 to-[#2a3ae6]/10 border border-white/10 mb-5">
                 <Globe className="w-7 h-7 text-[#6b7fff]" />
               </div>
-              <h2 className="text-2xl font-bold text-white">Welcome!</h2>
+              <h2 className="text-2xl font-bold text-white">{t('title')}</h2>
               <p className="text-sm text-gray-400 mt-2 max-w-xs mx-auto leading-relaxed">
-                Select your country and account currency to get started.
+                {t('subtitle')}
               </p>
-              <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20">
-                <span className="text-amber-400/90 text-xs font-medium">Currency cannot be changed later.</span>
-              </div>
             </div>
 
             <div className="px-6 pb-4 space-y-4">
               <SearchableDropdown
-                label="Country"
+                label={t('label_country')}
                 icon={<Globe className="w-3.5 h-3.5" />}
                 items={countryItems}
                 value={country}
                 onChange={handleCountryChange}
-                placeholder="Select your country"
+                placeholder={t('placeholder_country')}
+                searchPlaceholder={t('search_placeholder')}
+                nothingFound={t('nothing_found')}
                 renderItem={(key) => {
                   const c = COUNTRIES.find((x) => x.code === key);
-                  return c ? <span>{c.name}</span> : null;
+                  return c ? (
+                    <span className="flex items-center gap-2.5">
+                      <ReactCountryFlag countryCode={c.code} svg style={{ width: '1.25em', height: '1.25em', borderRadius: '2px' }} />
+                      <span>{c.name}</span>
+                    </span>
+                  ) : null;
                 }}
                 renderSelected={(key) => {
                   const c = COUNTRIES.find((x) => x.code === key);
-                  return c ? c.name : key;
+                  return c ? (
+                    <span className="flex items-center gap-2.5">
+                      <ReactCountryFlag countryCode={c.code} svg style={{ width: '1.25em', height: '1.25em', borderRadius: '2px' }} />
+                      <span>{c.name}</span>
+                    </span>
+                  ) : key;
                 }}
               />
 
               <SearchableDropdown
-                label="Currency"
+                label={t('label_currency')}
                 icon={<Banknote className="w-3.5 h-3.5" />}
                 items={currencyItems}
                 value={currency}
                 onChange={setCurrency}
-                placeholder="Select currency"
+                placeholder={t('placeholder_currency')}
+                searchPlaceholder={t('search_placeholder')}
+                nothingFound={t('nothing_found')}
                 renderItem={(key) => {
                   const c = CURRENCIES.find((x) => x.code === key);
                   return c ? (
@@ -350,7 +393,7 @@ export function CurrencyCountryModal({ onComplete }: CurrencyCountryModalProps) 
                   disabled={!country || !currency || loading}
                   className="w-full py-3.5 rounded-xl font-semibold text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed btn-accent text-white shadow-lg shadow-[#3347ff]/20 hover:shadow-[#3347ff]/30"
                 >
-                  {loading ? 'Saving...' : 'Continue'}
+                  {loading ? t('btn_saving') : t('btn_continue')}
                 </button>
               </div>
             </div>

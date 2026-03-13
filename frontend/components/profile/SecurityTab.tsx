@@ -207,11 +207,11 @@ export function SecuritySection({ profile, onProfileUpdate }: SecuritySectionPro
               />
             </div>
           </div>
-          <div className="mt-4 sm:mt-6 flex flex-wrap items-center gap-3 sm:gap-4">
+          <div className="mt-4 sm:mt-6 flex flex-col sm:flex-row flex-wrap items-start sm:items-center gap-3 sm:gap-4">
             <button
               type="submit"
               disabled={passwordSaving}
-              className="px-4 sm:px-6 py-2 sm:py-3 rounded-lg sm:rounded-xl bg-[#3347ff] hover:bg-[#3347ff]/90 text-white text-xs sm:text-sm font-medium uppercase tracking-wider transition-colors disabled:opacity-50"
+              className="w-full sm:w-auto px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg sm:rounded-xl bg-[#3347ff] hover:bg-[#3347ff]/90 text-white text-xs sm:text-sm font-medium uppercase tracking-wider transition-colors disabled:opacity-50"
             >
               {passwordSaving ? 'Сохранение...' : 'Изменить пароль'}
             </button>
@@ -272,7 +272,7 @@ export function SecuritySection({ profile, onProfileUpdate }: SecuritySectionPro
               <button
                 type="submit"
                 disabled={disable2FALoading}
-                className="mt-6 px-6 py-3 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-red-400 text-sm font-medium uppercase tracking-wider transition-colors disabled:opacity-50 border border-red-500/30"
+                className="mt-6 w-full sm:w-auto px-6 py-3 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-red-400 text-sm font-medium uppercase tracking-wider transition-colors disabled:opacity-50 border border-red-500/30"
               >
                 {disable2FALoading ? 'Отключение...' : 'Отключить 2FA'}
               </button>
@@ -283,10 +283,10 @@ export function SecuritySection({ profile, onProfileUpdate }: SecuritySectionPro
             <p className="text-sm text-white/70">
               Отсканируйте QR-код в приложении для аутентификации (Google Authenticator, Authy и др.):
             </p>
-            <div className="flex flex-col sm:flex-row gap-8 items-start">
+            <div className="flex flex-col sm:flex-row gap-6 sm:gap-8 items-center sm:items-start">
               {qrCode && (
-                <div className="p-4 rounded-xl bg-white inline-block shrink-0">
-                  <img src={qrCode} alt="QR-код" className="w-48 h-48" />
+                <div className="p-4 rounded-xl bg-white mx-auto sm:mx-0 shrink-0">
+                  <img src={qrCode} alt="QR-код" className="w-44 h-44 sm:w-48 sm:h-48 block" />
                 </div>
               )}
               <div className="flex-1 min-w-0 space-y-6">
@@ -321,19 +321,19 @@ export function SecuritySection({ profile, onProfileUpdate }: SecuritySectionPro
                       required
                     />
                   </div>
-                  <div className="flex gap-3">
-                <button
-                  type="submit"
-                  disabled={verify2FALoading}
-                  className="px-6 py-3 rounded-xl bg-[#3347ff] hover:bg-[#3347ff]/90 text-white text-sm font-medium uppercase tracking-wider transition-colors disabled:opacity-50"
-                >
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <button
+                      type="submit"
+                      disabled={verify2FALoading}
+                      className="w-full sm:w-auto px-6 py-3 rounded-xl bg-[#3347ff] hover:bg-[#3347ff]/90 text-white text-sm font-medium uppercase tracking-wider transition-colors disabled:opacity-50"
+                    >
                       {verify2FALoading ? 'Проверка...' : 'Подтвердить'}
                     </button>
-                <button
-                  type="button"
-                  onClick={cancel2FASetup}
-                  className="px-6 py-3 rounded-xl bg-white/10 hover:bg-white/15 text-white text-sm font-medium uppercase tracking-wider transition-colors"
-                >
+                    <button
+                      type="button"
+                      onClick={cancel2FASetup}
+                      className="w-full sm:w-auto px-6 py-3 rounded-xl bg-white/10 hover:bg-white/15 text-white text-sm font-medium uppercase tracking-wider transition-colors"
+                    >
                       Отмена
                     </button>
                   </div>
@@ -342,18 +342,20 @@ export function SecuritySection({ profile, onProfileUpdate }: SecuritySectionPro
             </div>
           </div>
         ) : (
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex flex-col gap-4">
             <p className="text-sm text-white/60">
               Добавьте дополнительный уровень защиты. При входе потребуется код из приложения.
             </p>
-            <button
-              type="button"
-              onClick={handleEnable2FA}
-              disabled={enable2FALoading}
-              className="px-6 py-3 rounded-xl bg-[#3347ff] hover:bg-[#3347ff]/90 text-white text-sm font-medium uppercase tracking-wider transition-colors disabled:opacity-50 shrink-0"
-            >
-              {enable2FALoading ? 'Загрузка...' : 'Включить 2FA'}
-            </button>
+            <div className="flex sm:justify-start">
+              <button
+                type="button"
+                onClick={handleEnable2FA}
+                disabled={enable2FALoading}
+                className="w-full sm:w-auto px-6 py-3 rounded-xl bg-[#3347ff] hover:bg-[#3347ff]/90 text-white text-sm font-medium uppercase tracking-wider transition-colors disabled:opacity-50"
+              >
+                {enable2FALoading ? 'Загрузка...' : 'Включить 2FA'}
+              </button>
+            </div>
           </div>
         )}
       </div>

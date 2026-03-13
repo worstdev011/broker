@@ -11,7 +11,6 @@
 import { useRef, useImperativeHandle, forwardRef } from 'react';
 import { useChart } from '../useChart';
 import { useCanvasInfrastructure } from '../internal/useCanvasInfrastructure';
-import type { TerminalSnapshot } from '@/types/terminal';
 import type { CandleMode } from '../internal/candleModes/candleMode.types';
 import type { IndicatorConfig } from '../internal/indicators/indicator.types';
 import type { OverlayRegistryParams } from '../useChart';
@@ -20,19 +19,16 @@ interface CandleChartProps {
   className?: string;
   style?: React.CSSProperties;
   timeframe?: string;
-  snapshot?: TerminalSnapshot | null;
   instrument?: string;
   payoutPercent?: number;
   digits?: number;
   activeInstrumentRef?: React.MutableRefObject<string>;
   indicatorConfigs?: IndicatorConfig[];
   drawingMode?: 'horizontal' | 'vertical' | 'trend' | 'rectangle' | 'fibonacci' | 'parallel-channel' | 'ray' | 'arrow' | null;
-  /** FLOW O: Overlay Registry — visibility и onDrawingAdded */
   overlayRegistry?: OverlayRegistryParams;
-  /** FLOW C-MARKET-ALTERNATIVES: Callback для переключения инструмента */
   onInstrumentChange?: (instrumentId: string) => void;
-  /** Режим свечей (classic/heikin_ashi/bars) — восстанавливается из localStorage */
   candleMode?: CandleMode;
+  onReady?: () => void;
 }
 
 export interface CandleChartRef {
@@ -73,9 +69,9 @@ export interface CandleChartRef {
 }
 
 export const CandleChart = forwardRef<CandleChartRef, CandleChartProps>(
-  ({ className, style, timeframe = '5s', snapshot, instrument, payoutPercent = 75, digits, activeInstrumentRef, indicatorConfigs = [], drawingMode = null, overlayRegistry, onInstrumentChange, candleMode = 'classic' }, ref) => {
+  ({ className, style, timeframe = '5s', instrument, payoutPercent = 75, digits, activeInstrumentRef, indicatorConfigs = [], drawingMode = null, overlayRegistry, onInstrumentChange, candleMode = 'classic', onReady }, ref) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
-    const chartApi = useChart({ canvasRef, timeframe, snapshot, instrument, payoutPercent, digits, activeInstrumentRef, indicatorConfigs, drawingMode, overlayRegistry, onInstrumentChange, candleMode });
+    const chartApi = useChart({ canvasRef, timeframe, instrument, payoutPercent, digits, activeInstrumentRef, indicatorConfigs, drawingMode, overlayRegistry, onInstrumentChange, candleMode, onReady });
 
     // Canvas infrastructure
     useCanvasInfrastructure({ canvasRef });

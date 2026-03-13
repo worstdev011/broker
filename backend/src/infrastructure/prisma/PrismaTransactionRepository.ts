@@ -1,12 +1,8 @@
-/**
- * Prisma implementation of TransactionRepository
- * 🔥 FLOW W1: Deposit/Withdrawal transactions
- */
-
 import { Prisma } from '@prisma/client';
 import { getPrismaClient } from '../../bootstrap/database.js';
 import type { TransactionRepository } from '../../ports/repositories/TransactionRepository.js';
 import type { Transaction, CreateTransactionDto, TransactionType, TransactionStatus, PaymentMethod } from '../../domain/finance/TransactionTypes.js';
+import { toNumber } from '../../shared/prismaHelpers.js';
 
 export class PrismaTransactionRepository implements TransactionRepository {
   async create(data: CreateTransactionDto): Promise<Transaction> {
@@ -23,7 +19,6 @@ export class PrismaTransactionRepository implements TransactionRepository {
         provider: data.provider ?? null,
       },
     });
-
     return this.toDomain(transaction);
   }
 
@@ -31,28 +26,16 @@ export class PrismaTransactionRepository implements TransactionRepository {
     const prisma = getPrismaClient();
     await prisma.transaction.update({
       where: { id: transactionId },
-      data: {
-        status: 'CONFIRMED',
-        confirmedAt: new Date(),
-      },
+      data: { status: 'CONFIRMED', confirmedAt: new Date() },
     });
   }
 
-  /**
-   * 🔥 FLOW W1: Balance считается ТОЛЬКО из подтверждённых транзакций
-   */
   async getBalance(accountId: string): Promise<number> {
     const prisma = getPrismaClient();
     const result = await prisma.transaction.aggregate({
-      where: {
-        accountId,
-        status: 'CONFIRMED',
-      },
-      _sum: {
-        amount: true,
-      },
+      where: { accountId, status: 'CONFIRMED' },
+      _sum: { amount: true },
     });
-
     return Number(result._sum.amount ?? 0);
   }
 
@@ -61,7 +44,6 @@ export class PrismaTransactionRepository implements TransactionRepository {
     const transaction = await prisma.transaction.findUnique({
       where: { id: transactionId },
     });
-
     return transaction ? this.toDomain(transaction) : null;
   }
 
@@ -71,21 +53,16 @@ export class PrismaTransactionRepository implements TransactionRepository {
       where: { accountId },
       orderBy: { createdAt: 'asc' },
     });
-
     return transactions.map(this.toDomain);
   }
 
   async findConfirmedByAccountIdBefore(
     accountId: string,
-    beforeDate: Date
+    beforeDate: Date,
   ): Promise<Transaction[]> {
     const prisma = getPrismaClient();
     const transactions = await prisma.transaction.findMany({
-      where: {
-        accountId,
-        status: 'CONFIRMED',
-        createdAt: { lt: beforeDate },
-      },
+      where: { accountId, status: 'CONFIRMED', createdAt: { lt: beforeDate } },
       orderBy: { createdAt: 'asc' },
     });
     return transactions.map(this.toDomain);
@@ -94,17 +71,14 @@ export class PrismaTransactionRepository implements TransactionRepository {
   async findConfirmedByAccountIdInDateRange(
     accountId: string,
     startDate: Date,
-    endDate: Date
+    endDate: Date,
   ): Promise<Transaction[]> {
     const prisma = getPrismaClient();
     const transactions = await prisma.transaction.findMany({
       where: {
         accountId,
         status: 'CONFIRMED',
-        createdAt: {
-          gte: startDate,
-          lte: endDate,
-        },
+        createdAt: { gte: startDate, lte: endDate },
       },
       orderBy: { createdAt: 'asc' },
     });
@@ -130,7 +104,7 @@ export class PrismaTransactionRepository implements TransactionRepository {
       accountId: transaction.accountId,
       type: transaction.type as TransactionType,
       status: transaction.status as TransactionStatus,
-      amount: typeof transaction.amount === 'number' ? transaction.amount : Number(transaction.amount),
+      amount: toNumber(transaction.amount),
       currency: transaction.currency,
       paymentMethod: transaction.paymentMethod as PaymentMethod,
       provider: transaction.provider,

@@ -1,8 +1,3 @@
-/**
- * Database bootstrap - Prisma PostgreSQL connection
- * Connection pool configured via DATABASE_URL params: connection_limit, pool_timeout, connect_timeout
- */
-
 import { PrismaClient } from '@prisma/client';
 import { env } from '../config/env.js';
 import { logger } from '../shared/logger.js';
@@ -14,33 +9,32 @@ export async function connectDatabase(): Promise<PrismaClient> {
     return prismaClient;
   }
 
-  logger.info('Connecting to PostgreSQL database...');
+  logger.info('Connecting to PostgreSQL...');
 
   prismaClient = new PrismaClient({
-    log: ['error'],
+    log: env.NODE_ENV === 'development'
+      ? ['error', 'warn']
+      : ['error'],
     datasources: {
-      db: {
-        url: env.DATABASE_URL,
-      },
+      db: { url: env.DATABASE_URL },
     },
   });
 
   try {
     await prismaClient.$connect();
-    logger.info('✅ PostgreSQL database connected successfully');
+    logger.info('PostgreSQL connected');
     return prismaClient;
   } catch (error) {
-    logger.error('❌ Failed to connect to PostgreSQL database:', error);
+    logger.error({ err: error }, 'Failed to connect to PostgreSQL');
     throw error;
   }
 }
 
 export async function disconnectDatabase(): Promise<void> {
   if (prismaClient) {
-    logger.info('Disconnecting from PostgreSQL database...');
     await prismaClient.$disconnect();
     prismaClient = null;
-    logger.info('✅ PostgreSQL database disconnected');
+    logger.info('PostgreSQL disconnected');
   }
 }
 

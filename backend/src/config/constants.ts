@@ -1,23 +1,18 @@
-/**
- * Backend constants — централизованные значения вместо magic numbers
- */
-
 import type { Timeframe } from '../prices/PriceTypes.js';
 
-/** API version prefix for all routes */
-export const API_PREFIX = '/api/v1';
+// ─── Payout ──────────────────────────────────────────────────────────────────
 
-/** Дефолтный payout % при отсутствии данных в БД */
+/** Default payout % when instrument has no DB override */
 export const DEFAULT_PAYOUT_PERCENT = 75;
 
-/** Допустимый диапазон payout % (валидация) */
+/** Allowed payout % range for admin validation */
 export const PAYOUT_MIN = 60;
 export const PAYOUT_MAX = 90;
 
-/** Базовый таймфрейм 5s в миллисекундах */
-export const BASE_TIMEFRAME_MS = 5000;
+// ─── Timeframes ──────────────────────────────────────────────────────────────
 
-/** Маппинг timeframe → секунды (единый источник истины) */
+export const BASE_TIMEFRAME_MS = 5_000;
+
 export const TIMEFRAME_SECONDS: Record<Timeframe, number> = {
   '5s': 5,
   '10s': 10,
@@ -35,44 +30,49 @@ export const TIMEFRAME_SECONDS: Record<Timeframe, number> = {
   '1d': 86400,
 };
 
-/** Конвертация timeframe в миллисекунды */
 export function timeframeToMs(timeframe: Timeframe): number {
   const seconds = TIMEFRAME_SECONDS[timeframe] ?? 5;
   return seconds * 1000;
 }
 
-/** RealWebSocketHub: базовая задержка переподключения (мс) */
-export const WS_HUB_BASE_RECONNECT_DELAY_MS = 2000;
+// ─── Accounts ─────────────────────────────────────────────────────────────────
 
-/** RealWebSocketHub: максимальная задержка переподключения (мс) */
-export const WS_HUB_MAX_RECONNECT_DELAY_MS = 60000;
+export const DEMO_INITIAL_BALANCE = 10_000;
+export const DEMO_RESET_LIMIT = 1_000;
+export const DEMO_DEFAULT_CURRENCY = 'USD';
+export const REAL_DEFAULT_CURRENCY = 'UAH';
 
-/** TradeService: минимальная длительность сделки (секунды) */
+// ─── Finance (Deposit / Withdraw) ────────────────────────────────────────────
+
+export const DEPOSIT_MIN_AMOUNT = 200;
+export const DEPOSIT_MAX_AMOUNT = 1_000;
+export const WITHDRAW_MIN_AMOUNT = 200;
+export const WITHDRAW_MAX_AMOUNT = 1_000;
+export const DEFAULT_FIAT_CURRENCY = 'UAH';
+
+// ─── Session ──────────────────────────────────────────────────────────────────
+
+export const SESSION_TTL_DAYS = 30;
+
 export const TRADE_MIN_EXPIRATION_SECONDS = 5;
-
-/** TradeService: максимальная длительность сделки (секунды) */
 export const TRADE_MAX_EXPIRATION_SECONDS = 300;
-
-/** TradeService: шаг длительности сделки (секунды) */
 export const TRADE_EXPIRATION_STEP = 5;
+export const TRADE_MAX_AMOUNT = 50_000;
+export const TRADE_CLOSING_INTERVAL_MS = 1_000;
+export const TRADE_STALE_THRESHOLD_MS = 60_000;
 
-/** TradeService: дефолтный payout (80%) */
-export const TRADE_PAYOUT_PERCENTAGE = 0.8;
+// ─── File uploads ────────────────────────────────────────────────────────────
 
-/** FileStorage: максимальный размер аватара (5MB) */
 export const MAX_AVATAR_SIZE_BYTES = 5 * 1024 * 1024;
 
-/** Rate limit: максимум запросов в окне (глобальный) */
+// ─── Rate limits ─────────────────────────────────────────────────────────────
+
 export const RATE_LIMIT_MAX = 100;
+export const RATE_LIMIT_CACHE = 10_000;
 
-/** Rate limit: размер in-memory кэша */
-export const RATE_LIMIT_CACHE = 10000;
-
-/** Upload rate limits — защита от abuse */
 export const RATE_LIMIT_UPLOAD_MAX = 10;
 export const RATE_LIMIT_UPLOAD_WINDOW = '1 hour';
 
-/** Auth rate limits — защита от brute force */
 export const RATE_LIMIT_AUTH_LOGIN_MAX = 5;
 export const RATE_LIMIT_AUTH_LOGIN_WINDOW = '15 minutes';
 export const RATE_LIMIT_AUTH_REGISTER_MAX = 3;
@@ -80,17 +80,16 @@ export const RATE_LIMIT_AUTH_REGISTER_WINDOW = '1 hour';
 export const RATE_LIMIT_AUTH_2FA_MAX = 5;
 export const RATE_LIMIT_AUTH_2FA_WINDOW = '5 minutes';
 
-/** LineChart: количество точек в snapshot */
-export const LINE_CHART_SNAPSHOT_TAKE = 600;
+// ─── Line chart ──────────────────────────────────────────────────────────────
 
-/** LineChart: дефолтный limit для history */
+export const LINE_CHART_SNAPSHOT_TAKE = 600;
 export const LINE_CHART_HISTORY_LIMIT = 300;
 
-/** WebSocket: heartbeat interval (ms) - ping clients for keep-alive */
-export const WS_HEARTBEAT_INTERVAL_MS = 30000;
+// ─── WebSocket ───────────────────────────────────────────────────────────────
 
-/** WebSocket: max messages per client per second (rate limit — защита от спама) */
+export const WS_HEARTBEAT_INTERVAL_MS = 30_000;
 export const WS_RATE_LIMIT_MAX = 100;
+export const WS_RATE_LIMIT_WINDOW_MS = 1_000;
 
-/** WebSocket: rate limit window (ms) — 1 sec */
-export const WS_RATE_LIMIT_WINDOW_MS = 1000;
+export const WS_HUB_BASE_RECONNECT_DELAY_MS = 2_000;
+export const WS_HUB_MAX_RECONNECT_DELAY_MS = 60_000;

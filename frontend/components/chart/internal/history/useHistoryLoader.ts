@@ -1,28 +1,13 @@
-/**
- * useHistoryLoader - ядро FLOW G6
- * 
- * Ответственность:
- * - Загрузка истории свечей при pan влево
- * - Защита от дубликатов
- * - Управление состоянием загрузки
- * 
- * ❌ ЗАПРЕЩЕНО:
- * - render
- * - interactions
- * - viewport-логика
- * - изменение live-свечи
- * - useState
- */
-
 import { useRef } from 'react';
+import { logger } from '@/lib/logger';
 import { api } from '@/lib/api/api';
 import type { SnapshotCandle } from '../chart.types';
 import type { Viewport } from '../viewport.types';
 import type { HistoryState } from './history.types';
 
 interface UseHistoryLoaderParams {
-  getCandles: () => Array<{ startTime: number; endTime: number }>; // Только для чтения startTime/endTime (normalized)
-  getEarliestRealTime: () => number | null; // Реальный timestamp самой ранней свечи (БД) — для API ?to=
+  getCandles: () => Array<{ startTime: number; endTime: number }>;
+  getEarliestRealTime: () => number | null;
   prependCandles: (newCandles: SnapshotCandle[], timeframeMs: number) => void;
   timeframe: string; // например "5s"
   timeframeMs: number;
@@ -32,12 +17,12 @@ interface UseHistoryLoaderParams {
 interface UseHistoryLoaderReturn {
   maybeLoadMore: (viewport: Viewport) => void;
   getState: () => HistoryState;
-  reset: () => void; // FLOW T1: сброс при смене timeframe (очистка loadedRanges, hasMore)
+  reset: () => void;
 }
 
-const PRELOAD_THRESHOLD_MS = 5000; // Загружаем за 5 секунд до границы (примерно 1 свеча для 5s timeframe)
-const HISTORY_LIMIT = 200; // Количество свечей за запрос
-const MAX_CANDLES = 3000; // Максимальное количество свечей в памяти
+const PRELOAD_THRESHOLD_MS = 5000;
+const HISTORY_LIMIT = 200;
+const MAX_CANDLES = 3000;
 
 export function useHistoryLoader({
   getCandles,
@@ -50,21 +35,15 @@ export function useHistoryLoader({
   const isLoadingRef = useRef<boolean>(false);
   const hasMoreRef = useRef<boolean>(true);
   const loadedRangesRef = useRef<Set<string>>(new Set());
-  // 🔥 FIX: AbortController — отмена in-flight запросов при reset/смене таймфрейма
   const abortControllerRef = useRef<AbortController | null>(null);
-  // Минимальный throttle — не чаще 1 вызова в 50ms (смягчает спайки при быстром pan)
   const lastCallTimeRef = useRef<number>(0);
 
-  /** FLOW P: всегда брать текущий инструмент при запросе — колбэк pan может быть из старого рендера */
   const assetRef = useRef(asset);
   assetRef.current = asset;
 
   const timeframeRef = useRef(timeframe);
   timeframeRef.current = timeframe;
 
-  /**
-   * Получить текущее состояние
-   */
   const getState = (): HistoryState => {
     return {
       isLoading: isLoadingRef.current,
@@ -72,11 +51,7 @@ export function useHistoryLoader({
     };
   };
 
-  /**
-   * Внутренняя реализация загрузки истории
-   */
   const doLoadMore = async (viewport: Viewport): Promise<void> => {
-    // Если уже загружается или нет больше данных
     if (isLoadingRef.current || !hasMoreRef.current) {
       return;
     }
@@ -86,25 +61,23 @@ export function useHistoryLoader({
       return;
     }
 
-    // Реальный timestamp самой ранней свечи (БД) — API использует реальные timestamps
     const toTime = getEarliestRealTime();
     if (toTime === null) {
       return;
     }
 
-    // Находим самую раннюю свечу (normalized) для проверки «близко к левой границе»
+    // Find earliest normalized candle to check proximity to left viewport edge
     const earliestCandle = candles.reduce((earliest, candle) => {
       return candle.startTime < earliest.startTime ? candle : earliest;
     }, candles[0]);
     const earliestTime = earliestCandle.startTime;
 
-    // Загружаем, если viewport.timeStart близко к earliestTime (normalized)
     const timeToEarliest = viewport.timeStart - earliestTime;
     if (timeToEarliest > PRELOAD_THRESHOLD_MS) {
-      return; // Еще рано загружать
+      return;
     }
 
-    // FLOW P: instrument из ref — колбэк pan/zoom в useChartInteractions с deps [] даёт stale closure
+    // Use ref to avoid stale closure from interaction callbacks
     const currentInstrument = assetRef.current;
     const rangeKey = `${currentInstrument}-${toTime}-${HISTORY_LIMIT}`;
     if (loadedRangesRef.current.has(rangeKey)) {
@@ -113,8 +86,11 @@ export function useHistoryLoader({
 
     isLoadingRef.current = true;
     loadedRangesRef.current.add(rangeKey);
+    if (loadedRangesRef.current.size > 500) {
+      const entries = [...loadedRangesRef.current];
+      loadedRangesRef.current = new Set(entries.slice(-250));
+    }
 
-    // 🔥 FIX: Отменяем предыдущий in-flight запрос и создаём новый AbortController
     abortControllerRef.current?.abort();
     const controller = new AbortController();
     abortControllerRef.current = controller;
@@ -122,10 +98,7 @@ export function useHistoryLoader({
     try {
       const url = `/api/quotes/candles?instrument=${encodeURIComponent(currentInstrument)}&timeframe=${encodeURIComponent(timeframeRef.current)}&to=${toTime}&limit=${HISTORY_LIMIT}`;
 
-      // Формат ответа: { items: SnapshotCandle[] } или SnapshotCandle[]
       const response = await api<{ items: SnapshotCandle[] } | SnapshotCandle[]>(url, { signal: controller.signal });
-      
-      // Нормализуем формат ответа
       let items: SnapshotCandle[];
       if (Array.isArray(response)) {
         items = response;
@@ -135,20 +108,22 @@ export function useHistoryLoader({
         items = [];
       }
 
+      // Discard stale response if instrument changed during fetch
+      if (assetRef.current !== currentInstrument) {
+        isLoadingRef.current = false;
+        return;
+      }
+
       if (!items || items.length === 0) {
-        // Нет больше данных
         hasMoreRef.current = false;
         isLoadingRef.current = false;
         return;
       }
 
-      // Сортируем по времени (от старых к новым)
       const sortedCandles = [...items].sort(
         (a, b) => a.startTime - b.startTime
       );
 
-      // Дедуп по startTime выполняется в useChartData.prependCandles (realStartTimesRef)
-      // Prepend в data layer
       prependCandles(sortedCandles, timeframeMs);
 
       // Если пришло меньше limit → больше нет данных
@@ -158,19 +133,16 @@ export function useHistoryLoader({
 
       isLoadingRef.current = false;
     } catch (error) {
-      // 🔥 FIX: Игнорируем отменённые запросы (AbortController)
       if (error instanceof DOMException && error.name === 'AbortError') {
         return;
       }
-      console.error('Failed to load history:', error);
+      logger.error('Failed to load history:', error);
       isLoadingRef.current = false;
-      // 🔥 FIX: Удаляем rangeKey при ошибке — иначе повторная загрузка заблокирована навсегда
       loadedRangesRef.current.delete(rangeKey);
-      // Не помечаем hasMore = false, чтобы можно было повторить
     }
   };
 
-  const THROTTLE_MS = 50; // Капелька задержки — не чаще 1 вызова в 50ms
+  const THROTTLE_MS = 50;
   const maybeLoadMore = (viewport: Viewport): void => {
     const now = performance.now();
     if (now - lastCallTimeRef.current < THROTTLE_MS) return;
@@ -179,7 +151,6 @@ export function useHistoryLoader({
   };
 
   const reset = (): void => {
-    // 🔥 FIX: Отменяем in-flight HTTP запрос при reset (смена таймфрейма/инструмента)
     abortControllerRef.current?.abort();
     abortControllerRef.current = null;
     loadedRangesRef.current = new Set();

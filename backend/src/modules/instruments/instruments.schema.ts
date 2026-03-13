@@ -1,8 +1,3 @@
-/**
- * Instruments request/response schemas for Fastify
- * 🔥 FLOW I-PAYOUT: Добавлен payoutPercent
- */
-
 export const getInstrumentsSchema = {
   response: {
     200: {

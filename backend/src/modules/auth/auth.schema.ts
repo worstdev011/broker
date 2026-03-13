@@ -1,21 +1,10 @@
-/**
- * Auth request/response schemas for Fastify
- */
-
 export const registerSchema = {
   body: {
     type: 'object',
     required: ['email', 'password'],
     properties: {
-      email: {
-        type: 'string',
-        format: 'email',
-      },
-      password: {
-        type: 'string',
-        minLength: 8,
-        description: 'Min 8 chars, at least 1 uppercase, 1 lowercase, 1 number',
-      },
+      email: { type: 'string', format: 'email' },
+      password: { type: 'string', minLength: 8 },
     },
   },
 } as const;
@@ -25,13 +14,8 @@ export const loginSchema = {
     type: 'object',
     required: ['email', 'password'],
     properties: {
-      email: {
-        type: 'string',
-        format: 'email',
-      },
-      password: {
-        type: 'string',
-      },
+      email: { type: 'string', format: 'email' },
+      password: { type: 'string' },
     },
   },
 } as const;
@@ -44,6 +28,4 @@ export const logoutSchema = {
   },
 } as const;
 
-export const meSchema = {
-  // No body required
-} as const;
+export const meSchema = {} as const;

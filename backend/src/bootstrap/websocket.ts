@@ -1,7 +1,3 @@
-/**
- * WebSocket bootstrap - WebSocket server initialization
- */
-
 import type { FastifyInstance } from 'fastify';
 import fastifyWebsocket from '@fastify/websocket';
 import { registerWebSocketRoutes, getWebSocketManager } from '../modules/websocket/websocket.routes.js';
@@ -18,24 +14,19 @@ export async function initWebSocket(app: FastifyInstance): Promise<void> {
   logger.info('Initializing WebSocket server...');
 
   try {
-    // Register WebSocket plugin with compression
     await app.register(fastifyWebsocket, {
       options: {
-        perMessageDeflate: true,
-        maxPayload: 64 * 1024, // 64KB max message size
+        maxPayload: 64 * 1024,
       },
     });
 
-    // Register WebSocket routes
     await registerWebSocketRoutes(app);
-
-    // Start heartbeat for keep-alive (ping clients every 30s)
     getWebSocketManager().startHeartbeat();
 
     wsInitialized = true;
-    logger.info('✅ WebSocket server initialized successfully');
+    logger.info('WebSocket server initialized');
   } catch (error) {
-    logger.error('❌ Failed to initialize WebSocket server:', error);
+    logger.error({ err: error }, 'Failed to initialize WebSocket server');
     throw error;
   }
 }

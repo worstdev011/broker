@@ -1,7 +1,3 @@
-/**
- * Domain types for Accounts
- */
-
 export enum AccountType {
   DEMO = 'demo',
   REAL = 'real',
@@ -11,7 +7,7 @@ export interface Account {
   id: string;
   userId: string;
   type: AccountType;
-  balance: number; // Decimal as number for domain
+  balance: number;
   currency: string;
   isActive: boolean;
   createdAt: Date;
@@ -25,7 +21,7 @@ export interface CreateAccountInput {
 export interface AccountDTO {
   id: string;
   type: AccountType;
-  balance: string; // Decimal as string for API
+  balance: string;
   currency: string;
   isActive: boolean;
 }

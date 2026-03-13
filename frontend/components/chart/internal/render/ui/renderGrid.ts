@@ -6,6 +6,8 @@
  */
 
 import type { TimePriceViewport } from './viewport.types';
+import { getChartSettings } from '@/lib/chartSettings';
+import { GRID_COLOR, GRID_LINE_WIDTH, TIME_AXIS_HEIGHT } from '../../chartTheme';
 
 interface RenderGridParams {
   ctx: CanvasRenderingContext2D;
@@ -15,9 +17,6 @@ interface RenderGridParams {
   /** Опциональный timeframeMs для свечного графика (для вертикальных линий) */
   timeframeMs?: number;
 }
-
-const GRID_COLOR = 'rgba(255, 255, 255, 0.07)';
-const GRID_LINE_WIDTH = 1;
 
 /**
  * Конвертирует время в X координату
@@ -46,6 +45,9 @@ export function renderGrid({
   height,
   timeframeMs,
 }: RenderGridParams): void {
+  const settings = getChartSettings();
+  if (!settings.showGrid) return;
+
   ctx.save();
   ctx.strokeStyle = GRID_COLOR;
   ctx.lineWidth = GRID_LINE_WIDTH;
@@ -59,9 +61,11 @@ export function renderGrid({
     return;
   }
 
-  // Вертикальные линии (время) - используем тот же алгоритм что у свечного графика
+  const gridHeight = height - TIME_AXIS_HEIGHT;
+
+  // Вертикальные линии (время)
   if (timeRange > 0) {
-    const MIN_LABEL_SPACING = 60; // Минимальное расстояние между метками в пикселях
+    const MIN_LABEL_SPACING = 60;
     const targetLabels = Math.floor(width / MIN_LABEL_SPACING);
     
     let timeStep: number;
@@ -70,7 +74,6 @@ export function renderGrid({
     } else {
       const timePerLabel = timeRange / targetLabels;
       
-      // Используем ту же логику что и в renderAxes для синхронизации
       if (timePerLabel < 1000) {
         timeStep = Math.ceil(timePerLabel / 1000) * 1000;
       } else if (timePerLabel < 60000) {
@@ -85,7 +88,6 @@ export function renderGrid({
       }
     }
     
-    // Если передан timeframeMs, используем его для выравнивания (для свечного графика)
     if (timeframeMs && timeframeMs > 0) {
       timeStep = Math.max(timeStep, timeframeMs);
     }
@@ -93,24 +95,24 @@ export function renderGrid({
     const startTime = Math.ceil(timeStart / timeStep) * timeStep;
     
     ctx.beginPath();
-    for (let time = startTime; time <= timeEnd; time += timeStep) {
+    let vCount = 0;
+    for (let time = startTime; time <= timeEnd && vCount < 200; time += timeStep, vCount++) {
       const rx = Math.round(timeToX(time, viewport, width)) + 0.5;
       if (rx >= 0 && rx <= width) {
         ctx.moveTo(rx, 0);
-        ctx.lineTo(rx, height);
+        ctx.lineTo(rx, gridHeight);
       }
     }
     ctx.stroke();
   }
 
-  // Горизонтальные линии (цена) - используем тот же алгоритм что у свечного графика
+  // Горизонтальные линии (цена)
   if (priceRange > 0) {
-    const targetSteps = 10; // Целевое количество шагов
+    const targetSteps = 10;
     const pixelsPerStep = height / targetSteps;
     const pricePerPixel = priceRange / height;
     const priceStepRaw = pixelsPerStep * pricePerPixel;
 
-    // Округляем до "красивых" значений
     const magnitude = Math.pow(10, Math.floor(Math.log10(priceStepRaw)));
     const normalized = priceStepRaw / magnitude;
 
@@ -124,9 +126,10 @@ export function renderGrid({
     const startPrice = Math.ceil(priceMin / priceStep) * priceStep;
     
     ctx.beginPath();
-    for (let price = startPrice; price <= priceMax; price += priceStep) {
+    let hCount = 0;
+    for (let price = startPrice; price <= priceMax && hCount < 200; price += priceStep, hCount++) {
       const ry = Math.round(priceToY(price, viewport, height)) + 0.5;
-      if (ry >= 0 && ry <= height) {
+      if (ry >= 0 && ry <= gridHeight) {
         ctx.moveTo(0, ry);
         ctx.lineTo(width, ry);
       }

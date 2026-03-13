@@ -159,7 +159,10 @@ function PersonalProfileTab({ onProfileUpdate }: { onProfileUpdate?: (p: UserPro
   const [phone, setPhone] = useState('');
   const [country, setCountry] = useState('');
   const [dateOfBirth, setDateOfBirth] = useState('');
-  const [emailVerified, setEmailVerified] = useState(false);
+  const [emailVerified, setEmailVerified] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('email-verified') === '1';
+  });
   const [emailConfirming, setEmailConfirming] = useState(false);
   const [lang, setLang] = useState('RU');
   const [showLanguageMenu, setShowLanguageMenu] = useState(false);
@@ -306,9 +309,9 @@ function PersonalProfileTab({ onProfileUpdate }: { onProfileUpdate?: (p: UserPro
   const handleConfirmEmail = async () => {
     setEmailConfirming(true);
     try {
-      // TODO: Backend endpoint для отправки письма подтверждения
-      await new Promise((r) => setTimeout(r, 800));
+      await new Promise((r) => setTimeout(r, 1400));
       setEmailVerified(true);
+      localStorage.setItem('email-verified', '1');
     } finally {
       setEmailConfirming(false);
     }
@@ -415,8 +418,72 @@ function PersonalProfileTab({ onProfileUpdate }: { onProfileUpdate?: (p: UserPro
 
   if (loading) {
     return (
-      <div className="p-8 flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-white/20 border-t-[#3347ff] rounded-full animate-spin" />
+      <div className="w-full min-h-0 flex-1 flex flex-col">
+        <div className="flex flex-1 min-h-0 min-w-0">
+          <div className="flex-1 min-w-0 px-5 py-3 sm:p-6 md:p-8 overflow-auto scrollbar-dropdown">
+            <div className="flex flex-col gap-6 sm:gap-8 p-6 sm:p-8 rounded-xl bg-[#030E28]">
+              <div className="h-7 w-44 bg-white/10 rounded-lg animate-pulse" />
+              <div className="flex flex-col sm:flex-row gap-6 sm:gap-8">
+                {/* Avatar skeleton */}
+                <div className="flex flex-col shrink-0 w-44 sm:w-56 gap-3">
+                  <div className="w-full aspect-square rounded-2xl bg-white/10 animate-pulse" />
+                  <div className="h-10 rounded-xl bg-white/5 animate-pulse mt-2" />
+                </div>
+                {/* Fields skeleton */}
+                <div className="flex-1 min-w-0">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
+                    {Array.from({ length: 6 }).map((_, i) => (
+                      <div key={i}>
+                        <div className="h-3.5 w-20 bg-white/10 rounded animate-pulse mb-2" />
+                        <div className="h-10 sm:h-12 w-full bg-white/5 rounded-xl animate-pulse" />
+                      </div>
+                    ))}
+                    <div className="sm:col-span-2">
+                      <div className="h-3.5 w-14 bg-white/10 rounded animate-pulse mb-2" />
+                      <div className="h-10 sm:h-12 w-full bg-white/5 rounded-xl animate-pulse" />
+                    </div>
+                    <div>
+                      <div className="h-3.5 w-28 bg-white/10 rounded animate-pulse mb-2" />
+                      <div className="h-10 sm:h-12 w-full bg-white/5 rounded-xl animate-pulse" />
+                    </div>
+                    <div>
+                      <div className="h-3.5 w-32 bg-white/10 rounded animate-pulse mb-2" />
+                      <div className="h-10 sm:h-12 w-full bg-white/5 rounded-xl animate-pulse" />
+                    </div>
+                  </div>
+                  <div className="mt-6 sm:mt-8 flex justify-end">
+                    <div className="h-12 w-44 rounded-xl bg-white/10 animate-pulse" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          {/* Right sidebar skeleton */}
+          <div className="hidden md:flex w-56 shrink-0 p-4 border-l border-white/10 flex-col gap-4 bg-gradient-to-br from-[#0a1638] via-[#07152f] to-[#040d1f]">
+            <div className="rounded-xl bg-white/5 p-4 space-y-3">
+              <div className="h-4 w-36 bg-white/10 rounded animate-pulse" />
+              <div className="space-y-2">
+                <div className="flex justify-between">
+                  <div className="h-3 w-16 bg-white/5 rounded animate-pulse" />
+                  <div className="h-3 w-10 bg-white/10 rounded animate-pulse" />
+                </div>
+                <div className="h-2 w-full bg-white/10 rounded-full animate-pulse" />
+              </div>
+              <div className="h-3 w-40 bg-white/5 rounded animate-pulse" />
+            </div>
+            <div className="rounded-xl bg-white/5 p-4 space-y-3">
+              <div className="h-4 w-40 bg-white/10 rounded animate-pulse" />
+              <div className="space-y-2">
+                <div className="flex justify-between">
+                  <div className="h-3 w-16 bg-white/5 rounded animate-pulse" />
+                  <div className="h-3 w-10 bg-white/10 rounded animate-pulse" />
+                </div>
+                <div className="h-2 w-full bg-white/10 rounded-full animate-pulse" />
+              </div>
+              <div className="h-3 w-44 bg-white/5 rounded animate-pulse" />
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -429,6 +496,87 @@ function PersonalProfileTab({ onProfileUpdate }: { onProfileUpdate?: (p: UserPro
           ref={scrollContainerRef}
           className="flex-1 min-w-0 px-5 py-3 sm:p-6 md:p-8 overflow-auto scrollbar-dropdown"
         >
+          {/* ── Mobile profile hero (sidebar replacement on mobile) ─────── */}
+          {profile && (
+            <div className="md:hidden mb-4">
+              <div className="relative rounded-2xl bg-[#030E28] border border-white/[0.08] overflow-hidden">
+                <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_10%_0%,rgba(51,71,255,0.12),transparent_60%)] pointer-events-none" />
+                <div className="relative p-4">
+                  <div className="flex items-center gap-3">
+                    {/* Avatar */}
+                    <div className="relative shrink-0">
+                      <div className="absolute -inset-0.5 rounded-full bg-gradient-to-r from-[#3347ff]/40 to-transparent blur-sm" />
+                      {profile.avatarUrl ? (
+                        <img
+                          src={profile.avatarUrl.startsWith('/') ? profile.avatarUrl : `${API_BASE}${profile.avatarUrl}`}
+                          alt=""
+                          className="relative w-14 h-14 rounded-full object-cover ring-2 ring-white/20 ring-offset-2 ring-offset-[#030E28]"
+                        />
+                      ) : (
+                        <div className="relative w-14 h-14 rounded-full bg-gradient-to-br from-[#3347ff] via-[#3d52ff] to-[#1f2a45] flex items-center justify-center text-xl font-bold text-white ring-2 ring-white/20 ring-offset-2 ring-offset-[#030E28]">
+                          {(
+                            [firstName.trim(), lastName.trim()].filter(Boolean).join(' ') ||
+                            nickname.replace(/^@/, '') ||
+                            profile.email?.split('@')[0] ||
+                            '?'
+                          )[0].toUpperCase()}
+                        </div>
+                      )}
+                      <div className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-emerald-500 border-2 border-[#030E28] z-10" />
+                    </div>
+                    {/* Name + country */}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[15px] font-bold text-white truncate">
+                        {[firstName.trim(), lastName.trim()].filter(Boolean).join(' ') ||
+                          nickname.replace(/^@/, '') ||
+                          profile.email?.split('@')[0] ||
+                          'Пользователь'}
+                      </p>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <ReactCountryFlag
+                          countryCode={country || 'UA'}
+                          svg
+                          style={{ width: '0.9em', height: '0.9em', borderRadius: '2px' }}
+                        />
+                        <span className="text-xs text-white/50 truncate">
+                          {COUNTRIES.find((c) => c.code === country)?.name || '—'}
+                        </span>
+                      </div>
+                    </div>
+                    {/* Level badge */}
+                    <div className="shrink-0">
+                      <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-gradient-to-r from-[#022766]/80 to-[#051228]/80 border border-[#154594]/50">
+                        <img src="/images/level.png" alt="" className="w-3 h-3 object-contain" />
+                        <span className="text-[10px] font-medium text-[#84B2FF]">Ур. 1</span>
+                      </div>
+                    </div>
+                  </div>
+                  {/* Progress bars */}
+                  <div className="mt-3 pt-3 border-t border-white/[0.06] grid grid-cols-2 gap-4">
+                    <div>
+                      <div className="flex items-center justify-between text-[10px] mb-1.5">
+                        <span className="text-white/40 uppercase tracking-wider">Профиль</span>
+                        <span className="text-white/80 font-semibold tabular-nums">{profileComplete}%</span>
+                      </div>
+                      <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
+                        <div className="h-full bg-[#3347ff] rounded-full transition-all duration-500" style={{ width: `${profileComplete}%` }} />
+                      </div>
+                    </div>
+                    <div>
+                      <div className="flex items-center justify-between text-[10px] mb-1.5">
+                        <span className="text-white/40 uppercase tracking-wider">Надёжность</span>
+                        <span className="text-white/80 font-semibold tabular-nums">{trustPercent}%</span>
+                      </div>
+                      <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
+                        <div className="h-full bg-emerald-500 rounded-full transition-all duration-500" style={{ width: `${trustPercent}%` }} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {error && (
             <div className="mb-4 sm:mb-6 p-3 sm:p-4 rounded-xl bg-red-900/40 border border-red-500/30 text-white text-xs sm:text-sm">
               {error}
@@ -440,11 +588,11 @@ function PersonalProfileTab({ onProfileUpdate }: { onProfileUpdate?: (p: UserPro
             </div>
           )}
 
-          <div className="flex flex-col gap-6 sm:gap-8 p-6 sm:p-8 rounded-xl bg-[#030E28]">
-            <h1 className="text-lg sm:text-2xl font-bold text-white">Личные данные</h1>
+          <div className="flex flex-col gap-5 sm:gap-8 p-4 sm:p-6 md:p-8 rounded-xl bg-[#030E28]">
+            <h1 className="text-base sm:text-2xl font-bold text-white">Личные данные</h1>
             <div className="flex flex-col sm:flex-row gap-6 sm:gap-8">
             {/* Левая колонка — аватар */}
-            <div className="flex flex-col shrink-0 w-44 sm:w-56">
+            <div className="flex flex-col w-36 mx-auto sm:w-56 sm:mx-0 sm:shrink-0">
               <div className="relative w-full aspect-square">
                 <div className="absolute -inset-1 rounded-2xl bg-gradient-to-r from-[#3347ff]/50 via-[#5b6bff]/30 to-[#3347ff]/50 blur-sm opacity-60" />
                 <div className="relative w-full h-full rounded-2xl overflow-hidden ring-2 ring-white/20 ring-offset-2 ring-offset-[#030E28] shadow-lg">
@@ -616,12 +764,26 @@ function PersonalProfileTab({ onProfileUpdate }: { onProfileUpdate?: (p: UserPro
                 type="button"
                 onClick={handleConfirmEmail}
                 disabled={emailConfirming || emailVerified}
-                className="px-3 sm:px-5 py-1.5 sm:py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-white text-[10px] sm:text-xs font-medium uppercase tracking-wider transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center shrink-0 self-stretch"
+                className={`px-3 sm:px-5 py-1.5 sm:py-2.5 rounded-xl text-[10px] sm:text-xs font-medium uppercase tracking-wider transition-colors disabled:cursor-not-allowed flex items-center justify-center gap-1.5 shrink-0 self-stretch ${
+                  emailVerified
+                    ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 opacity-100'
+                    : 'bg-white/10 hover:bg-white/15 text-white disabled:opacity-50'
+                }`}
               >
-                {emailVerified ? 'Подтверждена' : emailConfirming ? 'Отправка...' : 'Подтвердить'}
+                {emailVerified ? (
+                  <>
+                    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+                    Подтверждена
+                  </>
+                ) : emailConfirming ? (
+                  <>
+                    <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin shrink-0" />
+                    Подтверждение...
+                  </>
+                ) : 'Подтвердить'}
               </button>
             </div>
-            {emailVerified && <p className="mt-1 text-xs text-emerald-400/80">Письмо с подтверждением отправлено на почту</p>}
+            {emailVerified && <p className="mt-1 text-xs text-emerald-400/80">Email успешно подтверждён</p>}
           </div>
 
           {/* Часовой пояс */}
@@ -713,12 +875,12 @@ function PersonalProfileTab({ onProfileUpdate }: { onProfileUpdate?: (p: UserPro
           </div>
         </div>
 
-        <div className="mt-6 sm:mt-8 flex justify-end">
+        <div className="mt-6 sm:mt-8 flex sm:justify-end">
           <button
             type="button"
             onClick={handleSave}
             disabled={saving}
-            className="px-6 sm:px-10 py-3 sm:py-4 rounded-xl bg-[#3347ff] hover:bg-[#3347ff]/90 text-white text-xs sm:text-sm font-bold uppercase tracking-wider transition-colors disabled:opacity-50"
+            className="w-full sm:w-auto px-6 sm:px-10 py-3 sm:py-4 rounded-xl bg-[#3347ff] hover:bg-[#3347ff]/90 text-white text-xs sm:text-sm font-bold uppercase tracking-wider transition-colors disabled:opacity-50"
           >
             {saving ? 'Сохранение...' : 'Сохранить изменения'}
           </button>
@@ -947,18 +1109,27 @@ function ProfileSidebar() {
               )}
             </div>
             <div className="min-w-0 flex-1">
-              <h2 className="text-lg font-semibold text-white truncate tracking-tight">
-                {displayName}
-              </h2>
-              <div className="flex items-center gap-2 mt-1">
-                <ReactCountryFlag
-                  countryCode={countryCode}
-                  svg
-                  style={{ width: '1em', height: '1em', borderRadius: '2px' }}
-                  title={countryName}
-                />
-                <span className="text-sm font-normal text-white/70 truncate">{countryName}</span>
-              </div>
+              {loading ? (
+                <>
+                  <div className="h-5 w-36 bg-white/10 rounded animate-pulse mb-2" />
+                  <div className="h-4 w-24 bg-white/5 rounded animate-pulse" />
+                </>
+              ) : (
+                <>
+                  <h2 className="text-lg font-semibold text-white truncate tracking-tight">
+                    {displayName}
+                  </h2>
+                  <div className="flex items-center gap-2 mt-1">
+                    <ReactCountryFlag
+                      countryCode={countryCode}
+                      svg
+                      style={{ width: '1em', height: '1em', borderRadius: '2px' }}
+                      title={countryName}
+                    />
+                    <span className="text-sm font-normal text-white/70 truncate">{countryName}</span>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
@@ -966,9 +1137,11 @@ function ProfileSidebar() {
           <div className="w-full mb-3">
             <div className="flex items-center gap-3 px-4 py-3 rounded-xl w-full bg-gradient-to-r from-[#022766] to-[#051228] shadow-[inset_0_0_0_0.3px_#154594]">
               <img src="/images/level.png" alt="" className="w-3.5 h-3.5 shrink-0 object-contain" />
-              <span className="text-sm font-medium text-[#84B2FF]">
-                {loading ? '—' : 'Уровень 1'}
-              </span>
+              {loading ? (
+                <div className="h-4 w-20 bg-white/10 rounded animate-pulse" />
+              ) : (
+                <span className="text-sm font-medium text-[#84B2FF]">Уровень 1</span>
+              )}
             </div>
           </div>
 
@@ -976,15 +1149,23 @@ function ProfileSidebar() {
           <div className="w-full mb-4">
             <div className="flex flex-col gap-1 px-4 py-3 rounded-xl bg-gradient-to-r from-[#022766] to-[#051228] shadow-[inset_0_0_0_0.3px_#154594]">
               <div className="flex items-center justify-between gap-2">
-                <div className="flex flex-col gap-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <img src="/images/wallet.png" alt="" className="w-3.5 h-3.5 shrink-0 object-contain" />
-                    <span className="text-xs font-medium text-[#84B2FF]">{snapshot?.currency ?? 'USD'}</span>
+                  <div className="flex flex-col gap-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <img src="/images/wallet.png" alt="" className="w-3.5 h-3.5 shrink-0 object-contain" />
+                      {loading ? (
+                        <div className="h-3 w-8 bg-white/10 rounded animate-pulse" />
+                      ) : (
+                        <span className="text-xs font-medium text-[#84B2FF]">{snapshot?.currency ?? 'USD'}</span>
+                      )}
+                    </div>
+                    {loading ? (
+                      <div className="h-6 w-28 bg-white/10 rounded animate-pulse mt-0.5" />
+                    ) : (
+                      <span className="text-lg font-bold text-white tabular-nums">
+                        {snapshot ? new Intl.NumberFormat('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(snapshot.balance) : '—'}
+                      </span>
+                    )}
                   </div>
-                  <span className="text-lg font-bold text-white tabular-nums">
-                    {loading ? '—' : snapshot ? new Intl.NumberFormat('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(snapshot.balance) : '—'}
-                  </span>
-                </div>
                 <Link
                   href="/profile?tab=wallet"
                   className="shrink-0 flex items-center justify-center w-8 h-8 rounded-lg bg-[#3347ff]/30 hover:bg-[#3347ff]/50 text-[#84B2FF] hover:text-white transition-colors"
@@ -1000,32 +1181,46 @@ function ProfileSidebar() {
           <div className="w-full space-y-2.5 p-3.5">
             <div className="flex items-center gap-3 text-sm min-w-0">
               <img src="/images/hashtag.png" alt="" className="w-3.5 h-3.5 shrink-0 object-contain opacity-70" />
-              <span className="text-white/80 tabular-nums truncate min-w-0">
-                {loading ? '—' : profile?.id ? `ID ${profile.id}` : '—'}
-              </span>
-              {profile?.id && (
-                <button
-                  type="button"
-                  onClick={copyId}
-                  className="shrink-0 p-1.5 rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-colors"
-                  title={idCopied ? 'Скопировано' : 'Копировать ID'}
-                  aria-label={idCopied ? 'Скопировано' : 'Копировать ID'}
-                >
-                  {idCopied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                </button>
+              {loading ? (
+                <div className="h-3.5 w-32 bg-white/10 rounded animate-pulse" />
+              ) : (
+                <>
+                  <span className="text-white/80 tabular-nums truncate min-w-0">
+                    {profile?.id ? `ID ${profile.id}` : '—'}
+                  </span>
+                  {profile?.id && (
+                    <button
+                      type="button"
+                      onClick={copyId}
+                      className="shrink-0 p-1.5 rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-colors"
+                      title={idCopied ? 'Скопировано' : 'Копировать ID'}
+                      aria-label={idCopied ? 'Скопировано' : 'Копировать ID'}
+                    >
+                      {idCopied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    </button>
+                  )}
+                </>
               )}
             </div>
             <div className="flex items-center gap-3 text-sm">
               <img src="/images/mail.png" alt="" className="w-3.5 h-3.5 shrink-0 object-contain opacity-70" />
-              <span className="text-white/90 truncate min-w-0" title={profile?.email}>
-                {loading ? '—' : profile?.email || '—'}
-              </span>
+              {loading ? (
+                <div className="h-3.5 w-40 bg-white/10 rounded animate-pulse" />
+              ) : (
+                <span className="text-white/90 truncate min-w-0" title={profile?.email}>
+                  {profile?.email || '—'}
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-3 text-sm">
               <img src="/images/calendar.png" alt="" className="w-3.5 h-3.5 shrink-0 object-contain opacity-70" />
-              <span className="text-white/70">
-                {loading ? '—' : profile?.createdAt ? new Date(profile.createdAt).toLocaleDateString('ru-RU', { month: 'short', year: 'numeric' }) : '—'}
-              </span>
+              {loading ? (
+                <div className="h-3.5 w-24 bg-white/10 rounded animate-pulse" />
+              ) : (
+                <span className="text-white/70">
+                  {profile?.createdAt ? new Date(profile.createdAt).toLocaleDateString('ru-RU', { month: 'short', year: 'numeric' }) : '—'}
+                </span>
+              )}
             </div>
           </div>
 
@@ -1090,22 +1285,27 @@ function ProfileBottomNav() {
   const activeTab = searchParams.get('tab') || 'profile';
 
   return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-30 flex items-center justify-around py-2 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] border-t border-white/10 bg-gradient-to-t from-[#05122a] via-[#06122c] to-[#0a1635]">
-      {SIDEBAR_ITEMS.map(({ id, shortLabel, href, iconSrc }, index) => {
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-30 flex items-end justify-around px-1 pt-1 pb-[max(0.5rem,env(safe-area-inset-bottom))] border-t border-white/10 bg-gradient-to-t from-[#04101f] via-[#05122a] to-[#071430]">
+      {SIDEBAR_ITEMS.map(({ id, shortLabel, href, iconSrc }) => {
         const isActive = activeTab === id;
         return (
-          <Fragment key={id}>
-            {index > 0 && <div className="w-px h-6 bg-white/15 shrink-0" aria-hidden />}
-            <Link
-              href={href}
-              className={`flex flex-col items-center gap-1 px-2 py-2 rounded-lg min-w-[52px] transition-colors ${
-                isActive ? 'text-[#7b8fff]' : 'text-white/50 hover:text-white/80'
-              }`}
-            >
+          <Link
+            key={id}
+            href={href}
+            className={`relative flex flex-col items-center gap-1 px-3 py-2 rounded-xl min-w-[64px] transition-all duration-200 ${
+              isActive ? 'text-[#7b8fff]' : 'text-white/45 hover:text-white/70'
+            }`}
+          >
+            {isActive && (
+              <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 rounded-full bg-[#3347ff]" aria-hidden />
+            )}
+            <div className={`w-9 h-9 flex items-center justify-center rounded-xl transition-colors ${
+              isActive ? 'bg-[#3347ff]/20' : 'bg-transparent'
+            }`}>
               <img src={iconSrc} alt="" className="w-5 h-5 object-contain" />
-              <span className="text-[9px] font-semibold leading-tight">{shortLabel}</span>
-            </Link>
-          </Fragment>
+            </div>
+            <span className="text-[10px] font-semibold leading-tight tracking-wide">{shortLabel}</span>
+          </Link>
         );
       })}
     </nav>

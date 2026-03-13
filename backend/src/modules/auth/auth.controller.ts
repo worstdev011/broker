@@ -1,230 +1,84 @@
-/**
- * Auth controller - handles HTTP requests
- */
-
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { AuthService } from '../../domain/auth/AuthService.js';
-import type { AuthResult, AuthResult2FA } from '../../domain/auth/AuthTypes.js';
-import {
-  UserNotFoundError,
-  InvalidCredentialsError,
-  UserAlreadyExistsError,
-  SessionNotFoundError,
-  InvalidSessionError,
-} from '../../domain/auth/AuthErrors.js';
+import type { AuthResult } from '../../domain/auth/AuthTypes.js';
+import type { RegisterInput, LoginInput, Verify2FAInput } from './auth.validation.js';
+import { SessionNotFoundError, InvalidSessionError } from '../../domain/auth/AuthErrors.js';
 import { setSessionCookie, getSessionToken, clearSessionCookie } from '../../infrastructure/auth/CookieAuthAdapter.js';
-import { logger } from '../../shared/logger.js';
 
 export class AuthController {
   constructor(private authService: AuthService) {}
 
-  async register(request: FastifyRequest<{ Body: { email: string; password: string } }>, reply: FastifyReply) {
-    try {
-      const { email, password } = request.body;
-      
-      // 🔥 FLOW S1: Extract userAgent and IP address
-      const userAgent = request.headers['user-agent'] || null;
-      const ipAddress = request.ip || request.socket.remoteAddress || null;
+  async register(request: FastifyRequest<{ Body: RegisterInput }>, reply: FastifyReply) {
+    const { email, password } = request.body;
+    const userAgent = request.headers['user-agent'] ?? null;
+    const ipAddress = request.ip ?? null;
 
-      const result = await this.authService.register(
-        { email, password },
-        userAgent,
-        ipAddress,
-      );
+    const result = await this.authService.register({ email, password }, userAgent, ipAddress);
 
-      // Set cookie
-      setSessionCookie(reply, result.sessionToken);
+    setSessionCookie(reply, result.sessionToken);
+    const csrfToken = reply.generateCsrf();
 
-      const csrfToken = reply.generateCsrf();
-      return reply.status(201).send({
-        user: result.user,
-        csrfToken,
-      });
-    } catch (error) {
-      if (error instanceof UserAlreadyExistsError) {
-        return reply.status(409).send({
-          error: 'User already exists',
-          message: error.message,
-        });
-      }
-
-      logger.error('Register error:', error);
-      return reply.status(500).send({
-        error: 'Internal server error',
-      });
-    }
+    return reply.status(201).send({ user: result.user, csrfToken });
   }
 
-  async login(request: FastifyRequest<{ Body: { email: string; password: string } }>, reply: FastifyReply) {
-    try {
-      const { email, password } = request.body;
-      
-      // 🔥 FLOW S1: Extract userAgent and IP address
-      const userAgent = request.headers['user-agent'] || null;
-      const ipAddress = request.ip || request.socket.remoteAddress || null;
+  async login(request: FastifyRequest<{ Body: LoginInput }>, reply: FastifyReply) {
+    const { email, password } = request.body;
+    const userAgent = request.headers['user-agent'] ?? null;
+    const ipAddress = request.ip ?? null;
 
-      const result = await this.authService.login(
-        { email, password },
-        userAgent,
-        ipAddress,
-      );
+    const result = await this.authService.login({ email, password }, userAgent, ipAddress);
 
-      // 🔥 FLOW S3: Check if 2FA is required
-      if ('requires2FA' in result && result.requires2FA) {
-        // Don't set cookie, return tempToken for second step
-        return reply.send({
-          requires2FA: true,
-          tempToken: result.tempToken,
-        });
-      }
-
-      // Normal login - result is AuthResult here (2FA branch returned above)
-      const authResult = result as AuthResult;
-      setSessionCookie(reply, authResult.sessionToken);
-
-      const csrfToken = reply.generateCsrf();
-      return reply.send({
-        user: authResult.user,
-        csrfToken,
-      });
-    } catch (error) {
-      if (error instanceof InvalidCredentialsError) {
-        return reply.status(401).send({
-          error: 'Invalid credentials',
-          message: error.message,
-        });
-      }
-
-      logger.error('Login error:', error);
-      return reply.status(500).send({
-        error: 'Internal server error',
-      });
+    if ('requires2FA' in result && result.requires2FA) {
+      return reply.send({ requires2FA: true, tempToken: result.tempToken });
     }
+
+    const authResult = result as AuthResult;
+    setSessionCookie(reply, authResult.sessionToken);
+    const csrfToken = reply.generateCsrf();
+
+    return reply.send({ user: authResult.user, csrfToken });
   }
 
-  /**
-   * 🔥 FLOW S3: POST /api/auth/2fa
-   * Verify 2FA code and complete login
-   */
   async verifyLogin2FA(
-    request: FastifyRequest<{
-      Body: {
-        tempToken: string;
-        code: string;
-      };
-    }>,
+    request: FastifyRequest<{ Body: Verify2FAInput }>,
     reply: FastifyReply,
   ) {
-    try {
-      const { tempToken, code } = request.body;
+    const { tempToken, code } = request.body;
+    const userAgent = request.headers['user-agent'] ?? null;
+    const ipAddress = request.ip ?? null;
 
-      if (!tempToken || !code) {
-        return reply.status(400).send({
-          error: 'Missing required fields',
-          message: 'tempToken and code are required',
-        });
-      }
+    const result = await this.authService.verifyLogin2FA(tempToken, code, userAgent, ipAddress);
 
-      // 🔥 FLOW S1: Extract userAgent and IP address
-      const userAgent = request.headers['user-agent'] || null;
-      const ipAddress = request.ip || request.socket.remoteAddress || null;
+    setSessionCookie(reply, result.sessionToken);
+    const csrfToken = reply.generateCsrf();
 
-      const result = await this.authService.verifyLogin2FA(
-        tempToken,
-        code,
-        userAgent,
-        ipAddress,
-      );
-
-      // Set cookie
-      setSessionCookie(reply, result.sessionToken);
-
-      const csrfToken = reply.generateCsrf();
-      return reply.send({
-        user: result.user,
-        csrfToken,
-      });
-    } catch (error) {
-      if (error instanceof InvalidCredentialsError || error instanceof InvalidSessionError) {
-        return reply.status(401).send({
-          error: 'Invalid code or token',
-          message: error.message,
-        });
-      }
-
-      if (error instanceof UserNotFoundError) {
-        return reply.status(404).send({
-          error: 'User not found',
-          message: error.message,
-        });
-      }
-
-      logger.error('Verify login 2FA error:', error);
-      return reply.status(500).send({
-        error: 'Internal server error',
-      });
-    }
+    return reply.send({ user: result.user, csrfToken });
   }
 
   async logout(request: FastifyRequest, reply: FastifyReply) {
-    try {
-      const token = getSessionToken(request);
-      if (!token) {
-        return reply.status(401).send({
-          error: 'Not authenticated',
-        });
-      }
-
+    const token = getSessionToken(request);
+    if (token) {
       await this.authService.logout(token);
-
-      // Clear cookie
-      clearSessionCookie(reply);
-
-      return reply.send({
-        message: 'Logged out successfully',
-      });
-    } catch (error) {
-      logger.error('Logout error:', error);
-      return reply.status(500).send({
-        error: 'Internal server error',
-      });
     }
+
+    clearSessionCookie(reply);
+    return reply.send({ message: 'Logged out successfully' });
   }
 
   async me(request: FastifyRequest, reply: FastifyReply) {
+    const token = getSessionToken(request);
+    if (!token) {
+      return reply.status(401).send({ error: 'NOT_AUTHENTICATED', message: 'Not authenticated' });
+    }
+
     try {
-      const token = getSessionToken(request);
-      if (!token) {
-        return reply.status(401).send({
-          error: 'Not authenticated',
-        });
-      }
-
       const user = await this.authService.getMe(token);
-
-      return reply.send({
-        user,
-      });
+      return reply.send({ user });
     } catch (error) {
       if (error instanceof SessionNotFoundError || error instanceof InvalidSessionError) {
         clearSessionCookie(reply);
-        return reply.status(401).send({
-          error: 'Invalid or expired session',
-          message: error.message,
-        });
       }
-
-      if (error instanceof UserNotFoundError) {
-        return reply.status(404).send({
-          error: 'User not found',
-          message: error.message,
-        });
-      }
-
-      logger.error('Get me error:', error);
-      return reply.status(500).send({
-        error: 'Internal server error',
-      });
+      throw error;
     }
   }
 }

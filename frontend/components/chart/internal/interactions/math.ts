@@ -130,6 +130,8 @@ export function zoomViewportTime({
   timeframeMs,
 }: ZoomViewportTimeParams): Viewport {
   const currentTimeRange = viewport.timeEnd - viewport.timeStart;
+  if (currentTimeRange <= 0) return { ...viewport };
+
   const newTimeRange = currentTimeRange * zoomFactor;
 
   // Ограничиваем диапазон

@@ -1,33 +1,20 @@
-/**
- * FLOW P1 — Instrument config
- *
- * id = instrument key (EURUSD_OTC, GBPUSD_REAL, …).
- * digits = precision for price display.
- * Engine params = initialPrice, bounds, volatility, tickInterval for OTC engine.
- * 
- * FLOW R2: Поддержка real-источника котировок
- */
-
 import type { Instrument } from '../domain/instruments/InstrumentTypes.js';
 import type { PriceConfig } from '../prices/PriceTypes.js';
 import type { PriceSource } from '../prices/types/PriceSource.js';
 
 export interface InstrumentConfig extends Instrument {
-  /** Источник котировок: 'otc' (генерируются) или 'real' (внешний источник) */
   source: PriceSource;
-  
-  /** Engine params for OTC price generator (только для source='otc') */
+  /** OTC price generator params (only for source='otc') */
   engine?: Omit<PriceConfig, 'asset'> & { asset: string };
-  
-  /** Конфигурация для real-источника (только для source='real') */
+  /** External price source config (only for source='real') */
   real?: {
     provider: 'xchange';
-    symbol: string; // 'EUR/USD' - унифицированный торговый символ (для внутренней логики)
-    pair: string; // 'EURUSD' - для внешнего API (xchangeapi)
+    symbol: string;
+    pair: string;
   };
 }
 
-const forex = (
+function forex(
   id: string,
   base: string,
   quote: string,
@@ -35,40 +22,41 @@ const forex = (
   initialPrice: number,
   minPrice: number,
   maxPrice: number,
-): InstrumentConfig => ({
-  id,
-  base,
-  quote,
-  digits,
-  source: 'otc', // FLOW R2: Явно указываем источник
-  engine: {
-    asset: `${base}/${quote}`, // symbol для OTC
-    initialPrice,
-    minPrice,
-    maxPrice,
-    volatility: 0.0002,
-    tickInterval: 500,
-  },
-});
-
-/**
- * Хелпер для создания унифицированного symbol из base и quote
- * Всегда формат: BASE/QUOTE (например, EUR/USD, GBP/JPY)
- */
-function getSymbol(base: string, quote: string): string {
-  return `${base}/${quote}`;
+): InstrumentConfig {
+  return {
+    id,
+    base,
+    quote,
+    digits,
+    source: 'otc',
+    engine: {
+      asset: `${base}/${quote}`,
+      initialPrice,
+      minPrice,
+      maxPrice,
+      volatility: 0.0002,
+      tickInterval: 500,
+    },
+  };
 }
 
-/**
- * Хелпер для создания pair для внешнего API из base и quote
- * Всегда формат: BASEQUOTE (например, EURUSD, GBPJPY)
- */
-function getPair(base: string, quote: string): string {
-  return `${base}${quote}`;
+function realForex(id: string, base: string, quote: string, digits: number): InstrumentConfig {
+  return {
+    id,
+    base,
+    quote,
+    digits,
+    source: 'real',
+    real: {
+      provider: 'xchange',
+      symbol: `${base}/${quote}`,
+      pair: `${base}${quote}`,
+    },
+  };
 }
 
 export const INSTRUMENTS: Record<string, InstrumentConfig> = {
-  // OTC pairs (суффикс _OTC)
+  // OTC pairs
   EURUSD_OTC: forex('EURUSD_OTC', 'EUR', 'USD', 5, 1.08, 0.95, 1.25),
   GBPUSD_OTC: forex('GBPUSD_OTC', 'GBP', 'USD', 5, 1.27, 1.0, 1.5),
   USDCAD_OTC: forex('USDCAD_OTC', 'USD', 'CAD', 5, 1.36, 1.2, 1.5),
@@ -93,9 +81,9 @@ export const INSTRUMENTS: Record<string, InstrumentConfig> = {
     source: 'otc',
     engine: {
       asset: 'BTC/USD',
-      initialPrice: 50000,
-      minPrice: 30000,
-      maxPrice: 70000,
+      initialPrice: 50_000,
+      minPrice: 30_000,
+      maxPrice: 70_000,
       volatility: 0.001,
       tickInterval: 500,
     },
@@ -108,9 +96,9 @@ export const INSTRUMENTS: Record<string, InstrumentConfig> = {
     source: 'otc',
     engine: {
       asset: 'ETH/USD',
-      initialPrice: 3000,
-      minPrice: 2000,
-      maxPrice: 4500,
+      initialPrice: 3_000,
+      minPrice: 2_000,
+      maxPrice: 4_500,
       volatility: 0.001,
       tickInterval: 500,
     },
@@ -146,224 +134,25 @@ export const INSTRUMENTS: Record<string, InstrumentConfig> = {
     },
   },
 
-  // FLOW R-MULTI: Real market prices для всех валютных пар
-  // Унифицированный symbol (EUR/USD) для внутренней логики, pair (EURUSD) для внешнего API
-  AUDCHF_REAL: {
-    id: 'AUDCHF_REAL',
-    base: 'AUD',
-    quote: 'CHF',
-    digits: 5,
-    source: 'real',
-    real: {
-      provider: 'xchange',
-      symbol: getSymbol('AUD', 'CHF'), // 'AUD/CHF' - унифицированный для внутренней логики
-      pair: getPair('AUD', 'CHF'), // 'AUDCHF' - для внешнего API
-    },
-  },
-  AUDJPY_REAL: {
-    id: 'AUDJPY_REAL',
-    base: 'AUD',
-    quote: 'JPY',
-    digits: 3,
-    source: 'real',
-    real: {
-      provider: 'xchange',
-      symbol: getSymbol('AUD', 'JPY'), // 'AUD/JPY'
-      pair: getPair('AUD', 'JPY'), // 'AUDJPY'
-    },
-  },
-  EURGBP_REAL: {
-    id: 'EURGBP_REAL',
-    base: 'EUR',
-    quote: 'GBP',
-    digits: 5,
-    source: 'real',
-    real: {
-      provider: 'xchange',
-      symbol: getSymbol('EUR', 'GBP'), // 'EUR/GBP'
-      pair: getPair('EUR', 'GBP'), // 'EURGBP'
-    },
-  },
-  EURUSD_REAL: {
-    id: 'EURUSD_REAL',
-    base: 'EUR',
-    quote: 'USD',
-    digits: 5,
-    source: 'real',
-    real: {
-      provider: 'xchange',
-      symbol: getSymbol('EUR', 'USD'), // 'EUR/USD'
-      pair: getPair('EUR', 'USD'), // 'EURUSD'
-    },
-  },
-  AUDCAD_REAL: {
-    id: 'AUDCAD_REAL',
-    base: 'AUD',
-    quote: 'CAD',
-    digits: 5,
-    source: 'real',
-    real: {
-      provider: 'xchange',
-      symbol: getSymbol('AUD', 'CAD'), // 'AUD/CAD'
-      pair: getPair('AUD', 'CAD'), // 'AUDCAD'
-    },
-  },
-  EURJPY_REAL: {
-    id: 'EURJPY_REAL',
-    base: 'EUR',
-    quote: 'JPY',
-    digits: 3,
-    source: 'real',
-    real: {
-      provider: 'xchange',
-      symbol: getSymbol('EUR', 'JPY'), // 'EUR/JPY'
-      pair: getPair('EUR', 'JPY'), // 'EURJPY'
-    },
-  },
-  EURAUD_REAL: {
-    id: 'EURAUD_REAL',
-    base: 'EUR',
-    quote: 'AUD',
-    digits: 5,
-    source: 'real',
-    real: {
-      provider: 'xchange',
-      symbol: getSymbol('EUR', 'AUD'), // 'EUR/AUD'
-      pair: getPair('EUR', 'AUD'), // 'EURAUD'
-    },
-  },
-  GBPCAD_REAL: {
-    id: 'GBPCAD_REAL',
-    base: 'GBP',
-    quote: 'CAD',
-    digits: 5,
-    source: 'real',
-    real: {
-      provider: 'xchange',
-      symbol: getSymbol('GBP', 'CAD'), // 'GBP/CAD'
-      pair: getPair('GBP', 'CAD'), // 'GBPCAD'
-    },
-  },
-  GBPUSD_REAL: {
-    id: 'GBPUSD_REAL',
-    base: 'GBP',
-    quote: 'USD',
-    digits: 5,
-    source: 'real',
-    real: {
-      provider: 'xchange',
-      symbol: getSymbol('GBP', 'USD'), // 'GBP/USD'
-      pair: getPair('GBP', 'USD'), // 'GBPUSD'
-    },
-  },
-  USDCHF_REAL: {
-    id: 'USDCHF_REAL',
-    base: 'USD',
-    quote: 'CHF',
-    digits: 5,
-    source: 'real',
-    real: {
-      provider: 'xchange',
-      symbol: getSymbol('USD', 'CHF'), // 'USD/CHF'
-      pair: getPair('USD', 'CHF'), // 'USDCHF'
-    },
-  },
-  GBPJPY_REAL: {
-    id: 'GBPJPY_REAL',
-    base: 'GBP',
-    quote: 'JPY',
-    digits: 3,
-    source: 'real',
-    real: {
-      provider: 'xchange',
-      symbol: getSymbol('GBP', 'JPY'), // 'GBP/JPY'
-      pair: getPair('GBP', 'JPY'), // 'GBPJPY'
-    },
-  },
-  CHFJPY_REAL: {
-    id: 'CHFJPY_REAL',
-    base: 'CHF',
-    quote: 'JPY',
-    digits: 3,
-    source: 'real',
-    real: {
-      provider: 'xchange',
-      symbol: getSymbol('CHF', 'JPY'), // 'CHF/JPY'
-      pair: getPair('CHF', 'JPY'), // 'CHFJPY'
-    },
-  },
-  USDCAD_REAL: {
-    id: 'USDCAD_REAL',
-    base: 'USD',
-    quote: 'CAD',
-    digits: 5,
-    source: 'real',
-    real: {
-      provider: 'xchange',
-      symbol: getSymbol('USD', 'CAD'), // 'USD/CAD'
-      pair: getPair('USD', 'CAD'), // 'USDCAD'
-    },
-  },
-  USDJPY_REAL: {
-    id: 'USDJPY_REAL',
-    base: 'USD',
-    quote: 'JPY',
-    digits: 3,
-    source: 'real',
-    real: {
-      provider: 'xchange',
-      symbol: getSymbol('USD', 'JPY'), // 'USD/JPY'
-      pair: getPair('USD', 'JPY'), // 'USDJPY'
-    },
-  },
-  GBPCHF_REAL: {
-    id: 'GBPCHF_REAL',
-    base: 'GBP',
-    quote: 'CHF',
-    digits: 5,
-    source: 'real',
-    real: {
-      provider: 'xchange',
-      symbol: getSymbol('GBP', 'CHF'), // 'GBP/CHF'
-      pair: getPair('GBP', 'CHF'), // 'GBPCHF'
-    },
-  },
-  EURCAD_REAL: {
-    id: 'EURCAD_REAL',
-    base: 'EUR',
-    quote: 'CAD',
-    digits: 5,
-    source: 'real',
-    real: {
-      provider: 'xchange',
-      symbol: getSymbol('EUR', 'CAD'), // 'EUR/CAD'
-      pair: getPair('EUR', 'CAD'), // 'EURCAD'
-    },
-  },
-  CADJPY_REAL: {
-    id: 'CADJPY_REAL',
-    base: 'CAD',
-    quote: 'JPY',
-    digits: 3,
-    source: 'real',
-    real: {
-      provider: 'xchange',
-      symbol: getSymbol('CAD', 'JPY'), // 'CAD/JPY'
-      pair: getPair('CAD', 'JPY'), // 'CADJPY'
-    },
-  },
-  CADCHF_REAL: {
-    id: 'CADCHF_REAL',
-    base: 'CAD',
-    quote: 'CHF',
-    digits: 5,
-    source: 'real',
-    real: {
-      provider: 'xchange',
-      symbol: getSymbol('CAD', 'CHF'), // 'CAD/CHF'
-      pair: getPair('CAD', 'CHF'), // 'CADCHF'
-    },
-  },
+  // Real market prices
+  AUDCHF_REAL: realForex('AUDCHF_REAL', 'AUD', 'CHF', 5),
+  AUDJPY_REAL: realForex('AUDJPY_REAL', 'AUD', 'JPY', 3),
+  EURGBP_REAL: realForex('EURGBP_REAL', 'EUR', 'GBP', 5),
+  EURUSD_REAL: realForex('EURUSD_REAL', 'EUR', 'USD', 5),
+  AUDCAD_REAL: realForex('AUDCAD_REAL', 'AUD', 'CAD', 5),
+  EURJPY_REAL: realForex('EURJPY_REAL', 'EUR', 'JPY', 3),
+  EURAUD_REAL: realForex('EURAUD_REAL', 'EUR', 'AUD', 5),
+  GBPCAD_REAL: realForex('GBPCAD_REAL', 'GBP', 'CAD', 5),
+  GBPUSD_REAL: realForex('GBPUSD_REAL', 'GBP', 'USD', 5),
+  USDCHF_REAL: realForex('USDCHF_REAL', 'USD', 'CHF', 5),
+  GBPJPY_REAL: realForex('GBPJPY_REAL', 'GBP', 'JPY', 3),
+  CHFJPY_REAL: realForex('CHFJPY_REAL', 'CHF', 'JPY', 3),
+  USDCAD_REAL: realForex('USDCAD_REAL', 'USD', 'CAD', 5),
+  USDJPY_REAL: realForex('USDJPY_REAL', 'USD', 'JPY', 3),
+  GBPCHF_REAL: realForex('GBPCHF_REAL', 'GBP', 'CHF', 5),
+  EURCAD_REAL: realForex('EURCAD_REAL', 'EUR', 'CAD', 5),
+  CADJPY_REAL: realForex('CADJPY_REAL', 'CAD', 'JPY', 3),
+  CADCHF_REAL: realForex('CADCHF_REAL', 'CAD', 'CHF', 5),
 };
 
 export const DEFAULT_INSTRUMENT_ID = 'EURUSD_OTC';
@@ -377,25 +166,21 @@ export function getInstrument(id: string): InstrumentConfig | undefined {
 }
 
 export function getInstrumentOrDefault(id: string | undefined): InstrumentConfig {
-  const key = id || DEFAULT_INSTRUMENT_ID;
-  const inst = INSTRUMENTS[key];
-  if (!inst) return INSTRUMENTS[DEFAULT_INSTRUMENT_ID];
-  return inst;
+  const key = id ?? DEFAULT_INSTRUMENT_ID;
+  return INSTRUMENTS[key] ?? INSTRUMENTS[DEFAULT_INSTRUMENT_ID]!;
 }
 
 /** Resolve instrumentId from symbol "EUR/USD" or id "EURUSD_OTC" */
 export function getInstrumentIdBySymbol(symbolOrId: string): string {
   if (!symbolOrId) return DEFAULT_INSTRUMENT_ID;
-  const found = Object.entries(INSTRUMENTS).find(
-    ([_, c]) => {
-      if (c.id === symbolOrId) return true;
-      // Унифицированный symbol для всех инструментов (EUR/USD формат)
-      if (c.source === 'otc' && c.engine?.asset === symbolOrId) return true;
-      if (c.source === 'real' && c.real?.symbol === symbolOrId) return true;
-      // Также поддерживаем старый формат pair для обратной совместимости
-      if (c.source === 'real' && c.real?.pair === symbolOrId) return true;
-      return false;
-    },
-  );
+
+  const found = Object.entries(INSTRUMENTS).find(([, config]) => {
+    if (config.id === symbolOrId) return true;
+    if (config.source === 'otc' && config.engine?.asset === symbolOrId) return true;
+    if (config.source === 'real' && config.real?.symbol === symbolOrId) return true;
+    if (config.source === 'real' && config.real?.pair === symbolOrId) return true;
+    return false;
+  });
+
   return found ? found[0] : symbolOrId.replace(/\//g, '') || DEFAULT_INSTRUMENT_ID;
 }

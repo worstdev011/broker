@@ -31,7 +31,6 @@ interface RenderEngineParams {
   mode?: CandleMode;
   digits?: number;
   settings?: { bullishColor: string; bearishColor: string };
-  previousPrice?: number | null;
 }
 
 export function renderEngine({
@@ -45,13 +44,12 @@ export function renderEngine({
   mode = 'classic',
   digits,
   settings,
-  previousPrice,
 }: RenderEngineParams): void {
   renderGrid({ ctx, viewport, width, height, timeframeMs });
   renderCandles({ ctx, viewport, candles, liveCandle, width, height, timeframeMs, mode, settings });
   renderAxes({ ctx, viewport, width, height, digits });
 
   if (liveCandle) {
-    renderPriceLine({ ctx, viewport, currentPrice: liveCandle.close, width, height, digits, previousPrice });
+    renderPriceLine({ ctx, viewport, currentPrice: liveCandle.close, width, height, digits });
   }
 }

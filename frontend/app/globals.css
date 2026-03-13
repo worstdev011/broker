@@ -185,6 +185,11 @@
   background: rgba(0, 0, 0, 0.3);
 }
 
+/* Shared dark-theme input */
+.input-dark {
+  @apply w-full px-3 py-2 sm:px-4 sm:py-3 rounded-lg sm:rounded-xl bg-white/5 border border-white/10 text-sm text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-[#3347ff]/50 focus:border-[#3347ff]/50;
+}
+
 /* Убираем все подсветки фокуса у инпутов в модалке логина */
 .panel-auth-input:focus {
   outline: none !important;

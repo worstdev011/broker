@@ -186,13 +186,80 @@ const TOPIC_OPTIONS = [
   { value: 'other', label: 'Другое' },
 ];
 
+function SupportPageSkeleton() {
+  return (
+    <div className="w-full min-h-[calc(100vh-3rem)] sm:min-h-[calc(100vh-3.5rem)] p-3 sm:p-6 md:p-8 overflow-auto relative">
+      <div className="relative w-full">
+        {/* Header */}
+        <div className="mb-4 sm:mb-10">
+          <div className="h-8 sm:h-9 w-36 bg-white/10 rounded animate-pulse mb-2" />
+          <div className="h-4 w-64 bg-white/5 rounded animate-pulse" />
+        </div>
+
+        {/* Contact card */}
+        <div className="mb-6 sm:mb-14 rounded-xl sm:rounded-2xl border border-white/[0.08] bg-white/[0.02] overflow-hidden">
+          <div className="p-3 sm:p-6 border-b border-white/[0.06]">
+            <div className="h-5 w-52 bg-white/10 rounded animate-pulse mb-2" />
+            <div className="h-4 w-64 bg-white/5 rounded animate-pulse" />
+          </div>
+          <div className="p-3 sm:p-6 md:p-8 grid grid-cols-1 xl:grid-cols-[1fr_340px] gap-4 sm:gap-10">
+            {/* Form skeleton */}
+            <div className="space-y-4">
+              <div>
+                <div className="h-3 w-16 bg-white/10 rounded animate-pulse mb-2" />
+                <div className="h-10 sm:h-12 w-full bg-white/5 rounded-xl animate-pulse" />
+              </div>
+              <div>
+                <div className="h-3 w-24 bg-white/10 rounded animate-pulse mb-2" />
+                <div className="h-24 w-full bg-white/5 rounded-xl animate-pulse" />
+              </div>
+              <div className="h-10 w-32 bg-white/5 rounded-xl animate-pulse" />
+            </div>
+            {/* Contacts sidebar */}
+            <div className="space-y-4">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="p-4 rounded-xl border border-white/[0.08] bg-white/[0.02]">
+                  <div className="h-4 w-24 bg-white/10 rounded animate-pulse mb-1.5" />
+                  <div className="h-3 w-40 bg-white/5 rounded animate-pulse" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* FAQ skeleton */}
+        <div className="space-y-4 sm:space-y-10">
+          <div className="h-5 w-36 bg-white/10 rounded animate-pulse" />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 sm:gap-y-6">
+            {Array.from({ length: 5 }).map((_, catIdx) => (
+              <div key={catIdx} className="rounded-xl sm:rounded-2xl border border-white/[0.06] bg-white/[0.02] p-3 sm:p-6">
+                <div className="h-3 w-40 bg-white/10 rounded animate-pulse mb-4" />
+                <div className="space-y-2">
+                  {Array.from({ length: catIdx === 0 ? 7 : catIdx === 1 ? 6 : catIdx === 2 ? 5 : 5 }).map((_, i) => (
+                    <div key={i} className="h-10 rounded-lg bg-white/[0.03] border border-white/[0.04] animate-pulse" />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function SupportTab() {
+  const [mounted, setMounted] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
   const [formSent, setFormSent] = useState(false);
   const [formData, setFormData] = useState({ topic: '', message: '' });
   const [showTopicModal, setShowTopicModal] = useState(false);
   const [dropdownRect, setDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null);
   const topicButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (showTopicModal && topicButtonRef.current) {
@@ -202,6 +269,10 @@ export function SupportTab() {
       setDropdownRect(null);
     }
   }, [showTopicModal]);
+
+  if (!mounted) {
+    return <SupportPageSkeleton />;
+  }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -229,7 +300,7 @@ export function SupportTab() {
               Напишите нам — ответим в течение 24 часов
             </p>
           </div>
-          <div className="p-3 sm:p-6 md:p-8 grid grid-cols-1 xl:grid-cols-[1fr_340px] gap-4 sm:gap-10 xl:gap-12">
+          <div className="p-3 sm:p-6 md:p-8 grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-4 sm:gap-8 lg:gap-10">
             {/* Форма */}
             <div>
               {formSent ? (
@@ -367,9 +438,9 @@ export function SupportTab() {
         </div>
 
         {/* FAQ */}
-        <div className="space-y-4 sm:space-y-10">
+        <div className="space-y-4 sm:space-y-6">
           <h2 className="text-base sm:text-lg font-semibold text-white">Частые вопросы</h2>
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-x-6 xl:gap-x-12 gap-y-6 sm:gap-y-10">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 sm:gap-y-6">
             {FAQ_CATEGORIES.map((category) => (
               <section key={category.id} className="rounded-xl sm:rounded-2xl border border-white/[0.06] bg-white/[0.02] p-3 sm:p-6">
                 <h3 className="text-xs font-semibold text-white/40 uppercase tracking-widest mb-4">

@@ -5,11 +5,13 @@
  * Цвет фона соответствует цвету страницы терминала (#061230).
  */
 
+import { BG_COLOR } from '../../chartTheme';
+
 export function renderBackground(
   ctx: CanvasRenderingContext2D,
   width: number,
   height: number
 ): void {
-  ctx.fillStyle = '#061230'; // Тот же цвет, что у свечного графика и страницы терминала
+  ctx.fillStyle = BG_COLOR;
   ctx.fillRect(0, 0, width, height);
 }

@@ -44,32 +44,26 @@ export function useLineViewport() {
     perfTime: performance.now(),
   });
 
-  // Step-based scrolling: viewport сдвигается раз в ~1 секунду с плавным easing
+  // Second-grid scrolling (Pocket Option style):
+  // Every whole second (wall clock) the viewport steps exactly 1000ms
+  // to the right with a smooth easing animation.  Between seconds the
+  // viewport is completely stationary — only the live line grows.
   const SCROLL_STEP_MS = 1000;
-  const SCROLL_SMOOTH_TAU = 250; // τ для экспоненциального easing (ms)
   const lastAdvancePerfRef = useRef<number>(0);
+  const scrollTargetEndRef = useRef<number | null>(null);
+  const lastSecondRef = useRef<number>(0);
 
-  /**
-   * 🔥 FLOW CONTINUOUS-FOLLOW: Вычислить текущее wall time из performance.now()
-   * Монотонное и плавное — один источник времени для viewport и live-сегмента
-   */
   function getWallTime(perfNow: number): number {
     const anchor = timeAnchorRef.current;
     return anchor.wallTime + (perfNow - anchor.perfTime);
   }
 
-  /**
-   * 🔥 FLOW CONTINUOUS-FOLLOW: Калибровка якоря по серверному timestamp
-   * Вызывается при получении price:update — корректирует drift клиент/сервер
-   */
   function calibrateTime(serverTimestamp: number): void {
     const perfNow = performance.now();
     const currentEstimate = getWallTime(perfNow);
     const error = serverTimestamp - currentEstimate;
 
-    // Корректируем только если drift > 50ms (игнорируем шум сети)
     if (Math.abs(error) > 50) {
-      // Плавная коррекция: 30% от ошибки за раз (не прыжок)
       timeAnchorRef.current = {
         wallTime: timeAnchorRef.current.wallTime + error * 0.3,
         perfTime: timeAnchorRef.current.perfTime,
@@ -77,34 +71,62 @@ export function useLineViewport() {
     }
   }
 
+  // Smooth easing factor: higher = faster convergence (0..1 per frame at 60fps).
+  const SCROLL_EASE_SPEED = 5;
+
   /**
-   * Step-based viewport scrolling (Pocket Option style).
+   * Second-grid viewport scrolling with smooth easing.
    *
-   * Target позиция обновляется раз в SCROLL_STEP_MS (1 с).
-   * Каждый кадр viewport плавно подтягивается к target через exponential easing.
-   * Между шагами — chart практически неподвижен, движется только live-линия.
+   * Each time wallNow crosses a whole-second boundary the scroll
+   * *target* advances by exactly 1000ms. Every frame, the actual
+   * viewport position eases towards the target using exponential
+   * interpolation — producing a silky-smooth slide instead of a
+   * 1-second jump.
    */
   function advanceContinuousFollow(perfNow: number): void {
     if (!viewportRef.current.autoFollow) return;
 
     const vp = viewportRef.current;
     const windowMs = vp.timeEnd - vp.timeStart;
-    const rightPadding = windowMs * RIGHT_PADDING_RATIO;
     const wallNow = getWallTime(perfNow);
+    const currentSecond = Math.floor(wallNow / SCROLL_STEP_MS);
 
-    // Target: следующая граница секунды + right padding
-    const targetEnd =
-      (Math.floor(wallNow / SCROLL_STEP_MS) + 1) * SCROLL_STEP_MS + rightPadding;
+    if (lastSecondRef.current === 0) {
+      lastSecondRef.current = currentSecond;
+    }
 
-    // Framerate-independent smooth easing
-    const dt =
-      lastAdvancePerfRef.current > 0
-        ? Math.min(perfNow - lastAdvancePerfRef.current, 100)
-        : 16;
+    // New second crossed — advance target
+    if (currentSecond > lastSecondRef.current) {
+      const secondsElapsed = currentSecond - lastSecondRef.current;
+      lastSecondRef.current = currentSecond;
+
+      const stepMs = secondsElapsed * SCROLL_STEP_MS;
+      if (scrollTargetEndRef.current !== null) {
+        scrollTargetEndRef.current += stepMs;
+      } else {
+        scrollTargetEndRef.current = vp.timeEnd + stepMs;
+      }
+    }
+
+    const target = scrollTargetEndRef.current;
+    if (target === null) return;
+
+    // Smooth exponential easing towards target
+    const dt = lastAdvancePerfRef.current > 0
+      ? Math.min(perfNow - lastAdvancePerfRef.current, 50)
+      : 16;
     lastAdvancePerfRef.current = perfNow;
 
-    const alpha = 1 - Math.exp(-dt / SCROLL_SMOOTH_TAU);
-    vp.timeEnd += (targetEnd - vp.timeEnd) * alpha;
+    const alpha = 1 - Math.exp(-SCROLL_EASE_SPEED * dt / 1000);
+    const diff = target - vp.timeEnd;
+
+    if (Math.abs(diff) < 0.5) {
+      vp.timeEnd = target;
+      scrollTargetEndRef.current = null;
+    } else {
+      vp.timeEnd += diff * alpha;
+    }
+
     vp.timeStart = vp.timeEnd - windowMs;
   }
 
@@ -125,12 +147,13 @@ export function useLineViewport() {
     const vp = viewportRef.current;
     const oldWindow = vp.timeEnd - vp.timeStart;
     const anchorTime = vp.timeStart + oldWindow * anchorRatio;
-    let newWindowMs = oldWindow / factor;
+    const newWindowMs = oldWindow / factor;
 
-    newWindowMs = Math.max(MIN_WINDOW_MS, Math.min(MAX_WINDOW_MS, newWindowMs));
-
-    let newTimeStart = anchorTime - newWindowMs * anchorRatio;
-    let newTimeEnd = newTimeStart + newWindowMs;
+    // Fix #7: After clamping window size, recompute start/end from the anchor
+    // so the zoom feels anchored at the pointer position
+    const clampedWindowMs = Math.max(MIN_WINDOW_MS, Math.min(MAX_WINDOW_MS, newWindowMs));
+    let newTimeStart = anchorTime - clampedWindowMs * anchorRatio;
+    let newTimeEnd = newTimeStart + clampedWindowMs;
 
     const bounds = dataBoundsRef.current;
     if (bounds) {
@@ -143,6 +166,10 @@ export function useLineViewport() {
       newTimeStart = clamped.timeStart;
       newTimeEnd = clamped.timeEnd;
     }
+
+    // If window didn't change (hit zoom limit), don't update — avoids position jitter
+    const actualNewWindow = newTimeEnd - newTimeStart;
+    if (Math.abs(actualNewWindow - oldWindow) < 1) return;
 
     vp.timeStart = newTimeStart;
     vp.timeEnd = newTimeEnd;
@@ -183,6 +210,9 @@ export function useLineViewport() {
    */
   function resetFollow(): void {
     viewportRef.current.autoFollow = true;
+    scrollTargetEndRef.current = null;
+    lastAdvancePerfRef.current = 0;
+    lastSecondRef.current = 0;
   }
 
   /**
@@ -190,6 +220,9 @@ export function useLineViewport() {
    */
   function setAutoFollow(enabled: boolean): void {
     viewportRef.current.autoFollow = enabled;
+    if (!enabled) {
+      scrollTargetEndRef.current = null;
+    }
   }
 
   /**
@@ -201,6 +234,9 @@ export function useLineViewport() {
       timeEnd,
       autoFollow,
     };
+    scrollTargetEndRef.current = null;
+    lastAdvancePerfRef.current = 0;
+    lastSecondRef.current = 0;
   }
 
   /**

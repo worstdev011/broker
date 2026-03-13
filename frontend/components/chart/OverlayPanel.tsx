@@ -6,7 +6,7 @@
 
 'use client';
 
-import { Eye, EyeOff, Trash2 } from 'lucide-react';
+import { Eye, EyeOff, Trash2, Settings } from 'lucide-react';
 import type { Overlay, DrawingOverlay } from './internal/overlay/overlay.types';
 import { isDrawingOverlay } from './internal/overlay/overlay.types';
 
@@ -14,6 +14,7 @@ interface OverlayPanelProps {
   overlays: Overlay[];
   onToggleVisibility: (id: string) => void;
   onRemove: (id: string) => void;
+  onEditIndicator?: (id: string) => void;
   className?: string;
 }
 
@@ -21,6 +22,7 @@ export function OverlayPanel({
   overlays,
   onToggleVisibility,
   onRemove,
+  onEditIndicator,
   className = '',
 }: OverlayPanelProps) {
   if (overlays.length === 0) {
@@ -84,6 +86,17 @@ export function OverlayPanel({
                     <EyeOff className="w-3 h-3" />
                   )}
                 </button>
+                {overlay.type === 'indicator' && onEditIndicator && (
+                  <button
+                    type="button"
+                    onClick={() => onEditIndicator(overlay.id)}
+                    className="p-0.5 rounded md:hover:bg-white/10 text-gray-400 md:hover:text-white transition-colors"
+                    title="Настройки индикатора"
+                    aria-label="Настройки индикатора"
+                  >
+                    <Settings className="w-3 h-3" />
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => onRemove(overlay.id)}

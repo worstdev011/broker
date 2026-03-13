@@ -19,7 +19,8 @@ const PANEL_TEXT_COLOR = 'rgba(255, 255, 255, 0.45)'; // Как у меток о
 const PANEL_PADDING = 14; // Увеличен отступ для большего воздуха
 const PANEL_MARGIN = 8; // Отступ слева
 const PANEL_MARGIN_BOTTOM = 35; // Отступ снизу
-const PANEL_FONT = '12px sans-serif'; // Как у меток осей и времени
+import { LABEL_FONT } from '../chartTheme';
+const PANEL_FONT = LABEL_FONT;
 const PANEL_LINE_HEIGHT = 22; // Увеличено расстояние между строками
 
 /**

@@ -1,19 +1,18 @@
-/**
- * Shared hook for account switching (demo/real).
- * Replaces duplicated logic in terminal/page.tsx and AppHeader.tsx.
- */
+'use client';
 
 import { useCallback } from 'react';
 import { api } from '@/lib/api/api';
 import { logger } from '@/lib/logger';
 import { toast } from '@/stores/toast.store';
-import type { AccountType } from '@/types/account';
+
+type SwitchableAccount = 'demo' | 'real' | 'DEMO' | 'REAL';
 
 export function useAccountSwitch() {
-  const switchAccount = useCallback(async (type: AccountType): Promise<boolean> => {
+  const switchAccount = useCallback(async (type: SwitchableAccount): Promise<boolean> => {
+    const normalized = type.toLowerCase();
     try {
       const r = await api<{ accounts: Array<{ id: string; type: string }> }>('/api/accounts');
-      const a = r.accounts.find((x) => x.type === type);
+      const a = r.accounts.find((x) => x.type === normalized);
       if (!a) return false;
       await api('/api/accounts/switch', {
         method: 'POST',
@@ -22,7 +21,7 @@ export function useAccountSwitch() {
       return true;
     } catch (e) {
       logger.error(e);
-      toast('Не удалось переключить аккаунт', 'error');
+      toast('Failed to switch account', 'error');
       return false;
     }
   }, []);

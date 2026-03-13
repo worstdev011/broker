@@ -1,8 +1,3 @@
-/**
- * WebSocket Manager - manages clients and broadcasts events
- * NO business logic, NO Prisma, NO domain knowledge
- */
-
 import type { WsEvent } from './WsEvents.js';
 import { WsClient } from './WsClient.js';
 import { logger } from '../logger.js';
@@ -13,9 +8,6 @@ export class WebSocketManager {
   private userClients: Map<string, Set<WsClient>> = new Map();
   private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
 
-  /**
-   * Register client
-   */
   register(client: WsClient): void {
     this.clients.add(client);
 
@@ -26,12 +18,9 @@ export class WebSocketManager {
       this.userClients.get(client.userId)!.add(client);
     }
 
-    logger.debug(`WebSocket client registered. Total: ${this.clients.size}, userId: ${client.userId}, authenticated: ${client.isAuthenticated}`);
+    logger.debug({ total: this.clients.size, userId: client.userId }, 'WebSocket client registered');
   }
 
-  /**
-   * Unregister client
-   */
   unregister(client: WsClient): void {
     this.clients.delete(client);
 
@@ -45,51 +34,39 @@ export class WebSocketManager {
       }
     }
 
-    logger.debug(`WebSocket client unregistered. Total: ${this.clients.size}`);
+    logger.debug({ total: this.clients.size }, 'WebSocket client unregistered');
   }
 
-  /**
-   * Broadcast event to all authenticated clients
-   */
   broadcast(event: WsEvent): void {
     let sent = 0;
     const deadClients: WsClient[] = [];
 
     for (const client of this.clients) {
-      if (!client.isAuthenticated) {
-        continue;
-      }
+      if (!client.isAuthenticated) continue;
 
       try {
         if (!client.isOpen()) {
           deadClients.push(client);
           continue;
         }
-
         client.send(event);
         sent++;
       } catch (error) {
-        logger.error('Failed to send broadcast:', error);
+        logger.error({ err: error }, 'Failed to send broadcast');
         deadClients.push(client);
       }
     }
 
-    // Clean up dead clients
-    deadClients.forEach((client) => this.unregister(client));
+    for (const client of deadClients) this.unregister(client);
 
     if (sent > 0) {
-      logger.debug(`Broadcasted ${event.type} to ${sent} clients`);
+      logger.debug({ type: event.type, sent }, 'Broadcast sent');
     }
   }
 
-  /**
-   * Send event to specific user
-   */
   sendToUser(userId: string, event: WsEvent): void {
     const userClients = this.userClients.get(userId);
-    if (!userClients) {
-      return;
-    }
+    if (!userClients) return;
 
     const deadClients: WsClient[] = [];
 
@@ -99,70 +76,46 @@ export class WebSocketManager {
           deadClients.push(client);
           continue;
         }
-
         client.send(event);
       } catch (error) {
-        logger.error('Failed to send to user:', error);
+        logger.error({ err: error }, 'Failed to send to user');
         deadClients.push(client);
       }
     }
 
-    // Clean up dead clients
-    deadClients.forEach((client) => this.unregister(client));
+    for (const client of deadClients) this.unregister(client);
   }
 
-  /**
-   * Broadcast event только клиентам, подписанным на конкретный инструмент.
-   *
-   * Используем для price/update и candle/*.
-   */
   broadcastToInstrument(instrument: string, event: WsEvent): void {
-    let sent = 0;
     const deadClients: WsClient[] = [];
-    let subscribedClients = 0;
 
     for (const client of this.clients) {
-      if (!client.isAuthenticated) {
-        continue;
-      }
-
-      // Подсчитываем подписанных клиентов
-      if (client.subscriptions.has(instrument)) {
-        subscribedClients++;
-      }
-
-      // клиент не подписан на этот инструмент — пропускаем
-      if (!client.subscriptions.has(instrument)) {
-        continue;
-      }
+      if (!client.isAuthenticated || !client.subscriptions.has(instrument)) continue;
 
       try {
         if (!client.isOpen()) {
           deadClients.push(client);
           continue;
         }
-
         client.send(event);
-        sent++;
       } catch (error) {
-        logger.error('Failed to send broadcast to instrument:', error);
+        logger.error({ err: error }, 'Failed to send broadcast to instrument');
         deadClients.push(client);
       }
     }
 
-    deadClients.forEach((client) => this.unregister(client));
+    for (const client of deadClients) this.unregister(client);
   }
 
   /**
-   * 🔥 FLOW WS-TF: Broadcast candle event only to clients subscribed to this instrument AND timeframe.
-   * Clients without activeTimeframe (e.g. line chart) receive all candle events.
+   * Broadcast candle event only to clients subscribed to this instrument AND timeframe.
+   * Clients without activeTimeframe receive all candle events.
    */
   broadcastCandleToInstrument(instrument: string, timeframe: string, event: WsEvent): void {
     const deadClients: WsClient[] = [];
 
     for (const client of this.clients) {
       if (!client.isAuthenticated || !client.subscriptions.has(instrument)) continue;
-      // Skip if client has a different activeTimeframe
       if (client.activeTimeframe && client.activeTimeframe !== timeframe) continue;
 
       try {
@@ -172,18 +125,17 @@ export class WebSocketManager {
         }
         client.send(event);
       } catch (error) {
-        logger.error('Failed to send candle broadcast:', error);
+        logger.error({ err: error }, 'Failed to send candle broadcast');
         deadClients.push(client);
       }
     }
 
-    deadClients.forEach((client) => this.unregister(client));
+    for (const client of deadClients) this.unregister(client);
   }
 
   /**
-   * 🔥 FLOW WS-BINARY: Broadcast pre-serialized data to instrument subscribers.
-   * string → text frame, Buffer → binary frame.
-   * Serialize once, send to N subscribers (no per-client overhead).
+   * Broadcast pre-serialized data to instrument subscribers.
+   * string -> text frame, Buffer -> binary frame.
    */
   broadcastRawToInstrument(instrument: string, raw: string | Buffer): void {
     const deadClients: WsClient[] = [];
@@ -198,25 +150,18 @@ export class WebSocketManager {
         }
         client.sendRaw(raw);
       } catch (error) {
-        logger.error('Failed to send raw broadcast to instrument:', error);
+        logger.error({ err: error }, 'Failed to send raw broadcast to instrument');
         deadClients.push(client);
       }
     }
 
-    deadClients.forEach((client) => this.unregister(client));
+    for (const client of deadClients) this.unregister(client);
   }
 
-  /**
-   * Get connected clients count
-   */
   getClientCount(): number {
     return this.clients.size;
   }
 
-  /**
-   * Start heartbeat - ping all clients periodically for keep-alive.
-   * Clients that don't respond to pong will be detected and connection closed by ws library.
-   */
   startHeartbeat(): void {
     if (this.heartbeatInterval) {
       logger.warn('WebSocket heartbeat already running');
@@ -236,14 +181,11 @@ export class WebSocketManager {
           deadClients.push(client);
         }
       }
-      deadClients.forEach((c) => this.unregister(c));
+      for (const c of deadClients) this.unregister(c);
     }, WS_HEARTBEAT_INTERVAL_MS);
-    logger.info(`WebSocket heartbeat started (interval: ${WS_HEARTBEAT_INTERVAL_MS}ms)`);
+    logger.info({ intervalMs: WS_HEARTBEAT_INTERVAL_MS }, 'WebSocket heartbeat started');
   }
 
-  /**
-   * Stop heartbeat interval
-   */
   stopHeartbeat(): void {
     if (this.heartbeatInterval) {
       clearInterval(this.heartbeatInterval);
@@ -252,9 +194,6 @@ export class WebSocketManager {
     }
   }
 
-  /**
-   * Graceful shutdown: close all WebSocket connections
-   */
   closeAll(): void {
     this.stopHeartbeat();
     const count = this.clients.size;
@@ -263,13 +202,13 @@ export class WebSocketManager {
         client.send({ type: 'server:shutdown', data: { message: 'Server is shutting down' } });
         client.close();
       } catch (error) {
-        logger.debug('Error closing WS client:', error);
+        logger.debug({ err: error }, 'Error closing WS client');
       }
     }
     this.clients.clear();
     this.userClients.clear();
     if (count > 0) {
-      logger.info(`Closed ${count} WebSocket connection(s)`);
+      logger.info({ count }, 'Closed WebSocket connections');
     }
   }
 }

@@ -1,59 +1,43 @@
-/**
- * Domain errors for Accounts
- */
+import { AppError } from '../../shared/errors/AppError.js';
 
-export class AccountError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'AccountError';
-  }
-}
-
-export class AccountNotFoundError extends AccountError {
+export class AccountNotFoundError extends AppError {
   constructor(accountId?: string) {
-    super(accountId ? `Account with id ${accountId} not found` : 'Account not found');
-    this.name = 'AccountNotFoundError';
+    super(404, accountId ? `Account ${accountId} not found` : 'Account not found', 'ACCOUNT_NOT_FOUND');
   }
 }
 
-export class AccountAlreadyExistsError extends AccountError {
+export class AccountAlreadyExistsError extends AppError {
   constructor(userId: string, type: string) {
-    super(`Account of type ${type} already exists for user ${userId}`);
-    this.name = 'AccountAlreadyExistsError';
+    super(409, `Account of type ${type} already exists for user ${userId}`, 'ACCOUNT_ALREADY_EXISTS');
   }
 }
 
-export class InvalidAccountTypeError extends AccountError {
+export class InvalidAccountTypeError extends AppError {
   constructor(type: string) {
-    super(`Invalid account type: ${type}`);
-    this.name = 'InvalidAccountTypeError';
+    super(400, `Invalid account type: ${type}`, 'INVALID_ACCOUNT_TYPE');
   }
 }
 
-export class InsufficientBalanceError extends AccountError {
+export class InsufficientBalanceError extends AppError {
   constructor() {
-    super('Insufficient balance');
-    this.name = 'InsufficientBalanceError';
+    super(400, 'Insufficient balance', 'INSUFFICIENT_BALANCE');
   }
 }
 
-export class UnauthorizedAccountAccessError extends AccountError {
+export class UnauthorizedAccountAccessError extends AppError {
   constructor() {
-    super('Unauthorized access to account');
-    this.name = 'UnauthorizedAccountAccessError';
+    super(403, 'Unauthorized access to account', 'UNAUTHORIZED_ACCOUNT_ACCESS');
   }
 }
 
-export class DemoResetNotAllowedError extends AccountError {
+export class DemoResetNotAllowedError extends AppError {
   constructor() {
-    super('Demo balance is high enough');
-    this.name = 'DemoResetNotAllowedError';
+    super(400, 'Demo balance is too high to reset', 'DEMO_RESET_NOT_ALLOWED');
   }
 }
 
-export class DemoAccountNotFoundError extends AccountError {
+export class DemoAccountNotFoundError extends AppError {
   constructor() {
-    super('Demo account not found');
-    this.name = 'DemoAccountNotFoundError';
+    super(404, 'Demo account not found', 'DEMO_ACCOUNT_NOT_FOUND');
   }
 }

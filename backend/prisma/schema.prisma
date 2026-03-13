@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -11,27 +8,27 @@ datasource db {
 }
 
 model User {
-  // FLOW U-USER-ID: 8 цифр, уникальный, присваивается при регистрации навсегда
-  id        String   @id
+  id        String   @id // 8-digit numeric ID, assigned at registration
   email     String   @unique
   password  String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // FLOW U1: Base Profile fields
   firstName   String?
   lastName    String?
   nickname    String?   @unique
   phone       String?   @unique
   country     String?
-  currency    String?   // 🔥 Валюта аккаунта — устанавливается один раз, не меняется
+  currency    String? // Account currency, set once
   dateOfBirth DateTime?
   avatarUrl   String?
 
-  // 🔥 FLOW S3: Two-Factor Authentication
-  twoFactorSecret    String?
-  twoFactorEnabled   Boolean  @default(false)
-  twoFactorBackupCodes String[] // Array of hashed backup codes
+  twoFactorSecret      String?
+  twoFactorEnabled     Boolean  @default(false)
+  twoFactorBackupCodes String[] // Hashed backup codes
+
+  kycStatus      String? // 'pending' | 'verified' | 'rejected'
+  kycApplicantId String?
 
   sessions     Session[]
   accounts     Account[]
@@ -48,7 +45,6 @@ model Session {
   expiresAt DateTime
   createdAt DateTime @default(now())
 
-  // 🔥 FLOW S1: Session metadata for UI
   userAgent String?
   ipAddress String?
 
@@ -67,10 +63,11 @@ model Account {
   id        String      @id @default(cuid())
   userId    String
   type      AccountType
-  balance   Decimal     @default(0)
+  balance   Decimal     @default(0) @db.Decimal(18, 2)
   currency  String      @default("UAH")
-  isActive  Boolean     @default(true)
+  isActive  Boolean     @default(true) // Currently selected account (not enabled/disabled)
   createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
 
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   trades       Trade[]
@@ -90,7 +87,7 @@ enum TradeStatus {
   OPEN
   WIN
   LOSS
-  TIE // Ничья: exitPrice === entryPrice → возврат ставки
+  TIE // exitPrice === entryPrice → stake returned
 }
 
 model Trade {
@@ -98,11 +95,11 @@ model Trade {
   userId     String
   accountId  String
   direction  TradeDirection
-  instrument String // Trading instrument (e.g., 'EURUSD_OTC', 'AUDCHF_REAL')
-  amount     Decimal
-  entryPrice Decimal
-  exitPrice  Decimal?
-  payout     Decimal
+  instrument String
+  amount     Decimal        @db.Decimal(18, 2)
+  entryPrice Decimal        @db.Decimal(18, 8)
+  exitPrice  Decimal?       @db.Decimal(18, 8)
+  payout     Decimal        @db.Decimal(18, 2)
   status     TradeStatus
   openedAt   DateTime       @default(now())
   expiresAt  DateTime
@@ -118,35 +115,32 @@ model Trade {
   @@map("trades")
 }
 
-// Свечи котировок — хранятся в БД постоянно (не в Redis)
 model Candle {
   id        String  @id @default(cuid())
-  symbol    String  @default("BTC/USD")
-  timeframe String // '5s'
-  timestamp BigInt // начало свечи, ms
-  open      Decimal
-  high      Decimal
-  low       Decimal
-  close     Decimal
+  symbol    String
+  timeframe String
+  timestamp BigInt // Candle start, ms
+  open      Decimal @db.Decimal(18, 8)
+  high      Decimal @db.Decimal(18, 8)
+  low       Decimal @db.Decimal(18, 8)
+  close     Decimal @db.Decimal(18, 8)
 
   @@unique([symbol, timeframe, timestamp])
   @@index([symbol, timeframe, timestamp(sort: Desc)])
   @@map("candles")
 }
 
-// Price Points для линейного графика — 1 точка в секунду
 model PricePoint {
   id        String  @id @default(cuid())
   symbol    String
-  timestamp BigInt // начало секунды (ms), Math.floor(time / 1000) * 1000
-  price     Decimal
+  timestamp BigInt // tick timestamp (ms)
+  price     Decimal @db.Decimal(18, 8)
 
   @@unique([symbol, timestamp])
   @@index([symbol, timestamp(sort: Desc)])
   @@map("price_points")
 }
 
-// 🔥 FLOW W1: Transaction model for deposits/withdrawals
 enum TransactionType {
   DEPOSIT
   WITHDRAW
@@ -185,10 +179,10 @@ model Transaction {
   status TransactionStatus
 
   amount   Decimal @db.Decimal(18, 2)
-  currency String // "USD"
+  currency String
 
   paymentMethod PaymentMethod
-  provider      String? // stripe / crypto / manual
+  provider      String?
 
   createdAt   DateTime  @default(now())
   confirmedAt DateTime?
@@ -202,16 +196,15 @@ model Transaction {
   @@map("transactions")
 }
 
-// 🔥 FLOW I-PAYOUT: Instrument model для хранения доходности
 model Instrument {
-  id           String   @id // 'EURUSD_OTC', 'GBPUSD_REAL', etc.
-  name         String   // Display name: 'EUR / USD', 'GBP / USD'
-  base         String   // 'EUR', 'GBP', 'USD'
-  quote        String   // 'USD', 'JPY', 'CHF'
-  isActive     Boolean  @default(true)
-  payoutPercent Int     @default(75) // 60–90%
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id            String   @id // e.g. 'EURUSD_OTC', 'GBPUSD_REAL'
+  name          String
+  base          String
+  quote         String
+  isActive      Boolean  @default(true)
+  payoutPercent Int      @default(75) // 60–90%
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   @@map("instruments")
 }

@@ -1,7 +1,3 @@
-/**
- * WebSocket client representation
- */
-
 import type { WebSocket } from 'ws';
 import type { WsEvent } from './WsEvents.js';
 import { logger } from '../logger.js';
@@ -10,92 +6,59 @@ import { randomUUID } from 'crypto';
 export class WsClient {
   public userId: string | null = null;
   public isAuthenticated = false;
-  /**
-   * FLOW WS-1: Set подписок на инструменты (может быть несколько)
-   */
   public subscriptions = new Set<string>();
-  /**
-   * 🔥 FLOW WS-TF: Активный таймфрейм клиента (для фильтрации candle:close и snapshot)
-   */
   public activeTimeframe: string | null = null;
-  /**
-   * FLOW WS-1: Session ID для отслеживания соединения
-   */
   public sessionId: string;
-  /**
-   * Rate limit: message count in current window
-   */
   public messageCount = 0;
-  /**
-   * Rate limit: window start timestamp
-   */
   public rateLimitWindowStart = Date.now();
 
   constructor(private socket: WebSocket) {
     this.sessionId = randomUUID();
   }
 
-  /**
-   * Send WebSocket ping for keep-alive (client auto-responds with pong)
-   */
   ping(): void {
     try {
       if (this.socket?.readyState === 1) {
         this.socket.ping();
       }
     } catch (error) {
-      logger.debug('WsClient ping failed:', error);
+      logger.debug({ err: error }, 'WsClient ping failed');
     }
   }
 
-  /**
-   * Send event to client
-   */
   send(event: WsEvent): void {
     try {
       if (!this.socket) {
-        logger.warn('Cannot send WS event: socket is not available');
+        logger.warn('Cannot send WS event: socket unavailable');
         return;
       }
       this.socket.send(JSON.stringify(event));
     } catch (error) {
-      logger.error('Failed to send WS event:', error);
+      logger.error({ err: error }, 'Failed to send WS event');
     }
   }
 
-  /**
-   * 🔥 FLOW WS-BINARY: Send pre-serialized data (string → text frame, Buffer → binary frame)
-   * Used for high-frequency messages like price ticks
-   */
   sendRaw(data: string | Buffer): void {
     try {
       if (!this.socket) return;
       this.socket.send(data);
     } catch (error) {
-      logger.error('Failed to send raw WS data:', error);
+      logger.error({ err: error }, 'Failed to send raw WS data');
     }
   }
 
-  /**
-   * Close connection
-   */
   close(): void {
     try {
-      if (!this.socket) {
-        return;
-      }
+      if (!this.socket) return;
       this.socket.close();
     } catch (error) {
-      logger.error('Failed to close WS connection:', error);
+      logger.error({ err: error }, 'Failed to close WS connection');
     }
   }
 
-  /**
-   * Check if connection is open
-   */
   isOpen(): boolean {
     try {
-      return this.socket?.readyState === 1; // WebSocket.OPEN
+      return this.socket?.readyState === 1;
     } catch {
       return false;
     }

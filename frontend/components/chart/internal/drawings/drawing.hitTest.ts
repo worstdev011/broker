@@ -7,6 +7,7 @@
 import type { Drawing } from './drawing.types';
 import type { Viewport } from '../viewport.types';
 import type { DrawingEditMode } from './drawing.types';
+import { timeToX, priceToY } from '../utils/coords';
 
 interface HitTestResult {
   hit: boolean;
@@ -24,24 +25,6 @@ interface HitTestDrawingParams {
 }
 
 const DEFAULT_TOLERANCE = 7; // пикселей
-
-/**
- * Конвертирует time в X координату
- */
-function timeToX(time: number, viewport: Viewport, width: number): number {
-  const timeRange = viewport.timeEnd - viewport.timeStart;
-  if (timeRange === 0) return 0;
-  return ((time - viewport.timeStart) / timeRange) * width;
-}
-
-/**
- * Конвертирует price в Y координату
- */
-function priceToY(price: number, viewport: Viewport, height: number): number {
-  const priceRange = viewport.priceMax - viewport.priceMin;
-  if (priceRange === 0) return height / 2;
-  return height - ((price - viewport.priceMin) / priceRange) * height;
-}
 
 /**
  * Расстояние между двумя точками

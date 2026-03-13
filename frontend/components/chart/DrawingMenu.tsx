@@ -5,8 +5,10 @@
 
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
-import { ChevronDown, Star, Pencil } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { Star, Pencil } from 'lucide-react';
+import { useClickOutside } from '@/lib/hooks/useClickOutside';
+import { useLocalStorageSet } from '@/lib/hooks/useLocalStorageSet';
 
 export type DrawingModeOption = 'horizontal' | 'vertical' | 'trend' | 'rectangle' | 'fibonacci' | 'parallel-channel' | 'ray' | 'arrow';
 
@@ -26,57 +28,12 @@ const DRAWING_OPTIONS: { id: DrawingModeOption; label: string }[] = [
   { id: 'arrow', label: 'Стрелка' },
 ];
 
-const DRAWING_FAVORITES_KEY = 'drawing-menu-favorites';
-
-function loadFavorites(): Set<string> {
-  if (typeof window === 'undefined') return new Set();
-  try {
-    const raw = localStorage.getItem(DRAWING_FAVORITES_KEY);
-    if (!raw) return new Set();
-    const arr = JSON.parse(raw) as string[];
-    return new Set(Array.isArray(arr) ? arr : []);
-  } catch {
-    return new Set();
-  }
-}
-
-function saveFavorites(set: Set<string>) {
-  try {
-    localStorage.setItem(DRAWING_FAVORITES_KEY, JSON.stringify([...set]));
-  } catch {}
-}
 
 export function DrawingMenu({ drawingMode, onDrawingModeChange }: DrawingMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [favorites, setFavorites] = useState<Set<string>>(() => loadFavorites());
+  const [favorites, toggleFavorite] = useLocalStorageSet('drawing-menu-favorites');
   const menuRef = useRef<HTMLDivElement>(null);
-
-  const toggleFavorite = (id: string) => {
-    const next = new Set(favorites);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    setFavorites(next);
-    saveFavorites(next);
-  };
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent | TouchEvent) => {
-      const target = event.target as Node;
-      if (target && menuRef.current && !menuRef.current.contains(target)) {
-        setIsOpen(false);
-      }
-    };
-
-    if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside, true);
-      document.addEventListener('touchstart', handleClickOutside, true);
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside, true);
-      document.removeEventListener('touchstart', handleClickOutside, true);
-    };
-  }, [isOpen]);
+  useClickOutside(menuRef, () => setIsOpen(false), isOpen);
 
   const handleSelect = (id: DrawingModeOption) => {
     const next = drawingMode === id ? null : id;
@@ -93,7 +50,7 @@ export function DrawingMenu({ drawingMode, onDrawingModeChange }: DrawingMenuPro
         key={opt.id}
         type="button"
         onClick={() => handleSelect(opt.id)}
-        className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-xs transition-colors ${
+        className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-xs transition-colors duration-300 ease-in-out ${
           isActive
             ? 'bg-[#3347ff] text-white border border-[#3347ff]'
             : 'text-gray-300 md:hover:bg-white/8 md:hover:text-white'
@@ -106,11 +63,11 @@ export function DrawingMenu({ drawingMode, onDrawingModeChange }: DrawingMenuPro
             e.stopPropagation();
             toggleFavorite(opt.id);
           }}
-          className="flex-shrink-0 p-0.5 md:hover:bg-white/10 rounded transition-colors"
+          className="flex-shrink-0 p-0.5 md:hover:bg-white/10 rounded transition-colors duration-300 ease-in-out"
           title={favorites.has(opt.id) ? 'Убрать из избранного' : 'Добавить в избранное'}
         >
           <Star
-            className={`w-3.5 h-3.5 transition-colors ${
+            className={`w-3.5 h-3.5 transition-colors duration-300 ease-in-out ${
               favorites.has(opt.id)
                 ? 'fill-yellow-400 text-yellow-400'
                 : 'text-gray-400 md:hover:text-yellow-400'
@@ -126,7 +83,7 @@ export function DrawingMenu({ drawingMode, onDrawingModeChange }: DrawingMenuPro
     <div className="relative" ref={menuRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="px-3.5 py-2 rounded-md text-sm font-semibold transition-colors flex items-center justify-center text-white md:hover:bg-white/10"
+        className="px-3.5 py-2 rounded-md text-sm font-semibold transition-colors duration-300 ease-in-out flex items-center justify-center text-white md:hover:bg-white/10"
         title="Рисование"
         style={{ width: '44px', height: '36px', minWidth: '44px', maxWidth: '44px' }}
       >
@@ -134,7 +91,7 @@ export function DrawingMenu({ drawingMode, onDrawingModeChange }: DrawingMenuPro
       </button>
 
       {isOpen && (
-        <div className="absolute top-full left-1/2 -translate-x-[calc(50%+90px)] md:-translate-x-1/2 mt-2 rounded-lg shadow-xl min-w-[220px] z-50 overflow-hidden bg-[#091C56] border border-white/5">
+        <div className="absolute top-full left-1/2 -translate-x-[calc(50%+90px)] md:-translate-x-1/2 mt-2 rounded-lg shadow-xl min-w-[220px] z-50 overflow-hidden bg-[#1e2a40] border border-white/5">
           <div className="p-2">
             {favoriteOptions.length > 0 && (
               <>

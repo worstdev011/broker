@@ -2,21 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { Link } from '@/components/navigation';
-import { Tag, ExternalLink, History, ChevronRight, Shield, FileCheck, Calendar } from 'lucide-react';
+import { Tag, ExternalLink, History, ChevronRight, Shield, FileCheck, Calendar, Mail, CheckCircle2 } from 'lucide-react';
 import { api } from '@/lib/api/api';
-
-const VERIFICATION_STORAGE_KEY = 'profile-verification-status';
-
-function useIsVerified(): boolean {
-  const [isVerified, setIsVerified] = useState(false);
-  useEffect(() => {
-    const check = () => setIsVerified(localStorage.getItem(VERIFICATION_STORAGE_KEY) === 'verified');
-    check();
-    window.addEventListener('storage', check);
-    return () => window.removeEventListener('storage', check);
-  }, []);
-  return isVerified;
-}
+import { useIsVerified } from '@/lib/hooks/useVerification';
 
 type PaymentMethodId =
   | 'CARD'
@@ -93,6 +81,122 @@ const METHOD_LABELS: Record<string, string> = {
   DOT: 'Polkadot',
 };
 
+function WalletPageSkeleton() {
+  return (
+    <div className="flex flex-row w-full h-full min-h-0">
+      <div className="flex flex-col flex-1 min-w-0 min-h-0">
+        {/* Tab bar */}
+        <div className="shrink-0 flex border-b border-white/[0.08] px-3 sm:px-6 md:px-8 pt-3 sm:pt-4 md:pt-6 gap-1">
+          {[112, 96, 148].map((w) => (
+            <div key={w} className={`h-9 w-[${w}px] rounded-t-lg bg-white/5 animate-pulse mb-px`} style={{ width: w }} />
+          ))}
+        </div>
+
+        <div className="flex-1 min-h-0 p-3 sm:p-6 md:p-8 overflow-auto">
+          <div className="w-full">
+            {/* Title */}
+            <div className="h-8 w-52 bg-white/10 rounded animate-pulse mb-2" />
+            <div className="h-4 w-80 bg-white/5 rounded animate-pulse mb-6 sm:mb-8" />
+
+            {/* Two columns */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 sm:gap-6 mb-6 sm:mb-8">
+              {/* Payment methods */}
+              <div className="rounded-xl sm:rounded-2xl border border-white/[0.08] bg-[#030E28] p-4 sm:p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="w-7 h-7 rounded-full bg-white/10 animate-pulse" />
+                  <div className="h-5 w-44 bg-white/10 rounded animate-pulse" />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <div key={i} className="h-[72px] rounded-lg bg-white/5 animate-pulse" />
+                  ))}
+                </div>
+              </div>
+
+              {/* Amount input */}
+              <div className="rounded-xl sm:rounded-2xl border border-white/[0.08] bg-[#030E28] p-4 sm:p-6">
+                <div className="flex items-center gap-2 mb-4 sm:mb-5">
+                  <div className="w-6 h-6 rounded-full bg-white/10 animate-pulse" />
+                  <div className="h-5 w-36 bg-white/10 rounded animate-pulse" />
+                </div>
+                <div className="space-y-4">
+                  <div>
+                    <div className="h-3 w-44 bg-white/5 rounded animate-pulse mb-2" />
+                    <div className="h-10 w-full bg-white/5 rounded-lg animate-pulse" />
+                    <div className="h-3 w-32 bg-white/5 rounded animate-pulse mt-1.5" />
+                  </div>
+                  <div className="flex gap-3">
+                    {[1, 2, 3].map((i) => (
+                      <div key={i} className="h-8 w-24 rounded-lg bg-white/5 animate-pulse" />
+                    ))}
+                  </div>
+                  <div className="h-9 w-full bg-white/5 rounded-lg animate-pulse" />
+                </div>
+              </div>
+            </div>
+
+            {/* Recent transactions header + table */}
+            <div className="flex justify-between items-center mb-4">
+              <div className="h-5 w-44 bg-white/10 rounded animate-pulse" />
+              <div className="h-4 w-10 bg-white/5 rounded animate-pulse" />
+            </div>
+            <div className="rounded-xl border border-white/[0.06] overflow-hidden bg-white/[0.02]">
+              <WalletTableSkeleton rows={4} />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Right sidebar */}
+      <div className="hidden lg:flex w-[320px] shrink-0 px-4 py-6 flex-col gap-6 bg-gradient-to-br from-[#0a1638] via-[#07152f] to-[#040d1f] border-l border-white/10">
+        <div className="rounded-xl border border-white/[0.08] bg-[#030E28] p-6 space-y-5">
+          <div>
+            <div className="h-6 w-20 bg-white/10 rounded animate-pulse mb-1" />
+            <div className="h-3 w-36 bg-white/5 rounded animate-pulse" />
+          </div>
+          <div className="space-y-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="flex justify-between items-center">
+                <div className="h-4 w-16 bg-white/5 rounded animate-pulse" />
+                <div className="h-4 w-24 bg-white/10 rounded animate-pulse" />
+              </div>
+            ))}
+            <div className="pt-3 border-t border-white/10 flex justify-between items-center">
+              <div className="h-5 w-20 bg-white/10 rounded animate-pulse" />
+              <div className="h-7 w-28 bg-[#3347ff]/20 rounded animate-pulse" />
+            </div>
+          </div>
+          <div className="h-12 w-full rounded-xl bg-[#3347ff]/20 animate-pulse mt-2" />
+        </div>
+        <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 flex gap-3 items-start">
+          <div className="w-10 h-10 rounded-lg bg-white/10 animate-pulse shrink-0" />
+          <div className="flex-1 space-y-2 pt-0.5">
+            <div className="h-4 w-28 bg-white/10 rounded animate-pulse" />
+            <div className="h-3 w-44 bg-white/5 rounded animate-pulse" />
+          </div>
+        </div>
+        <div className="rounded-xl bg-white/5 animate-pulse h-32" />
+      </div>
+    </div>
+  );
+}
+
+function WalletTableSkeleton({ rows = 4 }: { rows?: number }) {
+  return (
+    <div className="divide-y divide-white/[0.04]">
+      {Array.from({ length: rows }).map((_, idx) => (
+        <div key={idx} className="flex items-center justify-between px-4 py-3">
+          <div className="space-y-2 flex-1 min-w-0">
+            <div className="h-3 w-32 bg-white/10 rounded animate-pulse" />
+            <div className="h-3 w-40 bg-white/5 rounded animate-pulse" />
+          </div>
+          <div className="h-4 w-20 bg-white/10 rounded animate-pulse ml-4" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 interface WalletTransaction {
   id: string;
   type: 'DEPOSIT' | 'WITHDRAW';
@@ -105,6 +209,23 @@ interface WalletTransaction {
 
 export function WalletTab() {
   const isVerified = useIsVerified();
+  const [emailVerified, setEmailVerified] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('email-verified') === '1';
+  });
+  const [emailConfirming, setEmailConfirming] = useState(false);
+
+  const handleConfirmEmail = async () => {
+    setEmailConfirming(true);
+    try {
+      await new Promise((r) => setTimeout(r, 1400));
+      setEmailVerified(true);
+      localStorage.setItem('email-verified', '1');
+    } finally {
+      setEmailConfirming(false);
+    }
+  };
+
   const [balance, setBalance] = useState<{ currency: string; balance: number } | null>(null);
   const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
   const [loading, setLoading] = useState(true);
@@ -258,6 +379,10 @@ export function WalletTab() {
   const selectedMethod = PAYMENT_METHODS.find((m) => m.id === paymentMethod);
   const selectedWithdrawMethod = WITHDRAW_PAYMENT_METHODS.find((m) => m.id === withdrawPaymentMethod);
 
+  if (loading && txLoading) {
+    return <WalletPageSkeleton />;
+  }
+
   return (
     <div className="flex flex-row w-full h-full min-h-0">
       {/* Левая часть: табы + контент */}
@@ -291,6 +416,40 @@ export function WalletTab() {
           <p className="text-xs sm:text-sm text-white/50 mb-5 sm:mb-8">
             Выберите способ оплаты и введите сумму для безопасного пополнения.
           </p>
+
+          {/* Email verification banner */}
+          {!emailVerified && (
+            <div className="mb-5 sm:mb-6 flex flex-col sm:flex-row sm:items-center gap-3 p-4 rounded-xl bg-amber-500/10 border border-amber-500/25">
+              <div className="flex items-center gap-3 flex-1 min-w-0">
+                <div className="shrink-0 w-9 h-9 rounded-lg bg-amber-500/20 flex items-center justify-center">
+                  <Mail className="w-4 h-4 text-amber-400" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-white">Подтвердите email</p>
+                  <p className="text-xs text-white/50 mt-0.5">Для совершения депозита необходимо подтвердить почту</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleConfirmEmail}
+                disabled={emailConfirming}
+                className="shrink-0 flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-black text-xs font-semibold uppercase tracking-wider transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {emailConfirming ? (
+                  <>
+                    <span className="w-3.5 h-3.5 border-2 border-black/30 border-t-black rounded-full animate-spin shrink-0" />
+                    Подтверждение...
+                  </>
+                ) : 'Подтвердить'}
+              </button>
+            </div>
+          )}
+          {emailVerified && (
+            <div className="mb-5 sm:mb-6 flex items-center gap-3 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/25">
+              <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+              <p className="text-sm text-emerald-400 font-medium">Email подтверждён</p>
+            </div>
+          )}
 
           {error && (
             <div className="mb-4 sm:mb-6 p-3 sm:p-4 rounded-lg sm:rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs sm:text-sm">
@@ -453,7 +612,7 @@ export function WalletTab() {
               <button
                 type="button"
                 onClick={handleDeposit}
-                disabled={submitting || !isValidAmount}
+                disabled={submitting || !isValidAmount || !emailVerified}
                 className="w-full flex items-center justify-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg sm:rounded-xl btn-accent text-white text-[10px] sm:text-xs font-semibold uppercase tracking-wider transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {submitting ? (
@@ -486,14 +645,12 @@ export function WalletTab() {
             </div>
             <div className="rounded-xl border border-white/[0.06] overflow-hidden bg-white/[0.02]">
               {txLoading ? (
-                <div className="p-8 flex justify-center">
-                  <div className="w-8 h-8 border-2 border-white/20 border-t-[#3347ff] rounded-full animate-spin" />
-                </div>
+                <WalletTableSkeleton />
               ) : transactions.filter((t) => t.type === 'DEPOSIT').length === 0 ? (
                 <div className="p-8 text-center text-white/40 text-sm">Нет пополнений</div>
               ) : (
-                <div className="overflow-x-auto">
-                <table className="w-full text-sm min-w-[400px]">
+                <div className="overflow-x-auto -mx-3 sm:mx-0 px-3 sm:px-0">
+                <table className="w-full text-sm min-w-[360px]">
                   <thead>
                     <tr className="border-b border-white/[0.06]">
                       <th className="text-left py-3 px-4 text-white/50 font-medium">Дата</th>
@@ -595,14 +752,12 @@ export function WalletTab() {
                       </div>
                       <div className="rounded-xl border border-white/[0.06] overflow-hidden bg-white/[0.02]">
                         {txLoading ? (
-                          <div className="p-8 flex justify-center">
-                            <div className="w-8 h-8 border-2 border-white/20 border-t-[#3347ff] rounded-full animate-spin" />
-                          </div>
+                          <WalletTableSkeleton />
                         ) : transactions.filter((t) => t.type === 'WITHDRAW').length === 0 ? (
                           <div className="p-8 text-center text-white/40 text-sm">Нет выводов</div>
                         ) : (
-                          <div className="overflow-x-auto">
-                            <table className="w-full text-sm min-w-[400px]">
+                          <div className="overflow-x-auto -mx-3 sm:mx-0 px-3 sm:px-0">
+                            <table className="w-full text-sm min-w-[360px]">
                               <thead>
                                 <tr className="border-b border-white/[0.06]">
                                   <th className="text-left py-3 px-4 text-white/50 font-medium">Дата</th>
@@ -824,21 +979,19 @@ export function WalletTab() {
                     </button>
                   </div>
                   <div className="rounded-xl border border-white/[0.06] overflow-hidden bg-white/[0.02]">
-                    {txLoading ? (
-                      <div className="p-8 flex justify-center">
-                        <div className="w-8 h-8 border-2 border-white/20 border-t-[#3347ff] rounded-full animate-spin" />
-                      </div>
-                    ) : transactions.filter((t) => t.type === 'WITHDRAW').length === 0 ? (
-                      <div className="p-8 text-center text-white/40 text-sm">Нет выводов</div>
-                    ) : (
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-sm min-w-[400px]">
-                          <thead>
-                            <tr className="border-b border-white/[0.06]">
-                              <th className="text-left py-3 px-4 text-white/50 font-medium">Дата</th>
-                              <th className="text-left py-3 px-4 text-white/50 font-medium">Способ</th>
-                              <th className="text-left py-3 px-4 text-white/50 font-medium">Статус</th>
-                              <th className="text-right py-3 px-4 text-white/50 font-medium">Сумма</th>
+                      {txLoading ? (
+                          <WalletTableSkeleton />
+                        ) : transactions.filter((t) => t.type === 'WITHDRAW').length === 0 ? (
+                          <div className="p-8 text-center text-white/40 text-sm">Нет выводов</div>
+                        ) : (
+                          <div className="overflow-x-auto -mx-3 sm:mx-0 px-3 sm:px-0">
+                            <table className="w-full text-sm min-w-[360px]">
+                              <thead>
+                                <tr className="border-b border-white/[0.06]">
+                                  <th className="text-left py-3 px-4 text-white/50 font-medium">Дата</th>
+                                  <th className="text-left py-3 px-4 text-white/50 font-medium">Способ</th>
+                                  <th className="text-left py-3 px-4 text-white/50 font-medium">Статус</th>
+                                  <th className="text-right py-3 px-4 text-white/50 font-medium">Сумма</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -901,19 +1054,19 @@ export function WalletTab() {
 
               {/* Табы фильтра и дата */}
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-5 sm:mb-6">
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   {(['all', 'deposits', 'withdrawals'] as const).map((f) => (
                     <button
                       key={f}
                       type="button"
                       onClick={() => setHistoryFilter(f)}
-                      className={`px-4 py-2.5 rounded-lg text-xs font-medium uppercase tracking-wider transition-colors ${
+                      className={`px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg text-[10px] sm:text-xs font-medium uppercase tracking-wider transition-colors ${
                         historyFilter === f
                           ? 'bg-[#3347ff] text-white'
                           : 'bg-white/5 text-white/70 hover:bg-white/10 hover:text-white border border-white/10'
                       }`}
                     >
-                      {f === 'all' ? 'ВСЕ' : f === 'deposits' ? 'ПОПОЛНЕНИЯ' : 'ВЫВОДЫ'}
+                      {f === 'all' ? 'Все' : f === 'deposits' ? 'Пополнения' : 'Выводы'}
                     </button>
                   ))}
                 </div>
@@ -937,8 +1090,8 @@ export function WalletTab() {
 
               <div className="rounded-2xl border border-white/[0.08] bg-[#030E28] overflow-hidden">
                 {txLoading ? (
-                  <div className="p-16 flex justify-center">
-                    <div className="w-10 h-10 border-2 border-white/20 border-t-[#3347ff] rounded-full animate-spin" />
+                  <div className="py-6">
+                    <WalletTableSkeleton rows={5} />
                   </div>
                 ) : filteredHistoryTransactions.length === 0 ? (
                   <div className="p-16 text-center">
@@ -1075,7 +1228,7 @@ export function WalletTab() {
                 <button
                   type="button"
                   onClick={handleDeposit}
-                  disabled={submitting || !isValidAmount}
+                  disabled={submitting || !isValidAmount || !emailVerified}
                   className="group relative w-full mt-6 flex items-center justify-center gap-2 px-6 py-4 rounded-xl bg-[#3347ff] hover:bg-[#3347ff]/90 text-white text-xs font-semibold uppercase tracking-wider transition-colors disabled:opacity-50 disabled:cursor-not-allowed overflow-hidden"
                 >
                   <span className="absolute inset-0 z-0 bg-gradient-to-r from-transparent via-white/25 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-500 pointer-events-none" />

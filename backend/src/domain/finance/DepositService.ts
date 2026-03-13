@@ -1,12 +1,13 @@
-/**
- * Deposit domain service - pure business logic
- * 🔥 FLOW W1: Deposit transactions
- */
-
 import type { AccountRepository } from '../../ports/repositories/AccountRepository.js';
 import type { TransactionRepository } from '../../ports/repositories/TransactionRepository.js';
 import { TransactionType, TransactionStatus, PaymentMethod } from './TransactionTypes.js';
+import { InvalidAmountError, TransactionNotFoundError } from './FinanceErrors.js';
 import { logger } from '../../shared/logger.js';
+import {
+  DEPOSIT_MIN_AMOUNT,
+  DEPOSIT_MAX_AMOUNT,
+  DEFAULT_FIAT_CURRENCY,
+} from '../../config/constants.js';
 
 export class DepositService {
   constructor(
@@ -14,10 +15,6 @@ export class DepositService {
     private transactionRepository: TransactionRepository,
   ) {}
 
-  /**
-   * 🔥 FLOW W1: Create deposit transaction
-   * Balance is calculated from transactions, not stored directly
-   */
   async deposit({
     userId,
     amount,
@@ -25,43 +22,36 @@ export class DepositService {
   }: {
     userId: string;
     amount: number;
-    paymentMethod: string;
+    paymentMethod: PaymentMethod;
   }) {
-    // Validation: 200–1000 UAH
-    if (amount < 200 || amount > 1000) {
-      throw new Error('Сумма пополнения: от 200 до 1000 ₴');
+    if (amount < DEPOSIT_MIN_AMOUNT || amount > DEPOSIT_MAX_AMOUNT) {
+      throw new InvalidAmountError(DEPOSIT_MIN_AMOUNT, DEPOSIT_MAX_AMOUNT, DEFAULT_FIAT_CURRENCY);
     }
 
-    // Get or create REAL account
     const account = await this.accountRepository.getRealAccount(userId);
 
-    // Create transaction (PENDING)
     const transaction = await this.transactionRepository.create({
       userId,
       accountId: account.id,
       type: TransactionType.DEPOSIT,
       status: TransactionStatus.PENDING,
       amount,
-      currency: 'UAH',
-      paymentMethod: paymentMethod as PaymentMethod,
-      provider: 'manual', // 🔥 MOCK: пока без реальных платёжек
+      currency: DEFAULT_FIAT_CURRENCY,
+      paymentMethod,
+      provider: 'manual',
     });
 
-    // 🔥 MOCK подтверждение (ПОКА ЧТО)
-    // В будущем здесь будет интеграция с Stripe/Crypto/Bank
+    // TODO: integrate real payment provider (Stripe/Crypto/Bank)
     await this.transactionRepository.confirm(transaction.id);
-
-    // Sync Account.balance so trades can use it (REAL account balance = sum of transactions)
     await this.accountRepository.updateBalance(account.id, amount);
 
-    logger.info(`Deposit created: userId=${userId}, amount=${amount}, transactionId=${transaction.id}`);
+    logger.info(`Deposit created: userId=${userId}, amount=${amount}, txId=${transaction.id}`);
 
-    // Return confirmed transaction
-    const confirmedTransaction = await this.transactionRepository.findById(transaction.id);
-    if (!confirmedTransaction) {
-      throw new Error('Failed to retrieve confirmed transaction');
+    const confirmed = await this.transactionRepository.findById(transaction.id);
+    if (!confirmed) {
+      throw new TransactionNotFoundError(transaction.id);
     }
 
-    return confirmedTransaction;
+    return confirmed;
   }
 }

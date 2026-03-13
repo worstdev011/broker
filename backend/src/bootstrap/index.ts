@@ -1,7 +1,3 @@
-/**
- * System bootstrap - Initialize all core systems
- */
-
 import type { FastifyInstance } from 'fastify';
 import { connectDatabase, disconnectDatabase } from './database.js';
 import { connectRedis, disconnectRedis } from './redis.js';
@@ -14,51 +10,60 @@ import { registerBullBoard } from '../jobs/board.js';
 import { logger } from '../shared/logger.js';
 
 export async function bootstrapAll(app: FastifyInstance): Promise<void> {
-  logger.info('🚀 Starting system bootstrap...');
+  logger.info('Starting system bootstrap...');
 
   try {
-    // Initialize database
     await connectDatabase();
-
-    // Initialize in-memory store (prices, active candles)
     await connectRedis();
-
-    // Initialize WebSocket
     await initWebSocket(app);
-
-    // Initialize price engine
     await bootstrapPrices();
-
-    // Initialize trade closing service
     await bootstrapTrades();
-
-    // Initialize time updates (countdown)
     await bootstrapTimeUpdates();
-
-    // Bull Board UI (when REDIS_URL is set)
     await registerBullBoard(app);
-
-    logger.info('✅ System bootstrap completed successfully');
+    logger.info('System bootstrap completed');
   } catch (error) {
-    logger.error('❌ System bootstrap failed:', error);
+    logger.error({ err: error }, 'System bootstrap failed');
     await shutdownAll();
     throw error;
   }
 }
 
-export async function shutdownAll(): Promise<void> {
-  logger.info('🛑 Shutting down all systems...');
+const SHUTDOWN_TIMEOUT_MS = 10_000;
 
-  try {
-    await shutdownTrades();
-    await shutdownTimeUpdates();
-    await shutdownWebSocketEvents();
-    await shutdownPrices();
-    await disconnectDatabase();
-    await disconnectRedis();
-    logger.info('✅ All systems shut down successfully');
-  } catch (error) {
-    logger.error('❌ Error during shutdown:', error);
-    throw error;
+export async function shutdownAll(): Promise<void> {
+  logger.info('Shutting down all systems...');
+
+  const errors: Error[] = [];
+
+  async function safeShutdown(name: string, fn: () => Promise<void>) {
+    try {
+      await fn();
+    } catch (error) {
+      logger.error({ err: error }, `Failed to shut down ${name}`);
+      errors.push(error instanceof Error ? error : new Error(String(error)));
+    }
   }
+
+  await safeShutdown('trades', shutdownTrades);
+  await safeShutdown('time updates', shutdownTimeUpdates);
+  await safeShutdown('websocket events', shutdownWebSocketEvents);
+  await safeShutdown('prices', shutdownPrices);
+  await safeShutdown('database', disconnectDatabase);
+  await safeShutdown('redis', disconnectRedis);
+
+  if (errors.length > 0) {
+    logger.warn(`Shutdown completed with ${errors.length} error(s)`);
+  } else {
+    logger.info('All systems shut down successfully');
+  }
+}
+
+/** Returns a promise that rejects after SHUTDOWN_TIMEOUT_MS */
+export function shutdownWithTimeout(): Promise<void> {
+  return Promise.race([
+    shutdownAll(),
+    new Promise<void>((_, reject) =>
+      setTimeout(() => reject(new Error('Shutdown timed out')), SHUTDOWN_TIMEOUT_MS),
+    ),
+  ]);
 }

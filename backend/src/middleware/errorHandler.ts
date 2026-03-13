@@ -1,29 +1,19 @@
-/**
- * Global error handler for Fastify
- * 
- * All domain errors extend AppError with statusCode and code.
- * Centralizes error handling logic and provides consistent error responses.
- */
-
 import type { FastifyError, FastifyReply, FastifyRequest } from 'fastify';
 import { ZodError } from 'zod';
 import { logger } from '../shared/logger.js';
 import { AppError } from '../shared/errors/AppError.js';
 import { env } from '../config/env.js';
 
-/**
- * Format Zod validation errors for API response
- */
 function formatZodError(zodError: ZodError) {
   const details: Record<string, string[]> = {};
-  
-  zodError.issues.forEach((issue) => {
-    const path = issue.path.length > 0 ? String(issue.path.join('.')) : 'root';
+
+  for (const issue of zodError.issues) {
+    const path = issue.path.length > 0 ? issue.path.join('.') : 'root';
     if (!details[path]) {
       details[path] = [];
     }
     details[path].push(issue.message);
-  });
+  }
 
   return {
     error: 'VALIDATION_ERROR',
@@ -32,19 +22,15 @@ function formatZodError(zodError: ZodError) {
   };
 }
 
-/**
- * Global error handler for Fastify
- */
 export async function errorHandler(
   error: FastifyError | AppError | Error,
   request: FastifyRequest,
   reply: FastifyReply,
 ) {
-  // Structured log with correlation
   logger.error(
     {
       err: error,
-      requestId: (request as { id?: string }).id,
+      requestId: request.id,
       url: request.url,
       method: request.method,
       userId: (request as { userId?: string }).userId,
@@ -53,21 +39,27 @@ export async function errorHandler(
     'Request error',
   );
 
-  // Handle Zod validation errors
   if (error instanceof ZodError) {
     return reply.status(400).send(formatZodError(error));
   }
 
-  // Handle AppError (includes all domain errors: Auth, Account, Trade, User)
   if (error instanceof AppError) {
     return reply.status(error.statusCode).send({
-      error: error.code ?? 'ERROR',
+      error: error.code,
       message: error.message,
     });
   }
 
-  // Handle Fastify validation errors
   const fastifyErr = error as FastifyError;
+
+  // CSRF token validation failures
+  if (fastifyErr.code === 'FST_CSRF_MISSING_SECRET' || fastifyErr.code?.startsWith('FST_CSRF')) {
+    return reply.status(403).send({
+      error: 'CSRF_ERROR',
+      message: 'Invalid or missing CSRF token',
+    });
+  }
+
   if ('validation' in fastifyErr && fastifyErr.validation) {
     return reply.status(400).send({
       error: 'VALIDATION_ERROR',
@@ -76,7 +68,6 @@ export async function errorHandler(
     });
   }
 
-  // Handle Fastify HTTP errors (404, etc.)
   if (fastifyErr.statusCode != null) {
     return reply.status(fastifyErr.statusCode).send({
       error: 'HTTP_ERROR',
@@ -84,7 +75,6 @@ export async function errorHandler(
     });
   }
 
-  // Default: Internal server error
   const isProduction = env.NODE_ENV === 'production';
   return reply.status(500).send({
     error: 'INTERNAL_SERVER_ERROR',

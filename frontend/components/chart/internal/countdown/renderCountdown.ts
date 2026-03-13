@@ -10,6 +10,8 @@
 
 import type { Viewport } from '../viewport.types';
 import type { Candle } from '../chart.types';
+import { timeToX, priceToY } from '../utils/coords';
+import { LABEL_COLOR, LABEL_FONT } from '../chartTheme';
 
 interface RenderCountdownParams {
   ctx: CanvasRenderingContext2D;
@@ -20,31 +22,11 @@ interface RenderCountdownParams {
   timeframeMs: number;
   timeframeLabel: string;
   remainingTime: string;
-  candleWidth: number; // Ширина свечи в пикселях
+  candleWidth: number;
 }
 
-const PADDING = 12; // Отступ от свечи по горизонтали
-const TEXT_COLOR = 'rgba(255, 255, 255, 0.45)'; // Как у меток осей
-const TEXT_SIZE = 12; // Размер шрифта
-const LINE_HEIGHT = 16; // Расстояние между строками
-
-/**
- * FLOW C4: Конвертирует время в X координату
- */
-function timeToX(time: number, viewport: Viewport, width: number): number {
-  const timeRange = viewport.timeEnd - viewport.timeStart;
-  if (timeRange === 0) return 0;
-  return ((time - viewport.timeStart) / timeRange) * width;
-}
-
-/**
- * Конвертирует цену в Y координату
- */
-function priceToY(price: number, viewport: Viewport, height: number): number {
-  const priceRange = viewport.priceMax - viewport.priceMin;
-  if (priceRange === 0) return height / 2;
-  return height - ((price - viewport.priceMin) / priceRange) * height;
-}
+const PADDING = 12;
+const LINE_HEIGHT = 16;
 
 export function renderCountdown({
   ctx,
@@ -76,7 +58,7 @@ export function renderCountdown({
   // X позиция: справа от свечи + отступ
   const textX = candleRightX + PADDING;
 
-  ctx.font = `${TEXT_SIZE}px sans-serif`;
+  ctx.font = LABEL_FONT;
   const textW = Math.max(ctx.measureText(timeframeLabel).width, ctx.measureText(remainingTime).width);
 
   if (textX > width - textW - 8) {
@@ -114,11 +96,10 @@ function renderText(
 ): void {
   ctx.save();
 
-  // Настраиваем шрифт и цвет
-  ctx.font = `${TEXT_SIZE}px sans-serif`;
+  ctx.font = LABEL_FONT;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
-  ctx.fillStyle = TEXT_COLOR;
+  ctx.fillStyle = LABEL_COLOR;
 
   // Рисуем метку таймфрейма выше линии текущей цены
   ctx.fillText(timeframeLabel, x, timeframeY);

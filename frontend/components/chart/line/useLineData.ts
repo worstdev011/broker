@@ -1,17 +1,15 @@
 /**
- * WebSocket Integration для линейного графика
+ * WebSocket integration for the line chart.
  *
- * Каждый тик записывается как точка (tick-level, как Pocket Option).
- * Live сегмент — продолжение линии от последнего тика к текущему моменту.
+ * Each tick is stored as-is in the point store.  The renderer draws
+ * a horizontal extension from the last tick to "now" (the live
+ * segment), so no bridge points are needed — the flat section between
+ * ticks is always rendered on-the-fly.
  */
 
 import { useCallback, useRef, useEffect } from 'react';
 import type { PricePoint } from './useLinePointStore';
 
-/**
- * Live сегмент — плоское продолжение от последнего тика до «сейчас».
- * X = wallNow (вычисляется в render loop), Y = последний тик (snap).
- */
 export type LiveSegment = {
   fromTime: number;
   toTime: number;
@@ -40,21 +38,20 @@ export function useLineData({ pointStore, viewport, enabled = true, setLiveSegme
     enabledRef.current = enabled;
   }, [enabled]);
 
-  /**
-   * Каждый тик → точка в store + live сегмент обновляется.
-   */
   const onPriceUpdate = useCallback(
     (price: number, timestamp: number): void => {
       if (!enabledRef.current) return;
 
-      pointStore.push({ time: timestamp, price });
       viewport.calibrateTime(timestamp);
+      pointStore.push({ time: timestamp, price });
 
+      // Fix #4: Update startedAt on every tick so the live segment animation
+      // stays in sync with the latest price arrival, preventing drift.
       const seg: LiveSegment = {
         fromTime: timestamp,
         toTime: timestamp + 500,
         fromPrice: price,
-        startedAt: liveSegmentRef.current?.startedAt ?? performance.now(),
+        startedAt: performance.now(),
       };
       liveSegmentRef.current = seg;
       setLiveSegment?.(seg);

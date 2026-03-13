@@ -6,7 +6,8 @@
 
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
+import { useClickOutside } from '@/lib/hooks/useClickOutside';
 import type { ChartType } from './chart.types';
 import type { CandleMode } from './internal/candleModes/candleMode.types';
 
@@ -37,25 +38,7 @@ export function ChartTypeMenu({
 }: ChartTypeMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent | TouchEvent) => {
-      const target = event.target as Node;
-      if (target && menuRef.current && !menuRef.current.contains(target)) {
-        setIsOpen(false);
-      }
-    };
-
-    if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside, true);
-      document.addEventListener('touchstart', handleClickOutside, true);
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside, true);
-      document.removeEventListener('touchstart', handleClickOutside, true);
-    };
-  }, [isOpen]);
+  useClickOutside(menuRef, () => setIsOpen(false), isOpen);
 
   const currentOption = CHART_OPTIONS.find(
     (opt) =>
@@ -68,14 +51,15 @@ export function ChartTypeMenu({
     <div className="relative" ref={menuRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="rounded-md text-sm font-semibold transition-colors flex items-center justify-center text-white md:hover:bg-white/10 p-1 min-w-[36px] min-h-[32px]"
+        className="rounded-md text-sm font-semibold transition-colors duration-300 ease-in-out flex items-center justify-center text-white md:hover:bg-white/10 px-3.5 py-2"
+        style={{ width: '44px', height: '36px', minWidth: '44px', maxWidth: '44px' }}
         title={currentOption ? `Тип графика: ${currentOption.label}` : 'Тип графика'}
       >
-        <img src={triggerIconSrc} alt="" className="w-5 h-4 object-contain" />
+        <img src={triggerIconSrc} alt="" className="w-5 h-4 object-contain shrink-0" />
       </button>
 
       {isOpen && (
-        <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 rounded-lg shadow-xl z-50 overflow-hidden bg-[#091C56] border border-white/5">
+        <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 rounded-lg shadow-xl z-50 overflow-hidden bg-[#1e2a40] border border-white/5">
           <div className="p-1.5 flex items-center gap-1">
             {CHART_OPTIONS.map((option) => {
               const isActive =
@@ -95,7 +79,7 @@ export function ChartTypeMenu({
                     }
                     setIsOpen(false);
                   }}
-                  className={`flex flex-col items-center justify-center gap-1 px-3 py-1.5 rounded-lg transition-colors w-[72px] min-w-[72px] ${
+                  className={`flex flex-col items-center justify-center gap-1 px-3 py-1.5 rounded-lg transition-colors duration-300 ease-in-out w-[72px] min-w-[72px] ${
                     isActive
                       ? 'bg-[#3347ff] text-white border border-[#3347ff]'
                       : 'bg-white/10 text-gray-300 md:hover:bg-white/15 md:hover:text-white'
