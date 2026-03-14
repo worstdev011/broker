@@ -1614,7 +1614,7 @@ export default function TerminalPage() {
                       defaultValue={cfg.stdDevMult ?? 2}
                       className="w-full rounded-md bg-[#0b1630] border border-white/10 px-2 py-1 text-xs text-white focus:outline-none focus:ring-1 focus:ring-[#3347ff]"
                       onBlur={(e) => {
-                        const raw = Number(e.target.value || cfg.stdDevMult ?? 2);
+                        const raw = Number(e.target.value || (cfg.stdDevMult ?? 2));
                         const val = clampFloat(raw, 0.5, 5);
                         e.target.value = String(val);
                         handleSave({ stdDevMult: val });
@@ -1637,7 +1637,7 @@ export default function TerminalPage() {
                       defaultValue={cfg.atrMult ?? 2}
                       className="w-full rounded-md bg-[#0b1630] border border-white/10 px-2 py-1 text-xs text-white focus:outline-none focus:ring-1 focus:ring-[#3347ff]"
                       onBlur={(e) => {
-                        const raw = Number(e.target.value || cfg.atrMult ?? 2);
+                        const raw = Number(e.target.value || (cfg.atrMult ?? 2));
                         const val = clampFloat(raw, 0.5, 5);
                         e.target.value = String(val);
                         handleSave({ atrMult: val });
