@@ -94,6 +94,11 @@ export default function TerminalPage() {
         const currentInst = data.find((inst) => inst.id === instrument);
         if (currentInst) {
           setPayoutPercent(currentInst.payoutPercent);
+        } else if (data.length > 0) {
+          // Stale instrument ID (e.g. from old localStorage) — reset to default
+          const fallback = data.find((inst) => inst.id === DEFAULT_INSTRUMENT_ID) ?? data[0]!;
+          setInstrument(fallback.id);
+          setPayoutPercent(fallback.payoutPercent);
         }
       } catch (error) {
         logger.error('Failed to load instruments:', error);
