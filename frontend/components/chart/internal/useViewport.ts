@@ -37,7 +37,7 @@ interface UseViewportReturn {
   recalculateYOnly: () => void; // Только Y, без изменения X
   updateViewport: (newViewport: Viewport) => void;
   config: ViewportConfig;
-  // 🔥 FLOW F1 / F3–F5 / F8: Follow mode API
+  // 🔥 FLOW F1 / F3-F5 / F8: Follow mode API
   setFollowMode: (on: boolean) => void;
   getFollowMode: () => boolean;
   toggleFollowMode: () => void;
@@ -235,9 +235,9 @@ export function useViewport({
   
   // 🔥 FLOW F1: Follow mode state
   const followModeRef = useRef<boolean>(true); // По умолчанию включен
-  // 🔥 FLOW F3: Якорь «где сейчас рынок» — обновляется при price:update / candle:close
+  // 🔥 FLOW F3: Якорь «где сейчас рынок» - обновляется при price:update / candle:close
   const latestCandleTimeRef = useRef<number | null>(null);
-  // 🔥 FLOW F1: Плавный сдвиг — целевой viewport и старт анимации
+  // 🔥 FLOW F1: Плавный сдвиг - целевой viewport и старт анимации
   const targetViewportRef = useRef<Viewport | null>(null);
   const followAnimationStartRef = useRef<{ viewport: Viewport; time: number } | null>(null);
   // 🔥 FLOW Y1: Y-scale drag state
@@ -275,7 +275,7 @@ export function useViewport({
       return;
     }
 
-    // 🔥 FLOW F1: Follow mode логика — целевой viewport идёт в аниматор, не прыжком
+    // 🔥 FLOW F1: Follow mode логика - целевой viewport идёт в аниматор, не прыжком
     if (followModeRef.current && liveCandle) {
       // Если follow mode включен, привязываем viewport к live-свече
       // 🔥 ВАЖНО: Сохраняем текущий масштаб (если viewport уже существует)
@@ -450,7 +450,7 @@ export function useViewport({
    * Обновление только Y масштаба (auto-fit) без изменения X
    * Используется при обновлении данных (price update)
    * 🔥 FLOW Y2: В manual режиме применяет yScaleFactor к авто-диапазону
-   *   (вместо полного пропуска Y — авто-масштаб работает с пользовательским зумом)
+   *   (вместо полного пропуска Y - авто-масштаб работает с пользовательским зумом)
    */
   const recalculateYOnly = (): void => {
     const currentViewport = viewportRef.current;
@@ -514,7 +514,7 @@ export function useViewport({
   /**
    * Обновить viewport (для pan/zoom)
    * 🔥 FLOW Y1: Y пересчитывается через auto-fit только если yMode === 'auto'
-   * 🔥 FLOW PAN-CLAMP: Viewport ограничен — минимум 10% должно пересекаться с данными
+   * 🔥 FLOW PAN-CLAMP: Viewport ограничен - минимум 10% должно пересекаться с данными
    */
   const updateViewport = (newViewport: Viewport): void => {
     // 🔥 FLOW PAN-CLAMP: Ограничиваем viewport по данным
@@ -652,7 +652,7 @@ export function useViewport({
     const start = followAnimationStartRef.current;
     if (!target || !start) return;
 
-    // Первый кадр анимации — фиксируем время старта
+    // Первый кадр анимации - фиксируем время старта
     const startTime = start.time === 0 ? now : start.time;
     if (start.time === 0) {
       followAnimationStartRef.current = { viewport: start.viewport, time: now };
@@ -782,7 +782,7 @@ export function useViewport({
       // Сохраняем текущий масштаб viewport
       const currentVp = viewportRef.current;
       if (!currentVp) {
-        // Нет viewport — просто включаем follow mode
+        // Нет viewport - просто включаем follow mode
         followModeRef.current = true;
         return;
       }
@@ -794,7 +794,7 @@ export function useViewport({
       const candles = getCandles();
       const { rightPaddingRatio, yPaddingRatio } = configRef.current;
       
-      // Если нет данных — просто включаем follow mode без анимации
+      // Если нет данных - просто включаем follow mode без анимации
       if (candles.length === 0 && !liveCandle) {
         followModeRef.current = true;
         return;
@@ -824,7 +824,7 @@ export function useViewport({
       let priceMax: number;
 
       if (!priceRange) {
-        // Не можем вычислить цены — включаем follow mode, используем текущие Y
+        // Не можем вычислить цены - включаем follow mode, используем текущие Y
         followModeRef.current = true;
         priceMin = currentVp.priceMin;
         priceMax = currentVp.priceMax;
@@ -1134,7 +1134,7 @@ export function useViewport({
   }, []);
 
   // 🔥 FIX: Очищаем returnToFollow таймер при unmount (утечка памяти + callback на мёртвом компоненте)
-  // Аналогично useLineChart.ts — при unmount CandleChart таймер должен быть отменён
+  // Аналогично useLineChart.ts - при unmount CandleChart таймер должен быть отменён
   useEffect(() => {
     return () => {
       if (returnToFollowTimerRef.current) {
@@ -1151,7 +1151,7 @@ export function useViewport({
     recalculateYOnly,
     updateViewport,
     config: configRef.current,
-    // 🔥 FLOW F1 / F3–F5 / F8: Follow mode API
+    // 🔥 FLOW F1 / F3-F5 / F8: Follow mode API
     setFollowMode,
     getFollowMode,
     toggleFollowMode,

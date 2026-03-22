@@ -24,7 +24,7 @@ const nextConfig = {
       { protocol: 'https', hostname: 'flagcdn.com', pathname: '/**' },
     ],
   },
-  // Проксируем /api/* и /uploads/* на бэкенд — cookies работают только при same-origin запросах
+  // Проксируем /api/* и /uploads/* на бэкенд - cookies работают только при same-origin запросах
   async rewrites() {
     return [
       { source: '/api/:path*', destination: `${backendUrl}/api/:path*` },

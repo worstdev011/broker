@@ -20,6 +20,7 @@ import type React from 'react';
 import type { Viewport } from '../viewport.types';
 import { InteractionState, type InteractionZone } from './interaction.types';
 import { panViewportTime, zoomViewportTime } from './math';
+import { getMinVisibleCandlesForZoom } from './zoomBreakpoints';
 
 interface UseChartInteractionsParams {
   canvasRef: RefObject<HTMLCanvasElement>;
@@ -31,7 +32,7 @@ interface UseChartInteractionsParams {
   getIsEditingDrawing?: () => boolean; // FLOW G16: Проверка, идет ли редактирование drawing
   getDrawingEditState?: () => { mode: string } | null; // FLOW G16: режим при драге (move / resize-*)
   getHoveredDrawingMode?: () => string | null; // FLOW G16: режим при наведении на drawing
-  getIsPointOnDrawing?: (x: number, y: number) => boolean; // FLOW G16-TOUCH: touch на drawing — не начинаем pan
+  getIsPointOnDrawing?: (x: number, y: number) => boolean; // FLOW G16-TOUCH: touch на drawing - не начинаем pan
   setFollowMode?: (on: boolean) => void; // 🔥 FLOW F1: Выключение follow при взаимодействии
   // 🔥 FLOW Y1: Y-scale drag API
   beginYScaleDrag?: (startY: number) => void;
@@ -65,7 +66,6 @@ interface UseChartInteractionsParams {
   scheduleReturnToFollow?: () => void;
 }
 
-const MIN_VISIBLE_CANDLES = 35; // Меньше zoom in — нельзя так сильно приближать
 const MAX_VISIBLE_CANDLES = 300; // Увеличено для возможности большего zoom out
 const ZOOM_SENSITIVITY = 0.1; // 10% за шаг колесика
 const PRICE_AXIS_WIDTH = 80; // 🔥 FLOW Y1: Ширина правой оси цены
@@ -135,7 +135,7 @@ export function useChartInteractions({
   getMarketStatus,
   scheduleReturnToFollow,
 }: UseChartInteractionsParams): UseChartInteractionsReturn {
-  // 🔥 FIX: Ref для актуальных callbacks — handlers стабильны, но всегда вызывают последние версии.
+  // 🔥 FIX: Ref для актуальных callbacks - handlers стабильны, но всегда вызывают последние версии.
   // Без этого при смене инструмента/таймфрейма handlers используют stale closure (eslint-disable скрывал).
   const handlersRef = useRef({
     updateViewport,
@@ -432,7 +432,7 @@ export function useChartInteractions({
       viewport,
       zoomFactor,
       anchorTime,
-      minVisibleCandles: MIN_VISIBLE_CANDLES,
+      minVisibleCandles: getMinVisibleCandlesForZoom(),
       maxVisibleCandles: MAX_VISIBLE_CANDLES,
       timeframeMs,
     });
@@ -558,7 +558,7 @@ export function useChartInteractions({
         viewport,
         zoomFactor,
         anchorTime,
-        minVisibleCandles: MIN_VISIBLE_CANDLES,
+        minVisibleCandles: getMinVisibleCandlesForZoom(),
         maxVisibleCandles: MAX_VISIBLE_CANDLES,
         timeframeMs,
       });
@@ -623,7 +623,7 @@ export function useChartInteractions({
       canvas.removeEventListener('touchend', handleTouchEnd);
       canvas.removeEventListener('touchcancel', handleTouchEnd);
     };
-  }, [canvasRef]); // handlersRef обновляется каждый рендер — handlers всегда вызывают актуальные callbacks
+  }, [canvasRef]); // handlersRef обновляется каждый рендер - handlers всегда вызывают актуальные callbacks
 
   /**
    * 🔥 FLOW: Timeframe Switch Reset - сброс состояния pan/zoom

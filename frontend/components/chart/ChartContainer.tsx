@@ -1,5 +1,5 @@
 /**
- * ChartContainer — switches between chart types (candle / line).
+ * ChartContainer - switches between chart types (candle / line).
  * Handles loading overlay, error state.
  *
  * Chart data is initialized via WS `chart:init` (not HTTP snapshot).

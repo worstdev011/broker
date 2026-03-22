@@ -2,6 +2,7 @@
 
 import { ArrowUp, ArrowDown, ChevronDown } from 'lucide-react';
 import ReactCountryFlag from 'react-country-flag';
+import { useEffect, useRef } from 'react';
 import { getInstrumentOrDefault } from '@/lib/instruments';
 import type { TradeHistoryItem } from '@/types/trade';
 
@@ -56,27 +57,77 @@ export function TradeCard({ trade, currentTime, isExpanded, onToggle, currency =
   const entryPrice = trade.entryPrice ? parseFloat(trade.entryPrice) : null;
   const exitPrice = trade.exitPrice ? parseFloat(trade.exitPrice) : null;
 
+  const progressBarRef = useRef<HTMLDivElement>(null);
+  const timerRef = useRef<HTMLSpanElement>(null);
+  const rafRef = useRef<number>(0);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const openedMs = new Date(trade.openedAt).getTime();
+    const expiresMs = new Date(trade.expiresAt).getTime();
+    const total = expiresMs - openedMs;
+
+    const tick = () => {
+      const nowMs = Date.now();
+
+      if (progressBarRef.current && total > 0) {
+        const pct = Math.min(100, Math.max(0, ((nowMs - openedMs) / total) * 100));
+        progressBarRef.current.style.width = `${pct}%`;
+      }
+
+      if (timerRef.current) {
+        const diffMs = expiresMs - nowMs;
+        if (diffMs > 0) {
+          const totalSec = Math.floor(diffMs / 1000);
+          const h = Math.floor(totalSec / 3600);
+          const m = Math.floor((totalSec % 3600) / 60);
+          const s = totalSec % 60;
+          timerRef.current.textContent = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+        } else {
+          timerRef.current.textContent = '00:00:00';
+        }
+      }
+
+      rafRef.current = requestAnimationFrame(tick);
+    };
+
+    rafRef.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [isOpen, trade.openedAt, trade.expiresAt]);
+
   const formatTime = (dateString: string) => {
     const date = new Date(dateString);
     return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`;
   };
 
-  const getTimeDisplay = () => {
+  const getInitialTimeDisplay = () => {
     if (isOpen) {
       const expiresAt = new Date(trade.expiresAt);
-      const now = currentTime || new Date();
+      const now = new Date();
       const diffMs = expiresAt.getTime() - now.getTime();
       if (diffMs > 0) {
         const totalSeconds = Math.floor(diffMs / 1000);
-        const hours = Math.floor(totalSeconds / 3600);
-        const minutes = Math.floor((totalSeconds % 3600) / 60);
-        const seconds = totalSeconds % 60;
-        return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+        const h = Math.floor(totalSeconds / 3600);
+        const m = Math.floor((totalSeconds % 3600) / 60);
+        const s = totalSeconds % 60;
+        return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
       }
       return '00:00:00';
     }
     return formatTime(trade.closedAt || trade.openedAt);
   };
+
+  const getInitialProgress = () => {
+    if (!isOpen) return null;
+    const openedMs = new Date(trade.openedAt).getTime();
+    const expiresMs = new Date(trade.expiresAt).getTime();
+    const total = expiresMs - openedMs;
+    if (total <= 0) return 100;
+    return Math.min(100, Math.max(0, ((Date.now() - openedMs) / total) * 100));
+  };
+
+  const progressPct = getInitialProgress();
 
   const pair = displayName.split(' ')[0];
   const [country1, country2] = getCurrencyCountryCodes(pair);
@@ -92,7 +143,9 @@ export function TradeCard({ trade, currentTime, isExpanded, onToggle, currency =
       tabIndex={0}
       onClick={onToggle}
       onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onToggle?.()}
-      className="bg-[#1f2a45] rounded-lg p-4 flex flex-col gap-3 cursor-pointer transition-all md:hover:bg-[#1f2a45]/90"
+      className={`bg-[#1f2a45] rounded-lg p-2.5 flex flex-col gap-1.5 cursor-pointer transition-all md:hover:bg-[#1f2a45]/90 border-l-[3px] ${
+        isOpen ? 'border-[#2478ff]' : isWin ? 'border-green-500' : 'border-red-500'
+      }`}
     >
       {/* Instrument + time */}
       <div className="flex items-center justify-between">
@@ -113,22 +166,43 @@ export function TradeCard({ trade, currentTime, isExpanded, onToggle, currency =
             {displayName} {isOTC ? 'OTC' : ''}
           </span>
         </div>
-        <span className="text-sm text-gray-300 font-mono">{getTimeDisplay()}</span>
+        {isOpen
+          ? <span ref={timerRef} className="text-sm text-gray-300">{getInitialTimeDisplay()}</span>
+          : <span className="text-sm text-gray-300">{getInitialTimeDisplay()}</span>
+        }
       </div>
 
       {/* Payout % + amount */}
       <div className="flex items-center justify-between">
         <span className="text-sm text-gray-300">{Math.round(payout * 100)}%</span>
-        <span className="text-sm text-white">-{fmtAmount(amount)}</span>
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-gray-500">{currency}</span>
+          <span className="text-sm text-white">{fmtAmount(amount)}</span>
+        </div>
       </div>
 
-      <div className="h-px bg-[#3B4657]" />
+      {progressPct !== null ? (
+        <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
+          <div
+            ref={progressBarRef}
+            className="h-full rounded-full"
+            style={{
+              width: `${progressPct}%`,
+              background: 'linear-gradient(90deg, #2478ff, #38c4ff)',
+            }}
+          />
+        </div>
+      ) : (
+        <div className="h-px bg-[#3B4657]" />
+      )}
 
       {/* Result + direction */}
       <div className="flex items-center justify-between">
-        <span className="text-sm font-medium text-white">
-          {isOpen ? '0.00' : isWin ? fmtAmount(payoutAmount) : '0.00'} {currency}
-        </span>
+        <div className="flex items-center gap-1.5">
+          <span className={`text-sm font-medium ${isOpen ? 'text-green-400' : isWin ? 'text-green-400' : 'text-red-400'}`}>
+            {isOpen ? `+${fmtAmount(payoutAmount)}` : isWin ? `+${fmtAmount(payoutAmount)}` : `-${fmtAmount(amount)}`} {currency}
+          </span>
+        </div>
         <div className="flex items-center gap-1">
           {trade.direction === 'CALL' ? (
             <ArrowUp className="w-4 h-4 text-green-400" />
@@ -144,13 +218,13 @@ export function TradeCard({ trade, currentTime, isExpanded, onToggle, currency =
         <div className="pt-3 mt-1 border-t border-white/10 flex flex-col gap-2">
           <div className="flex justify-between text-xs">
             <span className="text-gray-400">Точка входа</span>
-            <span className="text-white font-medium">{entryPrice != null ? fmtPrice(entryPrice) : '—'}</span>
+            <span className="text-white font-medium">{entryPrice != null ? fmtPrice(entryPrice) : '-'}</span>
           </div>
           {!isOpen && (
             <>
               <div className="flex justify-between text-xs">
                 <span className="text-gray-400">Точка выхода</span>
-                <span className="text-white font-medium">{exitPrice != null ? fmtPrice(exitPrice) : '—'}</span>
+                <span className="text-white font-medium">{exitPrice != null ? fmtPrice(exitPrice) : '-'}</span>
               </div>
               {entryPrice != null && exitPrice != null && (
                 <div className="flex justify-between text-xs">
@@ -178,7 +252,7 @@ export function TradeCard({ trade, currentTime, isExpanded, onToggle, currency =
           </div>
           <div className="flex justify-between text-xs">
             <span className="text-gray-400">Открыта</span>
-            <span className="text-white">{trade.openedAt ? new Date(trade.openedAt).toLocaleString('ru-RU') : '—'}</span>
+            <span className="text-white">{trade.openedAt ? new Date(trade.openedAt).toLocaleString('ru-RU') : '-'}</span>
           </div>
           {!isOpen && trade.closedAt && (
             <div className="flex justify-between text-xs">

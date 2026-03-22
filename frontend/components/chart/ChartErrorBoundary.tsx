@@ -14,7 +14,7 @@ interface State {
 }
 
 /**
- * 🔥 FIX #13: Error Boundary для графика — изолирует крэш графика от всей страницы
+ * 🔥 FIX #13: Error Boundary для графика - изолирует крэш графика от всей страницы
  */
 export class ChartErrorBoundary extends React.Component<Props, State> {
   constructor(props: Props) {

@@ -44,7 +44,7 @@ function formatTime(ts: number): string {
  * Форматирует цену: по digits инструмента или 2 по умолчанию.
  */
 function formatPrice(price: number, digits?: number): string {
-  if (!Number.isFinite(price)) return '—';
+  if (!Number.isFinite(price)) return '-';
   return price.toFixed(digits ?? 2);
 }
 

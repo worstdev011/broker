@@ -80,7 +80,7 @@ export class KycController {
   async webhook(request: FastifyRequest, reply: FastifyReply) {
     const digest = (request.headers['x-payload-digest'] as string | undefined) ?? '';
 
-    const rawBody: Buffer | undefined = (request.raw as Record<string, unknown>)[
+    const rawBody: Buffer | undefined = (request.raw as unknown as Record<string, unknown>)[
       'rawBody'
     ] as Buffer | undefined;
 

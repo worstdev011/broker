@@ -30,6 +30,7 @@ import { DEFAULT_INSTRUMENT_ID } from '@/lib/instruments';
 import { dismissToastByKey, showTradeOpenToast, showTradeCloseToast } from '@/stores/toast.store';
 import { parseTimeframeToMs } from './internal/utils/timeframe';
 import { zoomViewportTime } from './internal/interactions/math';
+import { getMinVisibleCandlesForZoom } from './internal/interactions/zoomBreakpoints';
 import { formatServerTime } from './internal/utils/formatServerTime';
 import type { PriceAlert } from './internal/alerts/priceAlerts.types';
 import type { InteractionZone } from './internal/interactions/interaction.types';
@@ -37,7 +38,7 @@ import type { ChartSnapshot } from '@/types/terminal';
 import type { IndicatorConfig } from './internal/indicators/indicator.types';
 import type { Viewport } from './internal/viewport.types';
 
-/** FLOW O: Overlay Registry — canvas читает visibility, UI пишет в registry */
+/** FLOW O: Overlay Registry - canvas читает visibility, UI пишет в registry */
 export interface OverlayRegistryParams {
   getVisibleOverlayIds?: () => Set<string>;
   onDrawingAdded?: (overlay: import('./internal/overlay/overlay.types').DrawingOverlay) => void;
@@ -140,7 +141,7 @@ export function useChart({ canvasRef, timeframe = '5s', instrument, payoutPercen
   // поэтому reset при монтировании гарантирует чистое состояние
   const isInitialMountRef = useRef<boolean>(true);
 
-  // При price:update — только Y (auto-fit), без движения по X. Сдвиг по X только при candle:close и по кнопке «Вернуться».
+  // При price:update - только Y (auto-fit), без движения по X. Сдвиг по X только при candle:close и по кнопке «Вернуться».
   const viewportRecalculateYOnlyRef = useRef<() => void>(() => {});
 
   // FLOW G2: инициализация слоя данных
@@ -298,7 +299,7 @@ export function useChart({ canvasRef, timeframe = '5s', instrument, payoutPercen
   // FLOW G14: Drawings
   const drawings = useDrawings();
 
-  // FLOW O7: при создании drawing — добавляем в Overlay Registry (если передан onDrawingAdded)
+  // FLOW O7: при создании drawing - добавляем в Overlay Registry (если передан onDrawingAdded)
   const onDrawingAddedRef = useRef(overlayRegistry?.onDrawingAdded);
   onDrawingAddedRef.current = overlayRegistry?.onDrawingAdded;
   const addDrawingWithOverlay = useCallback(
@@ -357,11 +358,11 @@ export function useChart({ canvasRef, timeframe = '5s', instrument, payoutPercen
   const onReadyRef = useRef(onReady);
   onReadyRef.current = onReady;
 
-  // FLOW T1/T4: Server time — refs, без state/setInterval. Drift compensation через performance.now()
+  // FLOW T1/T4: Server time - refs, без state/setInterval. Drift compensation через performance.now()
   const serverTimeRef = useRef<{ timestamp: number; utcOffsetMinutes: number } | null>(null);
   const lastSyncTimeRef = useRef(0);
 
-  // FLOW E1: Expiration seconds — хранится в ref, меняется только UI терминала
+  // FLOW E1: Expiration seconds - хранится в ref, меняется только UI терминала
   const expirationSecondsRef = useRef<number>(60);
 
   // Deferred work timeout IDs (cleanup on unmount)
@@ -696,7 +697,7 @@ export function useChart({ canvasRef, timeframe = '5s', instrument, payoutPercen
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [instrument]);
 
-  // WebSocket — single source of truth for chart data + real-time updates
+  // WebSocket - single source of truth for chart data + real-time updates
   useWebSocket({
     activeInstrumentRef,
     activeTimeframeRef,
@@ -791,7 +792,7 @@ export function useChart({ canvasRef, timeframe = '5s', instrument, payoutPercen
       const tfMs = parseTimeframeToMs(timeframe);
 
       if (liveCandle && match.candle.timestamp > liveCandle.startTime + tfMs * 1.5) {
-        // Gap detected — WS will send a fresh chart:init on next subscribe cycle
+        // Gap detected - WS will send a fresh chart:init on next subscribe cycle
         chartData.applyActiveCandleSnapshot(match.candle);
         viewport.recalculateYOnly();
       } else {
@@ -919,7 +920,7 @@ export function useChart({ canvasRef, timeframe = '5s', instrument, payoutPercen
       viewport: startVp,
       zoomFactor: factor,
       anchorTime,
-      minVisibleCandles: 35,
+      minVisibleCandles: getMinVisibleCandlesForZoom(),
       maxVisibleCandles: 300,
       timeframeMs,
     });

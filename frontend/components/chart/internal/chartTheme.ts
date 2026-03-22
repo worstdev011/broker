@@ -1,6 +1,6 @@
 /**
  * Shared visual constants for all chart UI elements.
- * Single source of truth — axes, crosshair, price line, grid, countdown.
+ * Single source of truth - axes, crosshair, price line, grid, countdown.
  */
 
 // Layout

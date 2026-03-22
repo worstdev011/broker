@@ -31,7 +31,7 @@ export async function registerKycRoutes(app: FastifyInstance) {
       (req: FastifyRequest, body: Buffer, done) => {
         // Store raw bytes on the underlying Node IncomingMessage so the
         // controller can access them after Fastify has already parsed the JSON.
-        (req.raw as Record<string, unknown>)['rawBody'] = body;
+        (req.raw as unknown as Record<string, unknown>)['rawBody'] = body;
         try {
           done(null, JSON.parse(body.toString('utf8')));
         } catch (err) {

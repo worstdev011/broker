@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback, Fragment } from 'react';
+import React, { useState, useEffect, useRef, useCallback, Fragment } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Link, useRouter } from '@/components/navigation';
 import ReactCountryFlag from 'react-country-flag';
@@ -204,7 +204,7 @@ function PersonalProfileTab({ onProfileUpdate }: { onProfileUpdate?: (p: UserPro
         setLastName(res.user.lastName || '');
         setNickname(res.user.nickname || '');
         setPhone(res.user.phone || '');
-        // Нормализуем страну в код (API может вернуть имя из модалки — "United States" или код "US")
+        // Нормализуем страну в код (API может вернуть имя из модалки - "United States" или код "US")
         setCountry(resolveCountryToCode(res.user.country) || 'UA');
         setDateOfBirth(res.user.dateOfBirth ? new Date(res.user.dateOfBirth).toISOString().slice(0, 10) : '');
       })
@@ -224,7 +224,7 @@ function PersonalProfileTab({ onProfileUpdate }: { onProfileUpdate?: (p: UserPro
       if (nickname.trim()) {
         const n = nickname.trim().startsWith('@') ? nickname.trim() : `@${nickname.trim()}`;
         if (!/^@[a-zA-Z0-9_]{5,20}$/.test(n)) {
-          setError('Никнейм: формат @username, 5–20 символов (буквы, цифры, _)');
+          setError('Никнейм: формат @username, 5-20 символов (буквы, цифры, _)');
           setSaving(false);
           return;
         }
@@ -514,12 +514,18 @@ function PersonalProfileTab({ onProfileUpdate }: { onProfileUpdate?: (p: UserPro
                         />
                       ) : (
                         <div className="relative w-14 h-14 rounded-full bg-gradient-to-br from-[#3347ff] via-[#3d52ff] to-[#1f2a45] flex items-center justify-center text-xl font-bold text-white ring-2 ring-white/20 ring-offset-2 ring-offset-[#030E28]">
-                          {(
-                            [firstName.trim(), lastName.trim()].filter(Boolean).join(' ') ||
-                            nickname.replace(/^@/, '') ||
-                            profile.email?.split('@')[0] ||
-                            '?'
-                          )[0].toUpperCase()}
+                          {(!firstName.trim() && !lastName.trim() && !nickname.replace(/^@/, '')) ? (
+                            <svg viewBox="0 0 24 24" fill="currentColor" className="w-7 h-7 text-white/80">
+                              <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/>
+                            </svg>
+                          ) : (
+                            (
+                              [firstName.trim(), lastName.trim()].filter(Boolean).join(' ') ||
+                              nickname.replace(/^@/, '') ||
+                              profile.email?.split('@')[0] ||
+                              '?'
+                            )[0].toUpperCase()
+                          )}
                         </div>
                       )}
                       <div className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-emerald-500 border-2 border-[#030E28] z-10" />
@@ -539,7 +545,7 @@ function PersonalProfileTab({ onProfileUpdate }: { onProfileUpdate?: (p: UserPro
                           style={{ width: '0.9em', height: '0.9em', borderRadius: '2px' }}
                         />
                         <span className="text-xs text-white/50 truncate">
-                          {COUNTRIES.find((c) => c.code === country)?.name || '—'}
+                          {COUNTRIES.find((c) => c.code === country)?.name || '-'}
                         </span>
                       </div>
                     </div>
@@ -591,7 +597,7 @@ function PersonalProfileTab({ onProfileUpdate }: { onProfileUpdate?: (p: UserPro
           <div className="flex flex-col gap-5 sm:gap-8 p-4 sm:p-6 md:p-8 rounded-xl bg-[#030E28]">
             <h1 className="text-base sm:text-2xl font-bold text-white">Личные данные</h1>
             <div className="flex flex-col sm:flex-row gap-6 sm:gap-8">
-            {/* Левая колонка — аватар */}
+            {/* Левая колонка - аватар */}
             <div className="flex flex-col w-36 mx-auto sm:w-56 sm:mx-0 sm:shrink-0">
               <div className="relative w-full aspect-square">
                 <div className="absolute -inset-1 rounded-2xl bg-gradient-to-r from-[#3347ff]/50 via-[#5b6bff]/30 to-[#3347ff]/50 blur-sm opacity-60" />
@@ -642,7 +648,7 @@ function PersonalProfileTab({ onProfileUpdate }: { onProfileUpdate?: (p: UserPro
               </p>
             </div>
 
-            {/* Правая колонка — поля формы */}
+            {/* Правая колонка - поля формы */}
             <div className="flex-1 min-w-0">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
           <div>
@@ -668,7 +674,7 @@ function PersonalProfileTab({ onProfileUpdate }: { onProfileUpdate?: (p: UserPro
             />
           </div>
           <div>
-            <LabelWithHint label="Никнейм" hint="5–20 символов, буквы, цифры и _" />
+            <LabelWithHint label="Никнейм" hint="5-20 символов, буквы, цифры и _" />
             <input
               type="text"
               value={nickname}
@@ -913,7 +919,7 @@ function PersonalProfileTab({ onProfileUpdate }: { onProfileUpdate?: (p: UserPro
         </div>
         </div>
 
-        {/* Правая колонка — виджеты (скрыта на мобилке) */}
+        {/* Правая колонка - виджеты (скрыта на мобилке) */}
         <div className="hidden md:flex w-56 shrink-0 p-4 border-l border-white/10 flex-col gap-4 overflow-hidden bg-gradient-to-br from-[#0a1638] via-[#07152f] to-[#040d1f]">
           <div className="rounded-xl bg-white/5 p-4">
             <h3 className="text-sm font-semibold text-white uppercase tracking-wider mb-3">Заполненность профиля</h3>
@@ -1077,17 +1083,22 @@ function ProfileSidebar() {
     };
   }, []);
 
-  const displayName = profile
-    ? [profile.firstName, profile.lastName].filter(Boolean).join(' ') || profile.nickname || profile.email?.split('@')[0] || 'Пользователь'
-    : 'Загрузка...';
+  const displayName = (() => {
+    if (!profile) return 'Загрузка...';
+    const first = profile.firstName?.trim();
+    const last = profile.lastName?.trim();
+    if (first && last) return `${first} ${last.charAt(0).toUpperCase()}.`;
+    if (first) return first;
+    return 'Гость';
+  })();
 
   const countryCode = resolveCountryToCode(profile?.country);
-  const countryName = COUNTRIES.find((c) => c.code === countryCode)?.name ?? profile?.country ?? '—';
+  const countryName = COUNTRIES.find((c) => c.code === countryCode)?.name ?? profile?.country ?? '-';
 
   return (
     <aside className="hidden md:flex w-[300px] shrink-0 flex-col h-full overflow-hidden relative bg-[#051228] border-r border-white/[0.08]">
 
-      {/* Верхний блок — аватар, имя, страна */}
+      {/* Верхний блок - аватар, имя, страна */}
       <div className="px-4 pt-6 pb-3 font-sans antialiased">
         <div className="flex flex-col items-start text-left w-full">
           <div className="flex items-center gap-4 w-full mb-4 pl-3.5">
@@ -1104,7 +1115,11 @@ function ProfileSidebar() {
                 />
               ) : (
                 <div className="relative w-16 h-16 rounded-full bg-gradient-to-br from-[#3347ff] via-[#3d52ff] to-[#1f2a45] flex items-center justify-center text-2xl font-bold text-white shadow-lg ring-2 ring-white/20 ring-offset-2 ring-offset-[#051228]">
-                  {displayName.charAt(0).toUpperCase()}
+                  {displayName === 'Гость' ? (
+                    <svg viewBox="0 0 24 24" fill="currentColor" className="w-8 h-8 text-white/80">
+                      <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/>
+                    </svg>
+                  ) : displayName.charAt(0).toUpperCase()}
                 </div>
               )}
             </div>
@@ -1133,19 +1148,7 @@ function ProfileSidebar() {
             </div>
           </div>
 
-          {/* Уровень — скруглённый бейдж */}
-          <div className="w-full mb-3">
-            <div className="flex items-center gap-3 px-4 py-3 rounded-xl w-full bg-gradient-to-r from-[#022766] to-[#051228] shadow-[inset_0_0_0_0.3px_#154594]">
-              <img src="/images/level.png" alt="" className="w-3.5 h-3.5 shrink-0 object-contain" />
-              {loading ? (
-                <div className="h-4 w-20 bg-white/10 rounded animate-pulse" />
-              ) : (
-                <span className="text-sm font-medium text-[#84B2FF]">Уровень 1</span>
-              )}
-            </div>
-          </div>
-
-          {/* Баланс — скруглённый блок */}
+          {/* Баланс - скруглённый блок */}
           <div className="w-full mb-4">
             <div className="flex flex-col gap-1 px-4 py-3 rounded-xl bg-gradient-to-r from-[#022766] to-[#051228] shadow-[inset_0_0_0_0.3px_#154594]">
               <div className="flex items-center justify-between gap-2">
@@ -1162,7 +1165,7 @@ function ProfileSidebar() {
                       <div className="h-6 w-28 bg-white/10 rounded animate-pulse mt-0.5" />
                     ) : (
                       <span className="text-lg font-bold text-white tabular-nums">
-                        {snapshot ? new Intl.NumberFormat('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(snapshot.balance) : '—'}
+                        {snapshot ? new Intl.NumberFormat('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(snapshot.balance) : '-'}
                       </span>
                     )}
                   </div>
@@ -1186,7 +1189,7 @@ function ProfileSidebar() {
               ) : (
                 <>
                   <span className="text-white/80 tabular-nums truncate min-w-0">
-                    {profile?.id ? `ID ${profile.id}` : '—'}
+                    {profile?.id ? `ID ${profile.id}` : '-'}
                   </span>
                   {profile?.id && (
                     <button
@@ -1208,7 +1211,7 @@ function ProfileSidebar() {
                 <div className="h-3.5 w-40 bg-white/10 rounded animate-pulse" />
               ) : (
                 <span className="text-white/90 truncate min-w-0" title={profile?.email}>
-                  {profile?.email || '—'}
+                  {profile?.email || '-'}
                 </span>
               )}
             </div>
@@ -1218,7 +1221,7 @@ function ProfileSidebar() {
                 <div className="h-3.5 w-24 bg-white/10 rounded animate-pulse" />
               ) : (
                 <span className="text-white/70">
-                  {profile?.createdAt ? new Date(profile.createdAt).toLocaleDateString('ru-RU', { month: 'short', year: 'numeric' }) : '—'}
+                  {profile?.createdAt ? new Date(profile.createdAt).toLocaleDateString('ru-RU', { month: 'short', year: 'numeric' }) : '-'}
                 </span>
               )}
             </div>
@@ -1232,7 +1235,7 @@ function ProfileSidebar() {
         <div className="h-px bg-gradient-to-r from-transparent via-[#3347ff]/40 to-transparent" />
       </div>
 
-      {/* Навигация — РАЗДЕЛЫ */}
+      {/* Навигация - РАЗДЕЛЫ */}
       <div className="flex-1 mt-6 px-4">
         <p className="text-[11px] font-semibold text-white/40 uppercase tracking-wider mb-3 px-1">
           РАЗДЕЛЫ
@@ -1246,16 +1249,14 @@ function ProfileSidebar() {
                 href={href}
                 className={`group relative flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-medium uppercase tracking-wider transition-all duration-200 overflow-hidden ${
                   isActive
-                    ? 'bg-gradient-to-r from-[#3347ff33] to-[#3347ff] text-white'
-                    : 'text-white/60 hover:text-white hover:bg-white/[0.06]'
+                    ? 'bg-white/[0.07] text-white'
+                    : 'text-white/50 hover:text-white hover:bg-white/[0.04]'
                 }`}
               >
                 {isActive && (
-                  <span className="absolute left-0 top-1.5 bottom-1.5 w-1.5 rounded-r-full bg-[#3347ff]" aria-hidden />
+                  <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r-full bg-[#3347ff]" aria-hidden />
                 )}
-                <div className={`flex items-center justify-center w-9 h-9 rounded-lg shrink-0 transition-colors ${
-                  isActive ? 'bg-[#3347ff]/30' : 'bg-white/5 group-hover:bg-white/10'
-                }`}>
+                <div className="w-9 h-9 flex items-center justify-center shrink-0">
                   <img src={iconSrc} alt="" className="w-4 h-4 object-contain" />
                 </div>
                 <span>{label.toUpperCase()}</span>
@@ -1299,9 +1300,7 @@ function ProfileBottomNav() {
             {isActive && (
               <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 rounded-full bg-[#3347ff]" aria-hidden />
             )}
-            <div className={`w-9 h-9 flex items-center justify-center rounded-xl transition-colors ${
-              isActive ? 'bg-[#3347ff]/20' : 'bg-transparent'
-            }`}>
+            <div className={`w-9 h-9 flex items-center justify-center rounded-xl transition-colors ${isActive ? 'bg-[#3347ff]/20' : 'bg-transparent'}`}>
               <img src={iconSrc} alt="" className="w-5 h-5 object-contain" />
             </div>
             <span className="text-[10px] font-semibold leading-tight tracking-wide">{shortLabel}</span>

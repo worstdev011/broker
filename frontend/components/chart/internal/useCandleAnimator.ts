@@ -8,7 +8,7 @@
  *
  * Правило (как в нормальных терминалах):
  * Первый тик после закрытия свечи всегда анимируется от close предыдущей свечи
- * (live.open новой свечи), а не от live.close — иначе визуальный рывок.
+ * (live.open новой свечи), а не от live.close - иначе визуальный рывок.
  *
  * ❌ ЗАПРЕЩЕНО:
  * - useState
@@ -47,7 +47,7 @@ type AnimationState = {
   startTime: number;
   duration: number;
   active: boolean;
-  /** Значения visual high/low в момент старта анимации — фитиль догоняет тело с тем же прогрессом */
+  /** Значения visual high/low в момент старта анимации - фитиль догоняет тело с тем же прогрессом */
   startVisualHigh: number;
   startVisualLow: number;
 };
@@ -74,13 +74,13 @@ export function useCandleAnimator({
     from: 0,
     to: 0,
     startTime: 0,
-    duration: 350, // ms — оптимально под price:update ~500ms
+    duration: 350, // ms - оптимально под price:update ~500ms
     active: false,
     startVisualHigh: 0,
     startVisualLow: 0,
   });
 
-  /** Первый тик после candle:close — анимируем от предыдущего close (live.open), не от live.close */
+  /** Первый тик после candle:close - анимируем от предыдущего close (live.open), не от live.close */
   const hasJustClosedRef = useRef<boolean>(false);
 
   /**
@@ -107,7 +107,7 @@ export function useCandleAnimator({
    * Правило: первый тик после закрытия свечи анимируется от close предыдущей свечи (live.open).
    */
   const onPriceUpdate = (price: number): void => {
-    // 🔥 FIX #15: Игнорируем NaN/Infinity — предотвращаем «пустой canvas» при сетевом сбое
+    // 🔥 FIX #15: Игнорируем NaN/Infinity - предотвращаем «пустой canvas» при сетевом сбое
     if (!Number.isFinite(price)) return;
 
     ensureInitialized();
@@ -122,7 +122,7 @@ export function useCandleAnimator({
     const prevClose = live.open; // close предыдущей свечи = open новой
 
     if (hasJustClosedRef.current) {
-      // Первый тик после candle:close — якорь на предыдущем close, без рывка
+      // Первый тик после candle:close - якорь на предыдущем close, без рывка
       hasJustClosedRef.current = false;
       animated.close = prevClose;
       animated.visualHigh = live.high;
@@ -153,7 +153,7 @@ export function useCandleAnimator({
 
   /**
    * Вызывается при candle:close
-   * Следующий onPriceUpdate будет первым тиком — анимация от предыдущего close (hasJustClosedRef).
+   * Следующий onPriceUpdate будет первым тиком - анимация от предыдущего close (hasJustClosedRef).
    */
   const onCandleClose = (): void => {
     animatedRef.current = null;
@@ -189,7 +189,7 @@ export function useCandleAnimator({
 
       animated.close = value;
 
-      // Фитиль анимируется с тем же прогрессом (eased), что и тело — нет «фитиль впереди, тело догоняет»
+      // Фитиль анимируется с тем же прогрессом (eased), что и тело - нет «фитиль впереди, тело догоняет»
       animated.visualHigh = lerp(anim.startVisualHigh, animated.truthHigh, eased);
       animated.visualLow = lerp(anim.startVisualLow, animated.truthLow, eased);
 

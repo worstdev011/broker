@@ -237,3 +237,128 @@ export function renderCandles({
 
   ctx.restore();
 }
+
+// ─── Min/max price labels for candle chart ─────────────────────────
+
+const LABEL_PADDING_X = 10;
+const LABEL_PADDING_Y = 2;
+const LABEL_BORDER_RADIUS = 6;
+const LABEL_Y_OFFSET = 10;
+const LABEL_FONT = '11px "Noto Sans", system-ui, -apple-system, sans-serif';
+const LABEL_BG = 'rgba(74, 118, 168, 0.35)';
+const LABEL_TEXT_COLOR = '#ffffff';
+
+interface RenderCandleMinMaxLabelsParams {
+  ctx: CanvasRenderingContext2D;
+  viewport: Viewport;
+  candles: Candle[];
+  liveCandle: Candle | null;
+  width: number;
+  height: number;
+  digits?: number;
+}
+
+export function renderCandleMinMaxLabels({
+  ctx,
+  viewport,
+  candles,
+  liveCandle,
+  width,
+  height,
+  digits = 5,
+}: RenderCandleMinMaxLabelsParams): void {
+  const startIdx = Math.max(0, lowerBound(candles, viewport.timeStart));
+  const endIdx = Math.min(candles.length - 1, upperBound(candles, viewport.timeEnd));
+
+  if (startIdx > endIdx && !liveCandle) return;
+
+  let minPrice = Infinity;
+  let maxPrice = -Infinity;
+  let minTime = 0;
+  let maxTime = 0;
+
+  for (let i = startIdx; i <= endIdx; i++) {
+    const c = candles[i];
+    if (c.low < minPrice) { minPrice = c.low; minTime = c.startTime; }
+    if (c.high > maxPrice) { maxPrice = c.high; maxTime = c.startTime; }
+  }
+
+  if (liveCandle) {
+    if (liveCandle.low < minPrice) { minPrice = liveCandle.low; minTime = liveCandle.startTime; }
+    if (liveCandle.high > maxPrice) { maxPrice = liveCandle.high; maxTime = liveCandle.startTime; }
+  }
+
+  if (!Number.isFinite(minPrice) || !Number.isFinite(maxPrice)) return;
+  if (minPrice === maxPrice) return;
+
+  ctx.save();
+  ctx.font = LABEL_FONT;
+  ctx.textBaseline = 'middle';
+
+  // Max label
+  {
+    const x = timeToX(maxTime, viewport, width);
+    const y = priceToY(maxPrice, viewport, height);
+    const text = maxPrice.toFixed(digits);
+    const metrics = ctx.measureText(text);
+    const tw = metrics.width;
+    const bgW = tw + LABEL_PADDING_X * 2;
+    const bgH = 16 + LABEL_PADDING_Y * 2;
+    const labelY = y - LABEL_Y_OFFSET - bgH;
+
+    let labelX = x - bgW / 2;
+    if (labelX < 0) labelX = 0;
+    if (labelX + bgW > width - 60) labelX = width - 60 - bgW;
+
+    ctx.fillStyle = LABEL_BG;
+    roundedRect(ctx, labelX, labelY, bgW, bgH, LABEL_BORDER_RADIUS);
+    ctx.fill();
+
+    ctx.fillStyle = LABEL_TEXT_COLOR;
+    ctx.textAlign = 'center';
+    ctx.fillText(text, labelX + bgW / 2, labelY + bgH / 2);
+  }
+
+  // Min label
+  {
+    const x = timeToX(minTime, viewport, width);
+    const y = priceToY(minPrice, viewport, height);
+    const text = minPrice.toFixed(digits);
+    const metrics = ctx.measureText(text);
+    const tw = metrics.width;
+    const bgW = tw + LABEL_PADDING_X * 2;
+    const bgH = 16 + LABEL_PADDING_Y * 2;
+    const labelY = y + LABEL_Y_OFFSET;
+
+    let labelX = x - bgW / 2;
+    if (labelX < 0) labelX = 0;
+    if (labelX + bgW > width - 60) labelX = width - 60 - bgW;
+
+    ctx.fillStyle = LABEL_BG;
+    roundedRect(ctx, labelX, labelY, bgW, bgH, LABEL_BORDER_RADIUS);
+    ctx.fill();
+
+    ctx.fillStyle = LABEL_TEXT_COLOR;
+    ctx.textAlign = 'center';
+    ctx.fillText(text, labelX + bgW / 2, labelY + bgH / 2);
+  }
+
+  ctx.restore();
+}
+
+function roundedRect(
+  ctx: CanvasRenderingContext2D,
+  x: number, y: number, w: number, h: number, r: number,
+): void {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}

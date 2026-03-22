@@ -269,7 +269,7 @@ export function useChartData({ onDataChange, timeframeMs: defaultTimeframeMs = 5
     }
 
     initializedRef.current = true;
-    // Skip onDataChange — full viewport recalc happens in useChart after init
+    // Skip onDataChange - full viewport recalc happens in useChart after init
   };
 
   const handlePriceUpdate = (price: number, timestamp: number): void => {

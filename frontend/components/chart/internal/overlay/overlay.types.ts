@@ -1,5 +1,5 @@
 /**
- * FLOW O1/O2 — Overlay Base Model
+ * FLOW O1/O2 - Overlay Base Model
  * Единый контракт для индикаторов, рисунков и будущих оверлеев.
  * UI не лезет в params и points.
  */

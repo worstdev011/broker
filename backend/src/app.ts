@@ -73,8 +73,8 @@ export async function createApp() {
     if (['GET', 'HEAD', 'OPTIONS'].includes(request.method)) return;
     if (request.url === '/health') return;
 
-    const pathname = request.url.split('?')[0];
-    if (CSRF_SKIP_PATHS.has(pathname)) return;
+    const pathname = request.url.split('?')[0] ?? '';
+    if (pathname && CSRF_SKIP_PATHS.has(pathname)) return;
 
     return new Promise<void>((resolve, reject) => {
       app.csrfProtection(request, reply, (err?: Error) => {

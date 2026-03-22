@@ -29,7 +29,7 @@ function emaOfSeries(values: number[], period: number): number[] {
 }
 
 /**
- * True Range для каждой свечи (первая — просто H-L).
+ * True Range для каждой свечи (первая - просто H-L).
  */
 function trueRanges(candles: Candle[]): number[] {
   const tr: number[] = [];

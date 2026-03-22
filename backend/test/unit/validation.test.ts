@@ -37,29 +37,20 @@ describe('emailSchema', () => {
 });
 
 describe('passwordStrongSchema', () => {
-  it('should accept valid strong password', () => {
+  it('should accept passwords with min length 6 (no digit required)', () => {
     expect(passwordStrongSchema.parse('Password123')).toBeDefined();
-    expect(passwordStrongSchema.parse('MyP@ssw0rd')).toBeDefined();
+    expect(passwordStrongSchema.parse('abcdef')).toBeDefined();
+    expect(passwordStrongSchema.parse('password123')).toBeDefined();
+    expect(passwordStrongSchema.parse('PASSWORD')).toBeDefined();
   });
 
   it('should reject too short', () => {
     expect(() => passwordStrongSchema.parse('Pass1')).toThrow();
-  });
-
-  it('should reject without uppercase', () => {
-    expect(() => passwordStrongSchema.parse('password123')).toThrow();
-  });
-
-  it('should reject without lowercase', () => {
-    expect(() => passwordStrongSchema.parse('PASSWORD123')).toThrow();
-  });
-
-  it('should reject without number', () => {
-    expect(() => passwordStrongSchema.parse('PasswordOnly')).toThrow();
+    expect(() => passwordStrongSchema.parse('abcde')).toThrow();
   });
 
   it('should reject too long (>128)', () => {
-    const long = 'Password1' + 'a'.repeat(120); // 129 chars, valid pattern
+    const long = 'a'.repeat(129);
     expect(() => passwordStrongSchema.parse(long)).toThrow();
   });
 });

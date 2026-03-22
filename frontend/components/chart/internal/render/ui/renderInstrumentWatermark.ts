@@ -8,7 +8,7 @@ import { getChartSettings } from '@/lib/chartSettings';
 
 /**
  * Форматирует instrumentId в читаемый label.
- * Real пары — без суффикса (EUR/USD). OTC пары — с суффиксом "OTC" (EUR/USD OTC).
+ * Real пары - без суффикса (EUR/USD). OTC пары - с суффиксом "OTC" (EUR/USD OTC).
  */
 function formatInstrumentLabel(instrumentId: string): string {
   let id = instrumentId;
@@ -18,7 +18,7 @@ function formatInstrumentLabel(instrumentId: string): string {
     suffix = ' OTC';
     id = id.slice(0, -4);
   } else if (id.endsWith('_REAL')) {
-    suffix = ''; // Real — без суффикса (основные рыночные котировки)
+    suffix = ''; // Real - без суффикса (основные рыночные котировки)
     id = id.slice(0, -5);
   }
 

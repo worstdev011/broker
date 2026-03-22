@@ -83,7 +83,7 @@ let _cacheTime = 0;
 const CACHE_TTL_MS = 500;
 
 /**
- * Получает текущие настройки (кэш 500ms — один localStorage read на ~30 кадров)
+ * Получает текущие настройки (кэш 500ms - один localStorage read на ~30 кадров)
  */
 export function getChartSettings(): ChartSettings {
   const now = Date.now();

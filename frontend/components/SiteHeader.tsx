@@ -88,7 +88,7 @@ export function SiteHeader({ activeNav, onOpenLogin, onOpenRegister }: SiteHeade
         isHeaderScrolled ? 'bg-[#061230]/95 backdrop-blur-sm' : 'bg-transparent'
       }`}
     >
-      <div className="container mx-auto px-3 sm:px-4 py-3 sm:py-6 flex items-center justify-between">
+      <div className="container mx-auto px-4 py-3 sm:py-6 flex items-center justify-between">
         <div className="flex-1 flex justify-start md:hidden min-w-0">
           <button
             onClick={() => setShowMobileMenu(!showMobileMenu)}

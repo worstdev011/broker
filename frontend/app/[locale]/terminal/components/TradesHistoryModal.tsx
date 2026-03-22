@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { X } from 'lucide-react';
+import Link from 'next/link';
+import { BarChart2, X } from 'lucide-react';
 import { api } from '@/lib/api/api';
 import { logger } from '@/lib/logger';
 import { useAccountStore } from '@/stores/account.store';
@@ -10,7 +11,7 @@ import type { TradeHistoryItem } from '@/types/trade';
 
 const TRADES_PAGE_SIZE = 25;
 
-export function TradesHistoryModal({ onClose }: { onClose: () => void }) {
+export function TradesHistoryModal({ onClose, refreshTrigger }: { onClose: () => void; refreshTrigger?: number }) {
   const [filter, setFilter] = useState<'active' | 'closed'>('closed');
   const [expandedTradeId, setExpandedTradeId] = useState<string | null>(null);
   const [trades, setTrades] = useState<TradeHistoryItem[]>([]);
@@ -55,12 +56,28 @@ export function TradesHistoryModal({ onClose }: { onClose: () => void }) {
     loadTrades(0, false);
   }, [loadTrades]);
 
+  // Обновляем список когда открывается новая сделка
+  useEffect(() => {
+    if (refreshTrigger && filter === 'active') {
+      loadTrades(0, false);
+    }
+  }, [refreshTrigger, filter, loadTrades]);
+
   useEffect(() => {
     if (filter === 'active') {
-      const interval = setInterval(() => setCurrentTime(new Date()), 1000);
+      const interval = setInterval(() => {
+        const now = new Date();
+        setCurrentTime(now);
+        const hasExpired = trades.some(
+          (t) => t.status === 'OPEN' && new Date(t.expiresAt).getTime() <= now.getTime()
+        );
+        if (hasExpired) {
+          setTimeout(() => loadTrades(0, false), 1200);
+        }
+      }, 1000);
       return () => clearInterval(interval);
     }
-  }, [filter]);
+  }, [filter, trades, loadTrades]);
 
   useEffect(() => {
     const scrollContainer = scrollContainerRef.current;
@@ -113,37 +130,36 @@ export function TradesHistoryModal({ onClose }: { onClose: () => void }) {
   const dateKeys = Object.keys(groupedByDate).sort((a, b) => b.localeCompare(a));
 
   return (
-    <div className="fixed left-0 md:left-[88px] top-[65px] bottom-[max(4.5rem,calc(4.5rem+env(safe-area-inset-bottom)))] md:bottom-0 md:h-[calc(100vh-65px)] z-50 w-full md:w-[340px] bg-[#0a1635] border-r border-white/10 shadow-2xl flex flex-col">
-      <div className="flex justify-end px-3 pt-2 shrink-0">
-        <button
-          type="button"
-          onClick={onClose}
-          className="p-2 -m-2 rounded-lg text-white/50 md:hover:text-white md:hover:bg-white/10 transition-colors touch-manipulation"
-          aria-label="Закрыть"
-        >
-          <X className="w-5 h-5 stroke-[2.5]" />
-        </button>
-      </div>
-
-      <div className="px-5 pt-0 shrink-0 border-b border-white/10">
-        <div className="flex">
+    <div className="fixed left-0 top-[53px] sm:top-[69px] bottom-[max(4.5rem,calc(4.5rem+env(safe-area-inset-bottom)))] z-50 w-full md:static md:h-full md:w-[330px] md:z-auto md:bottom-auto md:top-auto bg-[#0a1635] border-r border-white/10 shadow-2xl flex flex-col">
+      <div className="px-5 pt-4 shrink-0 border-b border-white/10">
+        <div className="relative">
+          <div className="flex pr-11 md:pr-0">
+            <button
+              type="button"
+              onClick={() => setFilter('active')}
+              className={`flex-1 pb-3 text-sm font-medium transition-colors border-b-2 -mb-px ${
+                filter === 'active' ? 'text-white border-[#3347ff]' : 'text-gray-400 border-transparent md:hover:text-white'
+              }`}
+            >
+              Активные
+            </button>
+            <button
+              type="button"
+              onClick={() => setFilter('closed')}
+              className={`flex-1 pb-3 text-sm font-medium transition-colors border-b-2 -mb-px ${
+                filter === 'closed' ? 'text-white border-[#3347ff]' : 'text-gray-400 border-transparent md:hover:text-white'
+              }`}
+            >
+              Закрытые
+            </button>
+          </div>
           <button
             type="button"
-            onClick={() => setFilter('active')}
-            className={`flex-1 pb-3 text-sm font-medium transition-colors border-b-2 -mb-px ${
-              filter === 'active' ? 'text-white border-[#3347ff]' : 'text-gray-400 border-transparent md:hover:text-white'
-            }`}
+            onClick={onClose}
+            className="md:hidden absolute top-0 right-0 w-10 h-10 flex items-center justify-center rounded-lg text-gray-400 active:bg-white/10 -mt-0.5 -mr-1"
+            aria-label="Закрыть"
           >
-            Активные
-          </button>
-          <button
-            type="button"
-            onClick={() => setFilter('closed')}
-            className={`flex-1 pb-3 text-sm font-medium transition-colors border-b-2 -mb-px ${
-              filter === 'closed' ? 'text-white border-[#3347ff]' : 'text-gray-400 border-transparent md:hover:text-white'
-            }`}
-          >
-            Закрытые
+            <X className="w-5 h-5" strokeWidth={2} />
           </button>
         </div>
       </div>
@@ -187,6 +203,17 @@ export function TradesHistoryModal({ onClose }: { onClose: () => void }) {
             )}
           </div>
         )}
+      </div>
+
+      {/* Footer - статистика */}
+      <div className="shrink-0 px-4 py-3 border-t border-white/10">
+        <Link
+          href="/profile?tab=trade"
+          className="flex items-center justify-center gap-2 w-full h-9 rounded-lg bg-gradient-to-r from-[#3347ff] to-[#1e2fcc] text-white text-sm font-semibold transition-all md:hover:from-[#3347ff]/90 md:hover:to-[#1e2fcc]/90 shadow-md shadow-[#3347ff]/20"
+        >
+          <BarChart2 className="w-4 h-4 shrink-0" />
+          Показать статистику
+        </Link>
       </div>
     </div>
   );

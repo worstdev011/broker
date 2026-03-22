@@ -1,29 +1,34 @@
 'use client';
 
 import { useState } from 'react';
+import { ChevronUp, ChevronDown } from 'lucide-react';
 
 export function AmountCalculatorModal({
   currentAmount,
   onSelect,
   onClose,
   payoutPercent,
+  currency = 'USD',
 }: {
   currentAmount: number;
   onSelect: (amount: number) => void;
   onClose: () => void;
   payoutPercent: number;
+  currency?: string;
 }) {
   const [display, setDisplay] = useState<string>(String(currentAmount));
   const [multiplier] = useState<number>(2);
   const [isFirstInput, setIsFirstInput] = useState<boolean>(true);
+  const [showKeypad, setShowKeypad] = useState<boolean>(true);
 
   const handleNumber = (num: string) => {
     if (isFirstInput) {
       setDisplay(num);
       setIsFirstInput(false);
-    } else if (display === '0' || display === '0.00') {
+    } else if (display === '0') {
       setDisplay(num);
     } else {
+      if (display.includes('.') && display.split('.')[1]!.length >= 2) return;
       setDisplay(display + num);
     }
   };
@@ -32,12 +37,15 @@ export function AmountCalculatorModal({
     if (isFirstInput) {
       setDisplay('0.');
       setIsFirstInput(false);
-    } else if (!display.includes('.')) {
+      return;
+    }
+    if (!display.includes('.')) {
       setDisplay(display + '.');
     }
   };
 
   const handleBackspace = () => {
+    setIsFirstInput(false);
     if (display.length > 1) {
       setDisplay(display.slice(0, -1));
     } else {
@@ -46,136 +54,114 @@ export function AmountCalculatorModal({
   };
 
   const handleMultiply = () => {
-    const current = Number.parseFloat(display);
-    const result = current * multiplier;
-    setDisplay(String(result.toFixed(2)));
+    const result = Number.parseFloat(display) * multiplier;
+    setDisplay(String(Math.min(50000, result)));
+    setIsFirstInput(true);
   };
 
   const handleDivide = () => {
-    const current = Number.parseFloat(display);
-    if (multiplier !== 0) {
-      const result = current / multiplier;
-      setDisplay(String(result.toFixed(2)));
-    }
+    const result = Number.parseFloat(display) / multiplier;
+    setDisplay(String(Math.max(1, result)));
+    setIsFirstInput(true);
   };
 
   const handleApply = () => {
     const finalAmount = Number.parseFloat(display);
-    if (finalAmount >= 1) {
-      onSelect(finalAmount);
+    if (Number.isFinite(finalAmount) && finalAmount >= 1) {
+      onSelect(Math.min(50000, finalAmount));
     }
   };
 
-  const formatDisplay = (value: string): string => {
-    const num = Number.parseFloat(value || '0');
-    return num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  };
+  const numValue = Number.parseFloat(display) || 0;
+  const profit = ((numValue * payoutPercent) / 100).toFixed(2);
+
+  const btnBase =
+    'h-9 rounded-lg flex items-center justify-center text-sm font-semibold transition-colors duration-100 select-none active:scale-95';
+  const btnNum =
+    `${btnBase} bg-white/[0.07] hover:bg-white/[0.13] text-white`;
+  const btnDel =
+    `${btnBase} bg-white/[0.07] hover:bg-red-500/20 text-red-400`;
 
   return (
-    <div className="flex flex-col gap-2">
-      {/* Display */}
-      <div className="bg-white/10 rounded-lg px-2 py-1">
-        <div className="text-right text-sm font-bold text-white">
-          {formatDisplay(display)}
+    <div className="flex flex-col w-full">
+      {/* ── Display ── */}
+      <div className="px-3 pt-3 pb-2 flex items-center gap-2">
+        <div className="flex-1 min-w-0">
+          <div className="text-2xl font-bold text-white leading-tight truncate">
+            {display} <span className="text-base font-semibold text-white/50">{currency}</span>
+          </div>
+          <div className="text-[11px] text-white/35 mt-0.5">
+            прибыль +{profit} {currency}
+          </div>
+        </div>
+
+        {/* × ÷ buttons */}
+        <div className="flex flex-col gap-1 shrink-0">
+          <button
+            type="button"
+            onClick={handleMultiply}
+            className="w-7 h-7 rounded-md bg-white/[0.08] hover:bg-white/[0.15] text-white/70 hover:text-white text-sm font-bold flex items-center justify-center transition-colors"
+            title={`× ${multiplier}`}
+          >
+            ×
+          </button>
+          <button
+            type="button"
+            onClick={handleDivide}
+            className="w-7 h-7 rounded-md bg-white/[0.08] hover:bg-white/[0.15] text-white/70 hover:text-white text-sm font-bold flex items-center justify-center transition-colors"
+            title={`÷ ${multiplier}`}
+          >
+            ÷
+          </button>
+        </div>
+
+        {/* Multiplier badge */}
+        <div className="w-7 h-[58px] rounded-md bg-white/[0.08] flex items-center justify-center text-sm font-bold text-white/70 shrink-0">
+          {multiplier}
         </div>
       </div>
 
-      {/* Keypad */}
-      <div className="grid grid-cols-3 gap-0.5">
+      {/* ── Калькулятор section ── */}
+      <div className="border-t border-white/[0.07]">
         <button
           type="button"
-          onClick={() => handleNumber('7')}
-          className="h-7 bg-white/10 md:hover:bg-white/20 rounded text-white text-xs font-medium transition-colors"
+          onClick={() => setShowKeypad((v) => !v)}
+          className="w-full px-3 py-1.5 flex items-center justify-between text-white/40 hover:text-white/60 transition-colors"
         >
-          7
+          <span className="text-[11px] font-semibold uppercase tracking-wider">Калькулятор</span>
+          {showKeypad
+            ? <ChevronUp className="w-3.5 h-3.5" />
+            : <ChevronDown className="w-3.5 h-3.5" />}
         </button>
-        <button
-          type="button"
-          onClick={() => handleNumber('8')}
-          className="h-7 bg-white/10 md:hover:bg-white/20 rounded text-white text-xs font-medium transition-colors"
-        >
-          8
-        </button>
-        <button
-          type="button"
-          onClick={() => handleNumber('9')}
-          className="h-7 bg-white/10 md:hover:bg-white/20 rounded text-white text-xs font-medium transition-colors"
-        >
-          9
-        </button>
-        <button
-          type="button"
-          onClick={() => handleNumber('4')}
-          className="h-7 bg-white/10 md:hover:bg-white/20 rounded text-white text-xs font-medium transition-colors"
-        >
-          4
-        </button>
-        <button
-          type="button"
-          onClick={() => handleNumber('5')}
-          className="h-7 bg-white/10 md:hover:bg-white/20 rounded text-white text-xs font-medium transition-colors"
-        >
-          5
-        </button>
-        <button
-          type="button"
-          onClick={() => handleNumber('6')}
-          className="h-7 bg-white/10 md:hover:bg-white/20 rounded text-white text-xs font-medium transition-colors"
-        >
-          6
-        </button>
-        <button
-          type="button"
-          onClick={() => handleNumber('1')}
-          className="h-7 bg-white/10 md:hover:bg-white/20 rounded text-white text-xs font-medium transition-colors"
-        >
-          1
-        </button>
-        <button
-          type="button"
-          onClick={() => handleNumber('2')}
-          className="h-7 bg-white/10 md:hover:bg-white/20 rounded text-white text-xs font-medium transition-colors"
-        >
-          2
-        </button>
-        <button
-          type="button"
-          onClick={() => handleNumber('3')}
-          className="h-7 bg-white/10 md:hover:bg-white/20 rounded text-white text-xs font-medium transition-colors"
-        >
-          3
-        </button>
-        <button
-          type="button"
-          onClick={handleDecimal}
-          className="h-7 bg-white/10 md:hover:bg-white/20 rounded text-white text-xs font-medium transition-colors"
-        >
-          .
-        </button>
-        <button
-          type="button"
-          onClick={() => handleNumber('0')}
-          className="h-7 bg-white/10 md:hover:bg-white/20 rounded text-white text-xs font-medium transition-colors"
-        >
-          0
-        </button>
-        <button
-          type="button"
-          onClick={handleBackspace}
-          className="h-7 bg-red-500/20 md:hover:bg-red-500/30 rounded text-red-400 md:hover:text-red-300 flex items-center justify-center text-lg font-medium transition-colors"
-        >
-          ⌫
-        </button>
+
+        {showKeypad && (
+          <div className="px-2 pb-2 grid grid-cols-3 gap-1">
+            {['7','8','9','4','5','6','1','2','3'].map((n) => (
+              <button key={n} type="button" onClick={() => handleNumber(n)} className={btnNum}>{n}</button>
+            ))}
+            <button type="button" onClick={handleDecimal} className={btnNum}>.</button>
+            <button type="button" onClick={() => handleNumber('0')} className={btnNum}>0</button>
+            <button type="button" onClick={handleBackspace} className={btnDel}>
+              <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z" />
+                <line x1="18" y1="9" x2="12" y2="15" />
+                <line x1="12" y1="9" x2="18" y2="15" />
+              </svg>
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* Apply Button */}
-      <button
-        type="button"
-        onClick={handleApply}
-        className="w-full py-1 bg-[#3347ff] md:hover:bg-[#3347ff]/90 text-white text-xs font-semibold rounded transition-colors"
-      >
-        Применить
-      </button>
+      {/* ── Apply ── */}
+      <div className="px-2 pb-2">
+        <button
+          type="button"
+          onClick={handleApply}
+          className="w-full py-2 rounded-lg bg-[#3347ff] hover:bg-[#2a3de0] text-white text-sm font-semibold transition-colors"
+        >
+          Применить
+        </button>
+      </div>
     </div>
   );
 }

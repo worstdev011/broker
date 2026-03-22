@@ -5,10 +5,10 @@
  *
  * Slow Stochastic (менее чувствительный, плавнее идёт):
  * Raw %K = 100 * (Close - Low_n) / (High_n - Low_n)
- * %K = SMA(Raw %K, smoothK)  — сглаживание, по умолчанию 3
+ * %K = SMA(Raw %K, smoothK)  - сглаживание, по умолчанию 3
  * %D = SMA(%K, periodD)
  *
- * Оба в диапазоне 0–100. Уровни перекупленности/перепроданности: 80 и 20.
+ * Оба в диапазоне 0-100. Уровни перекупленности/перепроданности: 80 и 20.
  */
 
 import type { Candle } from '../../chart.types';
@@ -37,7 +37,7 @@ function sma(values: number[], size: number): number[] {
  * @param periodK - период для сырого %K (обычно 14)
  * @param periodD - период сглаживания для %D (обычно 3)
  * @param smoothK - сглаживание сырого %K (3 = Slow Stochastic, 1 = Fast)
- * @returns { k, d } — массивы точек для %K и %D
+ * @returns { k, d } - массивы точек для %K и %D
  */
 export function calculateStochastic(
   candles: Candle[],

@@ -23,7 +23,7 @@ import { timeToX } from '../utils/coords';
 interface UseCrosshairParams {
   canvasRef: RefObject<HTMLCanvasElement>;
   getViewport: () => Viewport | null;
-  /** Если задан — время снэпится к центру свечи (магнит к центру свечи) */
+  /** Если задан - время снэпится к центру свечи (магнит к центру свечи) */
   getTimeframeMs?: () => number;
 }
 
@@ -63,7 +63,7 @@ export function useCrosshair({
   getTimeframeMs,
 }: UseCrosshairParams): UseCrosshairReturn {
   const crosshairRef = useRef<CrosshairState | null>(null);
-  // 🔥 FIX #9: Ref для callbacks — handlers стабильны, всегда вызывают актуальные версии
+  // 🔥 FIX #9: Ref для callbacks - handlers стабильны, всегда вызывают актуальные версии
   const callbacksRef = useRef({ getViewport, getTimeframeMs });
   callbacksRef.current = { getViewport, getTimeframeMs };
 
@@ -142,7 +142,7 @@ export function useCrosshair({
     const isTouchDevice =
       typeof window !== 'undefined' &&
       (window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0);
-    if (isTouchDevice) return; // Не подписываемся — getCrosshair всегда вернёт null
+    if (isTouchDevice) return; // Не подписываемся - getCrosshair всегда вернёт null
 
     canvas.addEventListener('mousemove', handleMouseMove);
     canvas.addEventListener('mouseleave', handleMouseLeave);

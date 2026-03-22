@@ -50,7 +50,7 @@ export function useCanvasInfrastructure({ canvasRef }: UseCanvasInfrastructurePa
 
     // 2. Device Pixel Ratio handling
     // 🔥 FIX: DPR читается при каждом resize, а не один раз при mount
-    // Если пользователь перетащит окно на монитор с другим DPI — canvas адаптируется
+    // Если пользователь перетащит окно на монитор с другим DPI - canvas адаптируется
     let currentDpr = window.devicePixelRatio || 1;
 
     /**
@@ -106,7 +106,7 @@ export function useCanvasInfrastructure({ canvasRef }: UseCanvasInfrastructurePa
     // 3. Resize handling через ResizeObserver
     // ВАЖНО: наблюдаем за родителем, а не за canvas
     // Если наблюдать за canvas → цикл: canvas меняет размер → observer → resize → canvas → observer
-    // Используем contentRect наблюдаемого элемента — размеры уже актуальны на момент колбэка
+    // Используем contentRect наблюдаемого элемента - размеры уже актуальны на момент колбэка
     const parentElement = canvas.parentElement;
     const observerCallback = (entries: ResizeObserverEntry[]) => {
       const entry = entries[0];

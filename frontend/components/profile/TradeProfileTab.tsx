@@ -322,7 +322,7 @@ export function TradeProfileTab() {
             </div>
 
             <div className="group rounded-xl border border-white/[0.08] bg-[#030E28] p-4 sm:p-5 hover:bg-white/[0.04] transition-all">
-              <StatLabel label="% УСПЕШНЫХ" hint="Win rate — процент прибыльных сделок от общего числа" />
+              <StatLabel label="% УСПЕШНЫХ" hint="Win rate - процент прибыльных сделок от общего числа" />
               {loading ? (
                 <div className="h-8 w-20 bg-white/10 rounded animate-pulse" />
               ) : (
@@ -377,7 +377,7 @@ export function TradeProfileTab() {
                         className="bg-transparent text-white/80 text-xs focus:outline-none w-24"
                       />
                     </label>
-                    <span className="text-white/40">—</span>
+                    <span className="text-white/40">-</span>
                     <label className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 border border-white/10 cursor-pointer">
                       <Calendar className="w-3.5 h-3.5 text-white/50" />
                       <input

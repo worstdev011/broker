@@ -88,7 +88,7 @@ export function renderGrid({
 
 /**
  * Рисует только вертикальные линии сетки по времени в заданном диапазоне по Y.
- * Используется когда под графиком есть индикаторы — чтобы сетка шла и по зонам RSI/Stochastic/Momentum.
+ * Используется когда под графиком есть индикаторы - чтобы сетка шла и по зонам RSI/Stochastic/Momentum.
  */
 export function renderVerticalGridOnly({
   ctx,

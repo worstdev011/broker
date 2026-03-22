@@ -39,9 +39,6 @@ export default function RisksPage() {
                 Важная информация о рисках, связанных с торговлей на финансовых рынках
               </p>
             </div>
-            <div className="flex-shrink-0 w-[5.5rem] h-[5.5rem] md:w-[6.5rem] md:h-[6.5rem] rounded-2xl bg-[#ebedff] flex items-center justify-center overflow-hidden">
-              <Image src="/images/howtoostart.png" alt="" width={48} height={48} className="w-10 h-10 md:w-12 md:h-12 object-contain" />
-            </div>
           </div>
         </div>
       </section>

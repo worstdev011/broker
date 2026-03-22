@@ -19,7 +19,7 @@ function readLocalStatus(): VerificationStatus {
  *
  * Strategy:
  * 1. Reads localStorage immediately (no flash, instant render).
- * 2. Validates against the server on mount — server is the source of truth.
+ * 2. Validates against the server on mount - server is the source of truth.
  * 3. Listens for cross-tab storage events and `profile-updated` custom events
  *    (dispatched by VerificationTab when Sumsub calls back in the browser).
  */

@@ -51,9 +51,6 @@ export default function StartPage() {
                 {t('subtitle')}
               </p>
             </div>
-            <div className="flex-shrink-0 w-[5.5rem] h-[5.5rem] md:w-[6.5rem] md:h-[6.5rem] rounded-2xl bg-[#ebedff] flex items-center justify-center overflow-hidden">
-              <Image src="/images/howtoostart.png" alt="" width={48} height={48} className="w-10 h-10 md:w-12 md:h-12 object-contain" />
-            </div>
           </div>
         </div>
       </section>
@@ -139,7 +136,7 @@ export default function StartPage() {
           </div>
         </div>
 
-        {/* Что нужно для старта — фон чуть шире контейнера, контент чуть уже */}
+        {/* Что нужно для старта - фон чуть шире контейнера, контент чуть уже */}
         <div className="container mx-auto px-4 mt-16 md:mt-24">
           <div className="-mx-6 md:-mx-12 lg:-mx-20 rounded-3xl overflow-hidden bg-[#061230] relative py-16 md:py-24">
             <div className="absolute inset-0 opacity-85 rounded-3xl" style={{ backgroundImage: 'url(/images/small.png)', backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat' }} />
@@ -210,7 +207,7 @@ export default function StartPage() {
       <section className="py-16 md:py-24 bg-white">
         <div className="container mx-auto px-4">
           <div className="grid md:grid-cols-[1fr_1.2fr] gap-12 lg:gap-16 items-start">
-            {/* Left — заголовок, описание, навигация */}
+            {/* Left - заголовок, описание, навигация */}
             <div className="flex flex-col">
               <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-gray-900 mb-6 leading-tight text-left">
                 {t('education_title')}
@@ -228,7 +225,7 @@ export default function StartPage() {
               </div>
             </div>
 
-            {/* Right — слайдер карточек */}
+            {/* Right - слайдер карточек */}
             <div className="overflow-hidden">
               <div className="flex gap-6 transition-transform duration-500 ease-out" style={{ transform: `translateX(-${educationSlide * 50}%)` }}>
                 <div className="flex-shrink-0 w-[calc(100%-1.5rem)] min-w-0 md:w-[calc(85%-0.75rem)]">

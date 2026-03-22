@@ -1,8 +1,8 @@
 /**
- * FLOW O3 — Overlay Registry (Data Layer)
+ * FLOW O3 - Overlay Registry (Data Layer)
  * ref-based, no React state для списка оверлеев.
  * API: addOverlay, removeOverlay, toggleVisibility, getVisibleOverlays, getOverlays.
- * onMutate вызывается после любой мутации — родитель может форсить ре-рендер панели.
+ * onMutate вызывается после любой мутации - родитель может форсить ре-рендер панели.
  */
 
 import { useRef, useCallback, useMemo } from 'react';

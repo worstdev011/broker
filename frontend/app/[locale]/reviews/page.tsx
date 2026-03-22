@@ -45,7 +45,7 @@ export default function ReviewsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-white [color-scheme:light]">
       <SiteHeader
         activeNav="reviews"
         onOpenLogin={() => { setPanelMode('login'); setShowRegisterPanel(true); }}
@@ -66,9 +66,6 @@ export default function ReviewsPage() {
               <p className="text-lg text-gray-400 max-w-2xl">
                 {t('subtitle')}
               </p>
-            </div>
-            <div className="flex-shrink-0 w-[5.5rem] h-[5.5rem] md:w-[6.5rem] md:h-[6.5rem] rounded-2xl bg-[#ebedff] flex items-center justify-center overflow-hidden">
-              <Image src="/images/howtoostart.png" alt="" width={48} height={48} className="w-10 h-10 md:w-12 md:h-12 object-contain" />
             </div>
           </div>
         </div>
@@ -145,7 +142,7 @@ export default function ReviewsPage() {
                     onChange={(e) => setReviewForm({ ...reviewForm, name: e.target.value })}
                     placeholder=" "
                     required
-                    className="peer w-full pt-5 pb-3 px-4 rounded-lg border border-gray-300 text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#3347ff]/50 focus:border-[#3347ff] transition-all"
+                    className="peer w-full pt-5 pb-3 px-4 rounded-lg border border-gray-300 bg-white text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#3347ff]/50 focus:border-[#3347ff] transition-all"
                   />
                   <label
                     htmlFor="review-name"
@@ -165,7 +162,7 @@ export default function ReviewsPage() {
                     onChange={(e) => setReviewForm({ ...reviewForm, email: e.target.value })}
                     placeholder=" "
                     required
-                    className="peer w-full pt-5 pb-3 px-4 rounded-lg border border-gray-300 text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#3347ff]/50 focus:border-[#3347ff] transition-all"
+                    className="peer w-full pt-5 pb-3 px-4 rounded-lg border border-gray-300 bg-white text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#3347ff]/50 focus:border-[#3347ff] transition-all"
                   />
                   <label
                     htmlFor="review-email"
@@ -222,7 +219,7 @@ export default function ReviewsPage() {
                   rows={6}
                   required
                   placeholder={t('placeholder_review')}
-                  className="w-full px-4 py-3 rounded-lg border border-gray-300 text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#3347ff]/50 focus:border-[#3347ff] transition-all resize-none"
+                  className="w-full px-4 py-3 rounded-lg border border-gray-300 bg-white text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#3347ff]/50 focus:border-[#3347ff] transition-all resize-none"
                 />
               </div>
               <button

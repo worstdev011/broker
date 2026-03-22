@@ -5,7 +5,7 @@ import { getChartSettings } from '@/lib/chartSettings';
  * otherwise falls back to magnitude-based decimal count.
  */
 export function formatPrice(price: number, digits?: number): string {
-  if (!Number.isFinite(price)) return '—';
+  if (!Number.isFinite(price)) return '-';
   if (digits != null) return price.toFixed(digits);
   const decimals = price >= 1000 ? 0 : price >= 100 ? 1 : price >= 10 ? 2 : 3;
   return price.toFixed(decimals);

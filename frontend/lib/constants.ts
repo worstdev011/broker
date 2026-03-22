@@ -1,5 +1,5 @@
 /**
- * Frontend constants — централизованные значения вместо magic numbers
+ * Frontend constants - централизованные значения вместо magic numbers
  */
 
 import urlConfig from './urls.js';
@@ -10,7 +10,7 @@ export const FALLBACK_BACKEND_URL = urlConfig.FALLBACK_BACKEND_URL;
 /** Fallback support channel URL when env var is not set */
 export const FALLBACK_SUPPORT_CHANNEL_URL = urlConfig.FALLBACK_SUPPORT_CHANNEL_URL;
 
-/** API version prefix — все запросы идут на /api/v1/... */
+/** API version prefix - все запросы идут на /api/v1/... */
 export const API_PREFIX = '/api/v1';
 
 /** Максимальное количество свечей/точек в памяти (производительность) */

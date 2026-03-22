@@ -20,7 +20,7 @@ export interface Toast {
   createdAt: number;
   /** Ключ для снятия тоста по нему (например tradeId для "сделка открыта") */
   key?: string;
-  /** Не скрывать автоматически — снять только через dismiss/dismissByKey */
+  /** Не скрывать автоматически - снять только через dismiss/dismissByKey */
   persistent?: boolean;
   /** Для type === 'trade-open': данные для отображения */
   tradeOpen?: TradeOpenPayload;
@@ -29,7 +29,7 @@ export interface Toast {
 export interface ToastOptions {
   key?: string;
   persistent?: boolean;
-  /** Таймаут авто-скрытия (мс); если не задан и не persistent — 4000 */
+  /** Таймаут авто-скрытия (мс); если не задан и не persistent - 4000 */
   duration?: number;
   tradeOpen?: TradeOpenPayload;
 }

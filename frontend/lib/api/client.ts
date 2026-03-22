@@ -1,6 +1,4 @@
-/**
- * API client with cookie-based auth + CSRF
- */
+
 
 import { logger } from '@/lib/logger';
 import { getCsrfToken, setCsrfToken, clearCsrfToken } from './csrf';

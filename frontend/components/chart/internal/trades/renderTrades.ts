@@ -177,12 +177,12 @@ export function renderTrades({
       ctx.arc(drawStartX, drawY, 2.5, 0, Math.PI * 2);
       ctx.fill();
 
-      // Справа вместо точки — метка: таймер + выплата (ставка + прибыль)
+      // Справа вместо точки - метка: таймер + выплата (ставка + прибыль)
       const countdownText = formatCountdown(trade.expiresAt);
       const totalPayout = trade.amount != null
         ? trade.amount + (trade.amount * payoutPercent) / 100
         : 0;
-      const payoutText = trade.amount != null ? `+${totalPayout.toFixed(2)} USD` : '— USD';
+      const payoutText = trade.amount != null ? `+${totalPayout.toFixed(2)} USD` : '- USD';
       ctx.font = '10px system-ui, -apple-system, "Segoe UI", sans-serif';
       const line1W = ctx.measureText(countdownText).width;
       const line2W = ctx.measureText(payoutText).width;

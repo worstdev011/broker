@@ -1,5 +1,5 @@
 /**
- * HTTP terminal snapshot — user/account/trade data only.
+ * HTTP terminal snapshot - user/account/trade data only.
  * Chart data is delivered via WS `chart:init`.
  */
 export interface TerminalSnapshot {

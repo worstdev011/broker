@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * SumsubKyc — embeds the Sumsub WebSDK 2.0 iframe.
+ * SumsubKyc - embeds the Sumsub WebSDK 2.0 iframe.
  *
  * Usage:
  *   <SumsubKyc userId="user_123" />

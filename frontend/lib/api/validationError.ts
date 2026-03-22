@@ -19,7 +19,7 @@ export function parseValidationError(data: unknown): string {
       const field = issue.path?.[0];
       const fieldName = field === 'password' ? 'Пароль' : field === 'email' ? 'Email' : field || 'Поле';
       if (issue.validation === 'regex' && field === 'password') {
-        return 'Пароль: минимум 8 символов, заглавная и строчная буква, цифра';
+        return 'Пароль: минимум 6 символов';
       }
       if (issue.message) return `${fieldName}: ${issue.message}`;
       return obj.message || obj.error || 'Ошибка валидации';

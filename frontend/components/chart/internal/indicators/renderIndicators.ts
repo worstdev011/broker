@@ -21,7 +21,7 @@ interface RenderIndicatorsParams {
   awesomeOscillatorHeight?: number; // Высота зоны Awesome Oscillator (гистограмма, по умолчанию 0)
   macdHeight?: number; // Высота зоны MACD (линия + сигнал + гистограмма, по умолчанию 0)
   atrHeight?: number; // Высота зоны ATR (линия волатильности, по умолчанию 0)
-  adxHeight?: number; // Высота зоны ADX (+DI/-DI/ADX, 0–100), по умолчанию 0
+  adxHeight?: number; // Высота зоны ADX (+DI/-DI/ADX, 0-100), по умолчанию 0
 }
 
 const RSI_ZONE_HEIGHT = 120; // Высота зоны RSI
@@ -61,7 +61,7 @@ function rsiToY(rsi: number, rsiHeight: number): number {
 }
 
 /**
- * Конвертирует значение осциллятора 0–100 в Y (для зоны Stochastic)
+ * Конвертирует значение осциллятора 0-100 в Y (для зоны Stochastic)
  */
 function oscToY(value: number, zoneHeight: number): number {
   return zoneHeight - (value / 100) * zoneHeight;
@@ -159,21 +159,21 @@ function renderRSIZone(
   ctx.lineWidth = 1;
   ctx.setLineDash([5, 5]);
 
-  // Уровень 70 (overbought) — пунктир
+  // Уровень 70 (overbought) - пунктир
   const y70 = yOffset + rsiToY(RSI_OVERBOUGHT, rsiHeight);
   ctx.beginPath();
   ctx.moveTo(0, y70);
   ctx.lineTo(width, y70);
   ctx.stroke();
 
-  // Уровень 30 (oversold) — пунктир
+  // Уровень 30 (oversold) - пунктир
   const y30 = yOffset + rsiToY(RSI_OVERSOLD, rsiHeight);
   ctx.beginPath();
   ctx.moveTo(0, y30);
   ctx.lineTo(width, y30);
   ctx.stroke();
 
-  // Уровень 50 (середина) — сплошная линия
+  // Уровень 50 (середина) - сплошная линия
   ctx.setLineDash([]);
   const y50 = yOffset + rsiToY(RSI_MID, rsiHeight);
   ctx.beginPath();
@@ -255,9 +255,9 @@ function renderStochasticZone(
 
 const MOMENTUM_GREEN = '#22c55e';
 const MOMENTUM_RED = '#ef4444';
-/** Доля половины высоты, которую занимают столбцы — чтобы не вылезали за край (0.65 = 65%) */
+/** Доля половины высоты, которую занимают столбцы - чтобы не вылезали за край (0.65 = 65%) */
 const MOMENTUM_HEIGHT_RATIO = 0.65;
-/** Доля ширины слота на одну свечу — тонкий столбик «1 свеча = 1 бар» */
+/** Доля ширины слота на одну свечу - тонкий столбик «1 свеча = 1 бар» */
 const MOMENTUM_BAR_WIDTH_RATIO = 0.6;
 /** Минимальный зазор между столбцами (px), чтобы при любом зуме не слипались */
 const MOMENTUM_MIN_GAP = 1;
@@ -338,7 +338,7 @@ function renderMomentumZone(
 
 /** Вертикальный отступ в зоне MACD, чтобы линии не упирались в границы */
 const MACD_OSC_PADDING = 12;
-/** Доля внутренней высоты для масштаба линий (остальное — отступы) */
+/** Доля внутренней высоты для масштаба линий (остальное - отступы) */
 const MACD_HEIGHT_RATIO = 0.65;
 /** Столбики гистограммы визуально выше: меньший масштаб = выше столбики */
 const MACD_BAR_SCALE = 0.82;
@@ -381,12 +381,12 @@ function renderMACDZone(
   const scaleRaw = sorted.length > 0 ? sorted[p90Index] : 1;
   const scale = scaleRaw < 1e-12 ? 1 : scaleRaw;
 
-  /** Y для линий MACD/Signal — с отступом от границ */
+  /** Y для линий MACD/Signal - с отступом от границ */
   function valueToY(v: number): number {
     return centerY - (v / scale) * innerHalfRange;
   }
 
-  /** Y для столбиков гистограммы — те же отступы, но масштаб меньше, столбики визуально выше */
+  /** Y для столбиков гистограммы - те же отступы, но масштаб меньше, столбики визуально выше */
   const scaleBar = scale * MACD_BAR_SCALE;
   function valueToYBar(v: number): number {
     return centerY - (v / scaleBar) * innerHalfRange;
@@ -433,7 +433,7 @@ function renderMACDZone(
     }
   }
 
-  // Линии MACD и Signal (с отступом от границ — valueToY)
+  // Линии MACD и Signal (с отступом от границ - valueToY)
   const macdPoints = macdSeries.points.filter((p) => p.time >= viewport.timeStart && p.time <= viewport.timeEnd);
   const signalPoints = signalSeries.points.filter((p) => p.time >= viewport.timeStart && p.time <= viewport.timeEnd);
   ctx.lineWidth = LINE_WIDTH;
@@ -513,7 +513,7 @@ function renderBollingerBands(
   ctx.fillStyle = hexToRgba(color, 0.08);
   ctx.fill();
 
-  // Линии: upper/lower — полупрозрачные, middle — ярче
+  // Линии: upper/lower - полупрозрачные, middle - ярче
   ctx.lineWidth = LINE_WIDTH;
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
@@ -572,7 +572,7 @@ function renderADXZone(
   };
 
   ctx.translate(0, yOffset);
-  // isRSI: false — используем priceMin/priceMax из viewport (динамический масштаб), иначе была бы фиксированная 0–100
+  // isRSI: false - используем priceMin/priceMax из viewport (динамический масштаб), иначе была бы фиксированная 0-100
   renderIndicatorLine(ctx, adxSeries.points, adxViewport, width, zoneHeight, config.color, false, 0, 0.9);
   renderIndicatorLine(ctx, plusDISeries.points, adxViewport, width, zoneHeight, config.colorD ?? '#22c55e', false, 0, 0.65);
   renderIndicatorLine(ctx, minusDISeries.points, adxViewport, width, zoneHeight, '#ef4444', false, 0, 0.65);
@@ -583,7 +583,7 @@ function renderADXZone(
 
 /** Отступ по вертикали в зоне ATR */
 const ATR_OSC_PADDING = 8;
-/** Доля высоты зоны для линии ATR — не до краёв, чуть отступ */
+/** Доля высоты зоны для линии ATR - не до краёв, чуть отступ */
 const ATR_HEIGHT_RATIO = 0.78;
 
 /**
@@ -882,7 +882,7 @@ export function renderIndicators({
     }
   }
 
-  // Рисуем ADX зону (ADX, +DI, -DI, 0–100) под ATR
+  // Рисуем ADX зону (ADX, +DI, -DI, 0-100) под ATR
   if (adxHeight > 0) {
     const adxYOffset = height + rsiHeight + stochHeight + momentumHeight + awesomeOscillatorHeight + macdHeight + atrHeight;
     for (const config of adxConfigs) {

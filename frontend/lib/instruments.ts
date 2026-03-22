@@ -1,6 +1,6 @@
 /**
- * FLOW P6 — Instrument Registry (Frontend)
- * Один терминал — один актив. activeInstrumentRef + reinit при смене.
+ * FLOW P6 - Instrument Registry (Frontend)
+ * Один терминал - один актив. activeInstrumentRef + reinit при смене.
  */
 
 export const DEFAULT_INSTRUMENT_ID = 'EURUSD_OTC';
@@ -12,7 +12,7 @@ export interface InstrumentInfo {
 }
 
 export const INSTRUMENTS: InstrumentInfo[] = [
-  // Real market pairs (отображаются без суффикса — «настоящие» рыночные котировки)
+  // Real market pairs (отображаются без суффикса - «настоящие» рыночные котировки)
   { id: 'AUDCHF_REAL', label: 'AUD/CHF', digits: 5 },
   { id: 'AUDJPY_REAL', label: 'AUD/JPY', digits: 3 },
   { id: 'EURGBP_REAL', label: 'EUR/GBP', digits: 5 },

@@ -53,7 +53,7 @@ function xToTime(x: number, viewport: TimePriceViewport, width: number): number 
  * Форматирует цену
  */
 function formatPrice(price: number, digits?: number): string {
-  if (!Number.isFinite(price)) return '—';
+  if (!Number.isFinite(price)) return '-';
   return price.toFixed(digits ?? 2);
 }
 

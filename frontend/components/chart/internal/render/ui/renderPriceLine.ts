@@ -43,7 +43,7 @@ function priceToY(price: number, viewport: TimePriceViewport, height: number): n
  * Форматирует цену: по digits инструмента или по величине (fallback).
  */
 function formatPrice(price: number, digits?: number): string {
-  if (!Number.isFinite(price)) return '—';
+  if (!Number.isFinite(price)) return '-';
   if (digits != null) return price.toFixed(digits);
   const decimals = price >= 1000 ? 0 : price >= 100 ? 1 : price >= 10 ? 2 : 3;
   return price.toFixed(decimals);

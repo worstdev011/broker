@@ -38,7 +38,7 @@ export function renderPriceAlerts({
   ctx.setLineDash(ALERT_DASH);
 
   for (const alert of alerts) {
-    // FLOW A6: не рисуем уже сработавшие алерты — линия исчезает
+    // FLOW A6: не рисуем уже сработавшие алерты - линия исчезает
     if (alert.triggered) {
       continue;
     }

@@ -282,7 +282,7 @@ function renderRay(
 
   let xEnd: number, yEnd: number;
   if (Math.abs(dx) < 1e-6) {
-    // Почти вертикальный луч — тянем до верхней или нижней границы
+    // Почти вертикальный луч - тянем до верхней или нижней границы
     xEnd = x1;
     yEnd = dy >= 0 ? height : 0;
   } else if (dx > 0) {
@@ -340,7 +340,7 @@ function renderRectangle(
   const p2 = Math.max(drawing.start.price, drawing.end.price);
 
   const x1 = timeToX(t1, viewport, width);
-  const y1 = priceToY(p2, viewport, height); // высокий price — верх
+  const y1 = priceToY(p2, viewport, height); // высокий price - верх
   const x2 = timeToX(t2, viewport, width);
   const y2 = priceToY(p1, viewport, height);
 

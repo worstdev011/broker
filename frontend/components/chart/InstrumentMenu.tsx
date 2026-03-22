@@ -1,5 +1,5 @@
 /**
- * InstrumentMenu — выпадающее меню для выбора валютной пары
+ * InstrumentMenu - выпадающее меню для выбора валютной пары
  */
 
 'use client';
@@ -78,6 +78,9 @@ export function InstrumentMenu({ instrument, onInstrumentChange }: InstrumentMen
   const searchInputRef = useRef<HTMLInputElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const tabContainerRef = useRef<HTMLDivElement>(null);
+  const tabButtonRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const [tabIndicator, setTabIndicator] = useState<{ left: number; width: number }>({ left: 0, width: 0 });
   // 🔥 FLOW I-PAYOUT: Загружаем payoutPercent для всех инструментов
   const [instrumentsData, setInstrumentsData] = useState<Array<{ id: string; payoutPercent: number }>>([]);
 
@@ -93,6 +96,22 @@ export function InstrumentMenu({ instrument, onInstrumentChange }: InstrumentMen
     };
     loadInstruments();
   }, []);
+
+  const TEXT_TABS: { key: Category; label: string }[] = [
+    { key: 'all', label: 'Все' },
+    { key: 'forex', label: 'Форекс' },
+    { key: 'crypto', label: 'Крипто' },
+    { key: 'otc', label: 'OTC' },
+  ];
+
+  useEffect(() => {
+    const idx = TEXT_TABS.findIndex(t => t.key === selectedCategory);
+    if (idx === -1) return;
+    const btn = tabButtonRefs.current[idx];
+    if (!btn) return;
+    setTabIndicator({ left: btn.offsetLeft, width: btn.offsetWidth });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCategory]);
 
   useClickOutside(menuRef, () => { setIsOpen(false); setSearchQuery(''); }, isOpen);
 
@@ -124,7 +143,7 @@ export function InstrumentMenu({ instrument, onInstrumentChange }: InstrumentMen
 
   // Фильтруем инструменты по категории и поисковому запросу
   let filteredInstruments = INSTRUMENTS.filter((inst) => {
-    // Вкладка «Избранные» — только отмеченные звездочкой
+    // Вкладка «Избранные» - только отмеченные звездочкой
     if (selectedCategory === 'favorites') {
       if (!favorites.has(inst.id)) return false;
     } else if (selectedCategory !== 'all') {
@@ -145,7 +164,7 @@ export function InstrumentMenu({ instrument, onInstrumentChange }: InstrumentMen
       return sortOrder === 'asc' ? payoutA - payoutB : payoutB - payoutA;
     });
   }
-  // Закрытые пары — в самый низ списка
+  // Закрытые пары - в самый низ списка
   filteredInstruments = [...filteredInstruments].sort((a, b) => {
     const closedA = isInstrumentClosed(a);
     const closedB = isInstrumentClosed(b);
@@ -243,63 +262,56 @@ export function InstrumentMenu({ instrument, onInstrumentChange }: InstrumentMen
       {isOpen && (
         <div className="absolute top-full left-0 mt-2 rounded-lg shadow-xl w-[380px] max-h-[500px] flex flex-col z-50 overflow-hidden bg-[#1e2a40] border border-white/5">
           {/* Фильтры по категориям */}
-          <div className="border-b border-white/10 px-4 py-2.5 flex items-center gap-2 flex-wrap">
+          <div className="px-4 flex items-center gap-3" style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+            {/* Звезда - избранное */}
             <button
               type="button"
               onClick={() => setSelectedCategory('favorites')}
-              className={`p-1.5 rounded-md text-sm font-medium transition-colors duration-300 ease-in-out flex items-center ${
-                selectedCategory === 'favorites'
-                  ? 'bg-[#3347ff]/20 text-white'
-                  : 'text-gray-400 md:hover:text-white md:hover:bg-white/5'
-              }`}
+              className="flex items-center py-2.5 shrink-0"
+              style={{ color: selectedCategory === 'favorites' ? '#fbbf24' : 'rgba(255,255,255,0.4)', transition: 'color 150ms ease' }}
               title="Избранные"
             >
-              <Star className={`w-4 h-4 shrink-0 ${favorites.size > 0 ? 'fill-yellow-400 text-yellow-400' : ''}`} />
+              <Star className={`w-4 h-4 shrink-0 ${favorites.size > 0 || selectedCategory === 'favorites' ? 'fill-yellow-400 text-yellow-400' : ''}`} />
             </button>
-            <button
-              type="button"
-              onClick={() => setSelectedCategory('all')}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors duration-300 ease-in-out ${
-                selectedCategory === 'all'
-                  ? 'bg-[#3347ff]/20 text-white'
-                  : 'text-gray-400 md:hover:text-white md:hover:bg-white/5'
-              }`}
-            >
-              Все
-            </button>
-            <button
-              type="button"
-              onClick={() => setSelectedCategory('forex')}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors duration-300 ease-in-out ${
-                selectedCategory === 'forex'
-                  ? 'bg-[#3347ff]/20 text-white'
-                  : 'text-gray-400 md:hover:text-white md:hover:bg-white/5'
-              }`}
-            >
-              Форекс
-            </button>
-            <button
-              type="button"
-              onClick={() => setSelectedCategory('crypto')}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors duration-300 ease-in-out ${
-                selectedCategory === 'crypto'
-                  ? 'bg-[#3347ff]/20 text-white'
-                  : 'text-gray-400 md:hover:text-white md:hover:bg-white/5'
-              }`}
-            >
-              Крипто
-            </button>
-            <button
-              type="button"
-              onClick={() => setSelectedCategory('otc')}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors duration-300 ease-in-out ${
-                selectedCategory === 'otc'
-                  ? 'bg-[#3347ff]/20 text-white'
-                  : 'text-gray-400 md:hover:text-white md:hover:bg-white/5'
-              }`}
-            >
-              OTC
-            </button>
+
+            {/* Разделитель */}
+            <div className="w-px h-4 shrink-0" style={{ background: 'rgba(255,255,255,0.1)' }} />
+
+            {/* Текстовые табы с скользящим индикатором */}
+            <div ref={tabContainerRef} className="relative flex items-center">
+              {TEXT_TABS.map((tab, idx) => (
+                <button
+                  key={tab.key}
+                  ref={el => { tabButtonRefs.current[idx] = el; }}
+                  type="button"
+                  onClick={() => setSelectedCategory(tab.key)}
+                  className="px-3 py-2.5 text-sm bg-transparent border-0 outline-none cursor-pointer whitespace-nowrap"
+                  style={{
+                    color: selectedCategory === tab.key ? '#fff' : 'rgba(255,255,255,0.4)',
+                    fontWeight: selectedCategory === tab.key ? 600 : 400,
+                    transition: 'color 150ms ease',
+                  }}
+                >
+                  {tab.label}
+                </button>
+              ))}
+              {/* Sliding underline indicator */}
+              <span
+                aria-hidden="true"
+                style={{
+                  position: 'absolute',
+                  bottom: 0,
+                  left: tabIndicator.left,
+                  width: tabIndicator.width,
+                  height: '2px',
+                  borderRadius: '2px',
+                  background: '#2478ff',
+                  opacity: selectedCategory === 'favorites' ? 0 : 1,
+                  transition: 'left 200ms ease, width 200ms ease, opacity 150ms ease',
+                  pointerEvents: 'none',
+                }}
+              />
+            </div>
           </div>
           {/* Поле поиска */}
           <div className="border-b border-white/10 px-4 py-3">
@@ -370,14 +382,20 @@ export function InstrumentMenu({ instrument, onInstrumentChange }: InstrumentMen
                     onInstrumentChange(inst.id);
                     setIsOpen(false);
                   }}
-                  className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-left text-sm transition-colors duration-300 ease-in-out duration-300 ease-in-out ${
+                  className={`w-full flex items-center justify-between gap-2 py-2 rounded-lg text-left text-sm transition-colors duration-300 ease-in-out ${
                     isDisabled
                       ? 'opacity-50 cursor-not-allowed text-gray-500'
                       : isActive
-                        ? 'bg-[#3347FF] text-white'
+                        ? 'text-white'
                         : 'text-gray-300 md:hover:bg-white/10 md:hover:text-white'
                   }`}
-                  title={isDisabled ? `${inst.label} — закрыто на выходных` : inst.label}
+                  style={isActive ? {
+                    borderLeft: '3px solid #2478ff',
+                    background: 'rgba(36,120,255,0.08)',
+                    paddingLeft: '9px',
+                    paddingRight: '12px',
+                  } : { paddingLeft: '12px', paddingRight: '12px' }}
+                  title={isDisabled ? `${inst.label} - закрыто на выходных` : inst.label}
                 >
                   <div className="flex items-center gap-2.5">
                     {/* Иконка избранного */}
@@ -402,7 +420,7 @@ export function InstrumentMenu({ instrument, onInstrumentChange }: InstrumentMen
                         className={`w-3.5 h-3.5 transition-colors duration-300 ease-in-out ${
                           favorites.has(inst.id)
                             ? 'fill-yellow-400 text-yellow-400'
-                            : 'text-gray-400 md:hover:text-yellow-400'
+                            : 'text-gray-500 hover:text-yellow-400'
                         }`}
                       />
                     </span>
@@ -449,7 +467,10 @@ export function InstrumentMenu({ instrument, onInstrumentChange }: InstrumentMen
                     <span className="font-medium">{displayName}</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-medium text-gray-400 text-right">
+                    <span
+                      className="text-xs font-medium text-right"
+                      style={{ color: isDisabled ? 'rgba(255,255,255,0.3)' : '#00d084' }}
+                    >
                       {isDisabled ? 'N/A' : `+${payout}%`}
                     </span>
                   </div>

@@ -8,9 +8,6 @@ import { z } from 'zod';
 /** RFC 5322 compliant email regex (simplified) */
 const EMAIL_REGEX = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
 
-/** Password: min 8 chars, at least 1 uppercase, 1 lowercase, 1 number */
-const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[a-zA-Z\d!@#$%^&*()_\-+=[\]{}|;:'",.<>?/\\`~]{8,}$/;
-
 /** Nickname: alphanumeric + underscore only, 3-30 chars (optional @ prefix) */
 const NICKNAME_REGEX = /^@?[a-zA-Z0-9_]{3,30}$/;
 
@@ -31,12 +28,8 @@ export const emailSchema = z
 
 export const passwordStrongSchema = z
   .string()
-  .min(8, 'Password must be at least 8 characters')
-  .max(128, 'Password must be at most 128 characters')
-  .regex(
-    PASSWORD_REGEX,
-    'Password must contain at least one uppercase letter, one lowercase letter, and one number'
-  );
+  .min(6, 'Password must be at least 6 characters')
+  .max(128, 'Password must be at most 128 characters');
 
 export const passwordSchema = z
   .string()

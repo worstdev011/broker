@@ -1,6 +1,4 @@
-/**
- * CSRF token — fetch and cache for mutating requests
- */
+
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? '';
 

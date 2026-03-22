@@ -21,7 +21,7 @@ export async function api<T>(url: string, options: RequestInit = {}): Promise<T>
     try {
       headers['csrf-token'] = await getCsrfToken();
     } catch {
-      // CSRF fetch failed — request may fail with 403
+      // CSRF fetch failed - request may fail with 403
     }
   }
 

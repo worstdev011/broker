@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
-import { ChevronDown, Search, Check, Globe, Banknote } from 'lucide-react';
-import { useTranslations } from 'next-intl';
+import { useState, useRef, useEffect, useMemo } from 'react';
+import Image from 'next/image';
+import { Search, Check } from 'lucide-react';
+import { useTranslations, useLocale } from 'next-intl';
 import ReactCountryFlag from 'react-country-flag';
 import { api } from '@/lib/api/api';
 
@@ -65,6 +66,23 @@ const COUNTRIES = [
   { code: 'KE', name: 'Kenya', currency: 'KES' },
 ];
 
+/** next-intl uses `ua`; ICU / Intl uses `uk` for Ukrainian */
+function appLocaleToBcp47(locale: string): string {
+  if (locale === 'ua') return 'uk';
+  return locale;
+}
+
+function useRegionDisplayNames(locale: string) {
+  const intlLocale = appLocaleToBcp47(locale);
+  return useMemo(() => {
+    try {
+      return new Intl.DisplayNames([intlLocale], { type: 'region' });
+    } catch {
+      return new Intl.DisplayNames(['en'], { type: 'region' });
+    }
+  }, [intlLocale]);
+}
+
 const CURRENCIES = [
   { code: 'USD', name: 'US Dollar', symbol: '$' },
   { code: 'EUR', name: 'Euro', symbol: '€' },
@@ -107,7 +125,6 @@ const CURRENCIES = [
 
 function SearchableDropdown({
   label,
-  icon,
   items,
   value,
   onChange,
@@ -118,7 +135,6 @@ function SearchableDropdown({
   nothingFound,
 }: {
   label: string;
-  icon: React.ReactNode;
   items: { key: string; searchText: string }[];
   value: string;
   onChange: (key: string) => void;
@@ -131,9 +147,16 @@ function SearchableDropdown({
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
+  const [visible, setVisible] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const id = requestAnimationFrame(() => setVisible(true));
+    return () => cancelAnimationFrame(id);
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -142,8 +165,7 @@ function SearchableDropdown({
         triggerRef.current && !triggerRef.current.contains(e.target as Node) &&
         listRef.current && !listRef.current.contains(e.target as Node)
       ) {
-        setOpen(false);
-        setSearch('');
+        handleClose();
       }
     };
     document.addEventListener('mousedown', handler);
@@ -152,23 +174,35 @@ function SearchableDropdown({
 
   useEffect(() => {
     if (open && searchInputRef.current) {
-      searchInputRef.current.focus();
+      setTimeout(() => searchInputRef.current?.focus(), 60);
     }
   }, [open]);
 
   const handleOpen = () => {
-    if (!open && triggerRef.current) {
+    if (open) { handleClose(); return; }
+    if (triggerRef.current) {
       const rect = triggerRef.current.getBoundingClientRect();
       setDropdownStyle({
         position: 'fixed',
-        top: rect.bottom + 8,
+        top: rect.bottom + 6,
         left: rect.left,
         width: rect.width,
         zIndex: 9999,
       });
     }
-    setOpen((v) => !v);
     setSearch('');
+    setVisible(false);
+    setOpen(true);
+  };
+
+  const handleClose = () => {
+    setVisible(false);
+    setTimeout(() => { setOpen(false); setSearch(''); }, 160);
+  };
+
+  const handleSelect = (key: string) => {
+    onChange(key);
+    handleClose();
   };
 
   const filtered = items.filter((item) =>
@@ -176,68 +210,133 @@ function SearchableDropdown({
   );
 
   return (
-    <div className="space-y-2">
-      <label className="text-xs text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
-        {icon}
-        {label}
-      </label>
+    <div className="space-y-1.5">
+      <label className="block text-xs font-medium text-white/40 tracking-wide">{label}</label>
       <div className="relative">
+
+        {/* Trigger */}
         <button
           ref={triggerRef}
           type="button"
           onClick={handleOpen}
-          className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-white/5 border border-white/10 hover:border-[#3347ff]/40 focus:border-[#3347ff]/50 transition-all text-left"
+          className="w-full flex items-center justify-between gap-3 px-4 py-3 rounded-xl text-left outline-none transition-all duration-150"
+          style={{
+            background: open ? 'rgba(36,120,255,0.08)' : 'rgba(255,255,255,0.04)',
+            border: open
+              ? '1px solid rgba(36,120,255,0.45)'
+              : value
+                ? '1px solid rgba(255,255,255,0.18)'
+                : '1px solid rgba(255,255,255,0.1)',
+            boxShadow: open ? '0 0 0 3px rgba(36,120,255,0.1)' : 'none',
+          }}
         >
-          {value ? (
-            <span className="text-white">{renderSelected(value)}</span>
-          ) : (
-            <span className="text-gray-500">{placeholder}</span>
-          )}
-          <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+          <span className="flex-1 min-w-0">
+            {value ? (
+              <span className="text-white text-sm">{renderSelected(value)}</span>
+            ) : (
+              <span className="text-white/30 text-sm">{placeholder}</span>
+            )}
+          </span>
+          <svg
+            width="13" height="13" viewBox="0 0 24 24" fill="none"
+            stroke={open ? '#4d86ff' : 'rgba(255,255,255,0.35)'}
+            strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
+            style={{ transition: 'transform 180ms ease, stroke 150ms ease', transform: open ? 'rotate(180deg)' : 'rotate(0deg)', flexShrink: 0 }}
+          >
+            <path d="M6 9l6 6 6-6" />
+          </svg>
         </button>
 
+        {/* Dropdown panel */}
         {open && (
           <div
             ref={listRef}
-            style={dropdownStyle}
-            className="bg-[#061230] border border-white/10 rounded-xl shadow-2xl overflow-hidden ring-1 ring-white/5"
+            style={{
+              ...dropdownStyle,
+              background: '#0b1525',
+              border: '1px solid rgba(255,255,255,0.1)',
+              borderRadius: '14px',
+              boxShadow: '0 16px 48px rgba(0,0,0,0.55), 0 2px 8px rgba(0,0,0,0.3)',
+              overflow: 'hidden',
+              opacity: visible ? 1 : 0,
+              transform: visible ? 'none' : 'translateY(-6px) scale(0.98)',
+              transition: 'opacity 160ms ease, transform 160ms ease',
+            }}
           >
-            <div className="p-2 border-b border-white/10">
-              <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-white/5 border border-white/10">
-                <Search className="w-4 h-4 text-gray-500 shrink-0" />
+            {/* Search */}
+            <div style={{ padding: '10px 10px 8px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+              <div
+                className="flex items-center gap-2.5"
+                style={{
+                  background: 'rgba(255,255,255,0.05)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  borderRadius: '9px',
+                  padding: '8px 12px',
+                }}
+              >
+                <Search className="w-3.5 h-3.5 shrink-0" style={{ color: 'rgba(255,255,255,0.25)' }} />
                 <input
                   ref={searchInputRef}
                   type="text"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder={searchPlaceholder}
-                  className="w-full bg-transparent text-sm text-white placeholder-gray-500 outline-none"
+                  className="w-full bg-transparent text-[13px] text-white outline-none"
+                  style={{ color: 'white' }}
+                  placeholder-style={{ color: 'rgba(255,255,255,0.25)' }}
                 />
+                {search && (
+                  <button
+                    type="button"
+                    onClick={() => setSearch('')}
+                    className="shrink-0 text-white/25 hover:text-white/50 transition-colors"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                      <path d="M18 6L6 18M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
               </div>
             </div>
-            <div className="max-h-[240px] overflow-y-auto scrollbar-dropdown">
+
+            {/* List */}
+            <div style={{ maxHeight: '232px', overflowY: 'auto' }}>
               {filtered.length === 0 ? (
-                <div className="px-4 py-6 text-sm text-gray-500 text-center">{nothingFound}</div>
+                <div style={{ padding: '24px 16px', textAlign: 'center', fontSize: '13px', color: 'rgba(255,255,255,0.25)' }}>
+                  {nothingFound}
+                </div>
               ) : (
-                filtered.map((item) => (
-                  <button
-                    key={item.key}
-                    type="button"
-                    onClick={() => {
-                      onChange(item.key);
-                      setOpen(false);
-                      setSearch('');
-                    }}
-                    className={`w-full flex items-center justify-between px-4 py-2.5 text-left text-sm transition-colors ${
-                      item.key === value
-                        ? 'bg-[#3347ff]/15 text-[#8b9aff]'
-                        : 'text-gray-300 hover:bg-white/5 hover:text-white'
-                    }`}
-                  >
-                    {renderItem(item.key, item.key === value)}
-                    {item.key === value && <Check className="w-4 h-4 text-[#3347ff] shrink-0" />}
-                  </button>
-                ))
+                <div style={{ padding: '4px' }}>
+                  {filtered.map((item) => {
+                    const selected = item.key === value;
+                    return (
+                      <button
+                        key={item.key}
+                        type="button"
+                        onClick={() => handleSelect(item.key)}
+                        className="w-full flex items-center justify-between gap-2 text-left transition-colors duration-100"
+                        style={{
+                          padding: '9px 12px',
+                          borderRadius: '8px',
+                          fontSize: '13px',
+                          background: selected ? 'rgba(36,120,255,0.13)' : 'transparent',
+                          color: selected ? '#7aacff' : 'rgba(255,255,255,0.7)',
+                        }}
+                        onMouseEnter={(e) => {
+                          if (!selected) (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.05)';
+                        }}
+                        onMouseLeave={(e) => {
+                          if (!selected) (e.currentTarget as HTMLElement).style.background = 'transparent';
+                        }}
+                      >
+                        <span className="flex-1 min-w-0">{renderItem(item.key, selected)}</span>
+                        {selected && (
+                          <Check className="w-3.5 h-3.5 shrink-0" style={{ color: '#4d86ff' }} />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
               )}
             </div>
           </div>
@@ -253,17 +352,22 @@ interface CurrencyCountryModalProps {
 
 export function CurrencyCountryModal({ onComplete }: CurrencyCountryModalProps) {
   const t = useTranslations('currencyModal');
+  const locale = useLocale();
+  const regionNames = useRegionDisplayNames(locale);
   const [country, setCountry] = useState('');
   const [currency, setCurrency] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const countryDisplayName = (code: string) => {
+    const row = COUNTRIES.find((c) => c.code === code);
+    return regionNames.of(code) || row?.name || code;
+  };
+
   const handleCountryChange = (code: string) => {
     setCountry(code);
     const match = COUNTRIES.find((c) => c.code === code);
-    if (match) {
-      setCurrency(match.currency);
-    }
+    if (match) setCurrency(match.currency);
   };
 
   const handleSubmit = async () => {
@@ -287,116 +391,150 @@ export function CurrencyCountryModal({ onComplete }: CurrencyCountryModalProps) 
     }
   };
 
-  const countryItems = COUNTRIES.map((c) => ({ key: c.code, searchText: c.name + ' ' + c.code }));
-  const currencyItems = CURRENCIES.map((c) => ({ key: c.code, searchText: c.code + ' ' + c.name + ' ' + c.symbol }));
+  const countryItems = useMemo(
+    () =>
+      COUNTRIES.map((c) => {
+        const label = regionNames.of(c.code) || c.name;
+        return {
+          key: c.code,
+          searchText: `${label} ${c.name} ${c.code}`.toLowerCase(),
+        };
+      }),
+    [regionNames]
+  );
+
+  const currencyItems = useMemo(
+    () =>
+      CURRENCIES.map((c) => ({
+        key: c.code,
+        searchText: `${c.code} ${c.name} ${c.symbol}`.toLowerCase(),
+      })),
+    []
+  );
 
   return (
     <>
-      <div className="fixed inset-0 z-[100] bg-[#061230]/90 backdrop-blur-md" />
+      {/* Overlay */}
+      <div
+        className="fixed inset-0 z-[100]"
+        style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(5px)' }}
+        aria-hidden="true"
+      />
+
+      {/* Modal */}
       <div className="fixed inset-0 z-[101] flex items-center justify-center p-4">
         <div
-          className="w-full max-w-md relative overflow-hidden rounded-2xl shadow-2xl"
           role="dialog"
           aria-modal="true"
+          aria-labelledby="currency-modal-title"
           onClick={(e) => e.stopPropagation()}
+          className="w-full max-w-md rounded-2xl overflow-hidden shadow-2xl border border-white/10 bg-[#0a1835]"
         >
-          <div className="absolute inset-0 bg-[#061230]" />
-          <div
-            className="absolute inset-0 opacity-85"
-            style={{
-              backgroundImage: 'url(/images/small.png)',
-              backgroundSize: 'cover',
-              backgroundPosition: 'center',
-              backgroundRepeat: 'no-repeat',
-            }}
-          />
-          <div className="absolute inset-0 bg-gradient-to-b from-[#061230]/80 via-transparent to-[#061230]/90" />
+          {/* Blue top line */}
+          <div className="h-[3px] w-full bg-[#2478ff] rounded-t-[2px]" />
 
-          <div className="relative border border-white/10 rounded-2xl">
-            <div className="h-0.5 bg-gradient-to-r from-transparent via-[#3347ff] to-transparent" />
-
-            <div className="px-6 pt-8 pb-5 text-center">
-              <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-[#3347ff]/20 to-[#2a3ae6]/10 border border-white/10 mb-5">
-                <Globe className="w-7 h-7 text-[#6b7fff]" />
-              </div>
-              <h2 className="text-2xl font-bold text-white">{t('title')}</h2>
-              <p className="text-sm text-gray-400 mt-2 max-w-xs mx-auto leading-relaxed">
-                {t('subtitle')}
-              </p>
-            </div>
-
-            <div className="px-6 pb-4 space-y-4">
-              <SearchableDropdown
-                label={t('label_country')}
-                icon={<Globe className="w-3.5 h-3.5" />}
-                items={countryItems}
-                value={country}
-                onChange={handleCountryChange}
-                placeholder={t('placeholder_country')}
-                searchPlaceholder={t('search_placeholder')}
-                nothingFound={t('nothing_found')}
-                renderItem={(key) => {
-                  const c = COUNTRIES.find((x) => x.code === key);
-                  return c ? (
-                    <span className="flex items-center gap-2.5">
-                      <ReactCountryFlag countryCode={c.code} svg style={{ width: '1.25em', height: '1.25em', borderRadius: '2px' }} />
-                      <span>{c.name}</span>
-                    </span>
-                  ) : null;
-                }}
-                renderSelected={(key) => {
-                  const c = COUNTRIES.find((x) => x.code === key);
-                  return c ? (
-                    <span className="flex items-center gap-2.5">
-                      <ReactCountryFlag countryCode={c.code} svg style={{ width: '1.25em', height: '1.25em', borderRadius: '2px' }} />
-                      <span>{c.name}</span>
-                    </span>
-                  ) : key;
-                }}
+          {/* Header + logo */}
+          <div className="px-7 pt-6 pb-5 text-center">
+            <div className="flex justify-center mb-5">
+              <Image
+                src="/images/logo.png"
+                alt="Comfortrade"
+                width={160}
+                height={48}
+                className="h-11 w-auto object-contain object-center"
+                priority
               />
-
-              <SearchableDropdown
-                label={t('label_currency')}
-                icon={<Banknote className="w-3.5 h-3.5" />}
-                items={currencyItems}
-                value={currency}
-                onChange={setCurrency}
-                placeholder={t('placeholder_currency')}
-                searchPlaceholder={t('search_placeholder')}
-                nothingFound={t('nothing_found')}
-                renderItem={(key) => {
-                  const c = CURRENCIES.find((x) => x.code === key);
-                  return c ? (
-                    <span className="flex items-center gap-2">
-                      <span className="w-8 text-gray-400 font-mono text-xs">{c.symbol}</span>
-                      <span>{c.code}</span>
-                      <span className="text-gray-500">- {c.name}</span>
-                    </span>
-                  ) : null;
-                }}
-                renderSelected={(key) => {
-                  const c = CURRENCIES.find((x) => x.code === key);
-                  return c ? c.symbol + ' ' + c.code + ' - ' + c.name : key;
-                }}
-              />
-
-              {error && (
-                <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-4 py-2.5">
-                  <p className="text-sm text-red-400 text-center">{error}</p>
-                </div>
-              )}
-
-              <div className="px-6 pt-2 pb-6">
-                <button
-                  type="button"
-                  onClick={handleSubmit}
-                  disabled={!country || !currency || loading}
-                  className="w-full py-3.5 rounded-xl font-semibold text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed btn-accent text-white shadow-lg shadow-[#3347ff]/20 hover:shadow-[#3347ff]/30"
-                >
-                  {loading ? t('btn_saving') : t('btn_continue')}
-                </button>
-              </div>
             </div>
+            <h2 id="currency-modal-title" className="text-[1.6rem] font-bold text-white leading-tight">
+              {t('title')}
+            </h2>
+            <p className="mt-2 text-sm leading-relaxed text-white/50">{t('subtitle')}</p>
+          </div>
+
+          {/* Fields */}
+          <div className="px-7 pb-3 space-y-5">
+            <SearchableDropdown
+              label={t('label_country')}
+              items={countryItems}
+              value={country}
+              onChange={handleCountryChange}
+              placeholder={t('placeholder_country')}
+              searchPlaceholder={t('search_placeholder')}
+              nothingFound={t('nothing_found')}
+              renderItem={(key) => {
+                const c = COUNTRIES.find((x) => x.code === key);
+                return c ? (
+                  <span className="flex items-center gap-2.5">
+                    <ReactCountryFlag countryCode={c.code} svg style={{ width: '1.25em', height: '1.25em', borderRadius: '2px' }} />
+                    <span>{countryDisplayName(c.code)}</span>
+                  </span>
+                ) : null;
+              }}
+              renderSelected={(key) => {
+                const c = COUNTRIES.find((x) => x.code === key);
+                return c ? (
+                  <span className="flex items-center gap-2.5">
+                    <ReactCountryFlag countryCode={c.code} svg style={{ width: '1.25em', height: '1.25em', borderRadius: '2px' }} />
+                    <span>{countryDisplayName(c.code)}</span>
+                  </span>
+                ) : key;
+              }}
+            />
+
+            <SearchableDropdown
+              label={t('label_currency')}
+              items={currencyItems}
+              value={currency}
+              onChange={setCurrency}
+              placeholder={t('placeholder_currency')}
+              searchPlaceholder={t('search_placeholder')}
+              nothingFound={t('nothing_found')}
+              renderItem={(key) => {
+                const c = CURRENCIES.find((x) => x.code === key);
+                return c ? (
+                  <span className="flex items-center gap-2">
+                    <span>{c.code}</span>
+                    <span className="text-white/40">- {c.name}</span>
+                  </span>
+                ) : null;
+              }}
+              renderSelected={(key) => {
+                const c = CURRENCIES.find((x) => x.code === key);
+                return c ? `${c.code} - ${c.name}` : key;
+              }}
+            />
+
+            {error && (
+              <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-4 py-2.5">
+                <p className="text-sm text-red-400 text-center">{error}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Button */}
+          <div className="px-7 pt-3 pb-7">
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={!country || !currency || loading}
+              className="w-full font-semibold text-white rounded-xl outline-none disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              style={{
+                height: '48px',
+                fontSize: '15px',
+                background: '#2478ff',
+                boxShadow: '0 4px 16px rgba(36,120,255,0.3)',
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.background = '#3d8aff';
+                (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-1px)';
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.background = '#2478ff';
+                (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(0)';
+              }}
+            >
+              {loading ? t('btn_saving') : t('btn_continue')}
+            </button>
           </div>
         </div>
       </div>

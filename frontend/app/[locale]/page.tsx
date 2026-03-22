@@ -1,7 +1,7 @@
 'use client'
 
 import Image from 'next/image'
-import { Suspense, useState, useEffect, FormEvent } from 'react'
+import { Suspense, useState, useEffect, FormEvent, ReactNode, ChangeEvent } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { Link, useRouter } from '@/components/navigation'
@@ -11,6 +11,32 @@ import Footer from '@/components/Footer'
 import { SiteHeader } from '@/components/SiteHeader'
 import { INSTRUMENTS } from '@/lib/instruments'
 import { toast } from '@/stores/toast.store'
+
+/** Filled (solid) field icons for auth panel - not outline/stroke */
+function IconMailFilled({ className }: { className?: string }) {
+  return (
+    <svg className={className} width={17} height={17} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+      <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.89 2 1.99 2H20c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5.01L4 8V6l8 5 8-5v2z" />
+    </svg>
+  )
+}
+
+function IconEyeFilled({ className }: { className?: string }) {
+  return (
+    <svg className={className} width={17} height={17} viewBox="0 0 16 16" fill="currentColor" aria-hidden>
+      <path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8zM8 5.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5z" />
+    </svg>
+  )
+}
+
+function IconEyeSlashFilled({ className }: { className?: string }) {
+  return (
+    <svg className={className} width={17} height={17} viewBox="0 0 16 16" fill="currentColor" aria-hidden>
+      <path d="m10.79 12.912-1.614-1.615a3.5 3.5 0 0 1-4.474-4.474l-2.06-2.06C.938 6.278 0 8 0 8s3 5.5 8 5.5a7.029 7.029 0 0 0 2.79-.588zM5.21 3.088A7.028 7.028 0 0 1 8 2c5 0 8 5.5 8 5.5s-.939 1.721-2.641 3.238l-2.062-2.062a3.5 3.5 0 0 0-4.474-4.474L5.21 3.089z" />
+      <path d="M5.525 7.646a2.5 2.5 0 0 0 2.829 2.829zm4.473.684L7.846 5.082a1.5 1.5 0 0 1 1.415 1.415l2.13 2.837zm4.473-3.237L16 6.086l.696 1.121a1.5 1.5 0 0 1-.972 2.292V12.5a.5.5 0 0 1-.5.5h-1a.5.5 0 0 1-.5-.5v-.282l-1.086-1.086A7.002 7.002 0 0 1 8 15c-5 0-8-5.5-8-5.5a7 7 0 0 1 1.043-1.31L.818 2.818a.5.5 0 0 1 0-.707l.708-.708a.5.5 0 0 1 .707 0L15.293 14.293a.5.5 0 0 1 0 .707l-.707.708a.5.5 0 0 1-.707 0l-1.889-1.89z" />
+    </svg>
+  )
+}
 
 function getCurrencyCountryCodes(pair: string): [string | null, string | null] {
   const parts = pair.split('/')
@@ -24,6 +50,104 @@ function getCurrencyCountryCodes(pair: string): [string | null, string | null] {
 
 const NON_OTC_INSTRUMENTS = INSTRUMENTS.filter((i) => !i.label.includes('OTC'))
 
+interface FloatInputProps {
+  id: string
+  type?: string
+  value: string
+  onChange: (e: ChangeEvent<HTMLInputElement>) => void
+  label: ReactNode
+  required?: boolean
+  minLength?: number
+  disabled?: boolean
+  icon?: 'email' | 'password'
+}
+
+function FloatInput({ id, type = 'text', value, onChange, label, required, minLength, disabled, icon }: FloatInputProps) {
+  const [focused, setFocused] = useState(false)
+  const [showPwd, setShowPwd] = useState(false)
+  const isFloated = focused || value !== ''
+  const resolvedType = type === 'password' ? (showPwd ? 'text' : 'password') : type
+
+  return (
+    <div className="relative" style={{ paddingTop: '14px' }}>
+      <input
+        id={id}
+        type={resolvedType}
+        value={value}
+        onChange={onChange}
+        required={required}
+        minLength={minLength}
+        disabled={disabled}
+        placeholder=""
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        style={{ borderColor: focused ? 'transparent' : 'rgba(255,255,255,0.2)' }}
+        className={`w-full bg-transparent border-0 border-b pb-2 pt-0.5 text-[15px] text-white outline-none transition-colors disabled:opacity-50 ${icon ? 'pr-8' : ''}`}
+      />
+
+      {/* Base underline - always visible, fades when focused */}
+
+      {/* Animated focus underline growing from center */}
+      <span
+        aria-hidden="true"
+        style={{
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          width: '100%',
+          height: '2px',
+          background: '#2478ff',
+          transform: focused ? 'scaleX(1)' : 'scaleX(0)',
+          transformOrigin: 'center',
+          transition: 'transform 200ms ease',
+          boxShadow: focused ? '0 2px 8px rgba(36,120,255,0.25)' : 'none',
+          pointerEvents: 'none',
+        }}
+      />
+
+      {/* Floating label */}
+      <label
+        htmlFor={id}
+        style={{
+          position: 'absolute',
+          left: 0,
+          top: isFloated ? '0px' : '58%',
+          transform: isFloated ? 'none' : 'translateY(-50%)',
+          fontSize: isFloated ? '11px' : '15px',
+          fontWeight: isFloated ? 500 : 400,
+          color: isFloated ? '#2478ff' : 'rgba(255,255,255,0.4)',
+          transition: 'all 180ms ease',
+          pointerEvents: 'none',
+          lineHeight: 1,
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {label}
+      </label>
+
+      {/* Email - filled envelope */}
+      {icon === 'email' && (
+        <span className="absolute right-0 bottom-2 pointer-events-none text-white/25">
+          <IconMailFilled />
+        </span>
+      )}
+
+      {/* Password - filled eye toggle */}
+      {icon === 'password' && (
+        <button
+          type="button"
+          tabIndex={-1}
+          onClick={() => setShowPwd(v => !v)}
+          className={`absolute right-0 bottom-2 transition-colors ${focused ? 'text-white/50' : 'text-white/25'}`}
+          aria-label={showPwd ? 'Скрыть пароль' : 'Показать пароль'}
+        >
+          {showPwd ? <IconEyeSlashFilled /> : <IconEyeFilled />}
+        </button>
+      )}
+    </div>
+  )
+}
+
 function HomeContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -32,6 +156,7 @@ function HomeContent() {
   const ta = useTranslations('auth')
   const tc = useTranslations('common')
   
+  const [heroReady, setHeroReady] = useState(false)
   const [showScrollTop, setShowScrollTop] = useState(false)
   const [showRegisterPanel, setShowRegisterPanel] = useState(false)
   const [panelMode, setPanelMode] = useState<'login' | 'register'>('register')
@@ -43,15 +168,29 @@ function HomeContent() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [promoCode, setPromoCode] = useState('')
   const [error, setError] = useState('')
+  const [errorVisible, setErrorVisible] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showForgotPassword, setShowForgotPassword] = useState(false)
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState('')
+
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setHeroReady(true))
+    return () => cancelAnimationFrame(id)
+  }, [])
 
   useEffect(() => {
     const onScroll = () => setShowScrollTop(window.scrollY > 400)
     window.addEventListener('scroll', onScroll, { passive: true })
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
+
+  useEffect(() => {
+    if (!error) { setErrorVisible(false); return }
+    setErrorVisible(true)
+    const t1 = setTimeout(() => setErrorVisible(false), 4500)
+    const t2 = setTimeout(() => setError(''), 5000)
+    return () => { clearTimeout(t1); clearTimeout(t2) }
+  }, [error])
 
 
   const scrollToTop = () => {
@@ -74,6 +213,20 @@ function HomeContent() {
     }
   }, [searchParams, router])
 
+  useEffect(() => {
+    if (!showRegisterPanel) return
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth
+    const header = document.querySelector('header') as HTMLElement | null
+    document.body.style.overflow = 'hidden'
+    document.body.style.paddingRight = scrollbarWidth + 'px'
+    if (header) header.style.paddingRight = scrollbarWidth + 'px'
+    return () => {
+      document.body.style.overflow = ''
+      document.body.style.paddingRight = ''
+      if (header) header.style.paddingRight = ''
+    }
+  }, [showRegisterPanel])
+
   const handleFormSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setError('')
@@ -85,16 +238,8 @@ function HomeContent() {
         setIsSubmitting(false)
         return
       }
-      if (password.length < 8) {
+      if (password.length < 6) {
         setError(ta('password_too_short'))
-        setIsSubmitting(false)
-        return
-      }
-      const hasUpper = /[A-Z]/.test(password)
-      const hasLower = /[a-z]/.test(password)
-      const hasNumber = /\d/.test(password)
-      if (!hasUpper || !hasLower || !hasNumber) {
-        setError(ta('password_requirements'))
         setIsSubmitting(false)
         return
       }
@@ -111,7 +256,7 @@ function HomeContent() {
       } else {
         setError(result.error || ta('register_error'))
         setIsSubmitting(false)
-        // Если email уже занят — переключаем на вкладку входа
+        // Если email уже занят - переключаем на вкладку входа
         if (result.error?.includes(ta('email_already_registered'))) setPanelMode('login')
       }
     } else {
@@ -128,8 +273,8 @@ function HomeContent() {
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Header and Hero Section — ровно на высоту экрана с учётом хедера */}
-      <div className="min-h-screen flex flex-col bg-[#061230] relative overflow-hidden pt-16 sm:pt-20 md:pt-24">
+      {/* Header and Hero Section */}
+      <div className="flex flex-col bg-[#061230] relative overflow-hidden pt-16 sm:pt-20 md:pt-24">
         <div className="absolute inset-0 opacity-85" style={{ backgroundImage: 'url(/images/back1.png)', backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat' }}></div>
         <div className="absolute inset-0 opacity-85" style={{ backgroundImage: 'url(/images/back2.png)', backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat' }}></div>
         
@@ -138,30 +283,64 @@ function HomeContent() {
           onOpenRegister={() => { setPanelMode('register'); setShowRegisterPanel(true); }}
         />
 
-        {/* Контент под хедером: заполняет оставшуюся высоту (100vh − хедер) */}
-        <div className="flex-1 flex min-h-0 flex-col">
+        <div className="flex flex-col">
         {/* Hero Section */}
-        <section className="flex-1 flex flex-col justify-center py-10 sm:py-16 md:py-20 relative z-10">
-          <div className="container mx-auto px-3 sm:px-4">
+        <section className="flex flex-col justify-center min-h-[calc(100dvh-4rem)] sm:min-h-[54vh] md:min-h-[58vh] py-16 sm:py-24 md:py-32 relative z-10">
+          <div className="container mx-auto px-4">
             <div className="grid md:grid-cols-[1fr_1.25fr] gap-12 items-center">
               {/* Left Column - Text Content */}
               <div className="space-y-8 text-center md:text-left">
-                {/* Rating badge - mobile only */}
-                <div className="md:hidden flex justify-center">
-                  <div className="relative inline-block">
-                    <div className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full text-white font-semibold text-sm shadow-lg" style={{ background: 'linear-gradient(135deg, #061230 0%, #0d1f4a 50%, #061230 100%)' }}>
-                      <div className="flex gap-0.5 text-amber-400">
-                        {[1,2,3,4,5].map((i) => (
-                          <svg key={i} className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                          </svg>
-                        ))}
-                      </div>
-                      <span>{t('rating_short')}</span>
+                {/* DOVI rating badge */}
+                <a
+                  href="https://dovi.com.ua/company/comfortrade"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 w-fit mx-auto md:mx-0 transition-all hover:brightness-110 group"
+                  style={{
+                    background: 'rgba(255,255,255,0.06)',
+                    border: '1px solid rgba(255,255,255,0.12)',
+                    opacity: heroReady ? 1 : 0,
+                    transform: heroReady ? 'none' : 'translateY(20px)',
+                    transition: 'opacity 0.6s ease 0ms, transform 0.6s ease 0ms',
+                  }}
+                >
+                  <div className="flex items-center gap-0.5">
+                    {[1,2,3,4].map(i => (
+                      <svg key={i} className="text-amber-400" style={{width:'14px',height:'14px'}} fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                      </svg>
+                    ))}
+                    <svg style={{width:'14px',height:'14px'}} viewBox="0 0 20 20">
+                      <defs>
+                        <linearGradient id="star-partial" x1="0" x2="1" y1="0" y2="0">
+                          <stop offset="60%" stopColor="#fbbf24" />
+                          <stop offset="60%" stopColor="rgba(255,255,255,0.1)" />
+                        </linearGradient>
+                      </defs>
+                      <path fill="url(#star-partial)" d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                    </svg>
+                  </div>
+                  <span className="text-white font-bold text-xs">4.6</span>
+                  <span className="w-px h-3 bg-white/20" />
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-5 h-5 rounded-full bg-white flex items-center justify-center shrink-0 overflow-hidden">
+                      <Image src="/images/dovilogo.ico" alt="DOVI" width={16} height={16} className="w-3.5 h-3.5 object-contain" />
+                    </div>
+                    <div className="flex flex-col leading-none">
+                      <span className="text-white/90 text-[11px] font-semibold">DOVI.COM.UA</span>
+                      <span className="text-white/50 text-[9px] font-medium mt-0.5">190 отзывов</span>
                     </div>
                   </div>
-                </div>
-                <h1 className="text-[2.5rem] md:text-5xl lg:text-6xl font-bold text-white leading-tight">
+                </a>
+
+                <h1
+                  className="text-[2.5rem] md:text-5xl lg:text-6xl font-bold text-white leading-tight"
+                  style={{
+                    opacity: heroReady ? 1 : 0,
+                    transform: heroReady ? 'none' : 'translateY(28px)',
+                    transition: 'opacity 0.7s ease 120ms, transform 0.7s ease 120ms',
+                  }}
+                >
                   {t('hero_title')}{' '}
                   <span className="relative inline-block">
                     COMFORTRADE
@@ -174,12 +353,26 @@ function HomeContent() {
                     />
                   </span>
                 </h1>
-                
-                <p className="text-base text-gray-300 leading-relaxed max-w-sm sm:max-w-md md:max-w-lg mx-auto md:mx-0 font-extralight">
+
+                <p
+                  className="text-base text-gray-300 leading-relaxed max-w-sm sm:max-w-md md:max-w-lg mx-auto md:mx-0 font-extralight"
+                  style={{
+                    opacity: heroReady ? 1 : 0,
+                    transform: heroReady ? 'none' : 'translateY(24px)',
+                    transition: 'opacity 0.7s ease 260ms, transform 0.7s ease 260ms',
+                  }}
+                >
                   {t('hero_subtitle')}
                 </p>
                 
-                <div className="flex flex-col sm:flex-row gap-4 justify-center md:justify-start">
+                <div
+                  className="flex flex-col sm:flex-row gap-4 justify-center md:justify-start"
+                  style={{
+                    opacity: heroReady ? 1 : 0,
+                    transform: heroReady ? 'none' : 'translateY(20px)',
+                    transition: 'opacity 0.7s ease 400ms, transform 0.7s ease 400ms',
+                  }}
+                >
                   <button onClick={() => setShowRegisterPanel(true)} className="btn-accent text-white px-6 py-3.5 sm:px-8 sm:py-4 rounded-lg font-semibold text-sm sm:text-base transition-colors w-fit min-w-[240px] sm:min-w-0 mx-auto sm:mx-0">
                     {tc('create_account')}
                   </button>
@@ -190,7 +383,14 @@ function HomeContent() {
               </div>
 
               {/* Right Column - Phone Image (hidden on mobile); column wider so image can scale up */}
-              <div className="hidden md:flex items-center justify-end min-w-0">
+              <div
+                className="hidden md:flex items-center justify-end min-w-0"
+                style={{
+                  opacity: heroReady ? 1 : 0,
+                  transform: heroReady ? 'none' : 'translateX(48px) scale(0.97)',
+                  transition: 'opacity 0.9s ease 200ms, transform 0.9s ease 200ms',
+                }}
+              >
                 <Image
                   src="/images/hero.png?v=2"
                   alt={t('hero_alt')}
@@ -272,7 +472,7 @@ function HomeContent() {
               </div>
 
               {/* Phone Image - почти на всю высоту карточки, прижата к низу и немного левее */}
-              <div className="flex-1 flex items-stretch px-0">
+              <div className="hidden md:flex flex-1 items-stretch px-0">
                 <div className="relative w-full h-full flex items-end justify-start pl-2">
                   <Image
                     src="/images/second.png?v=2"
@@ -355,48 +555,30 @@ function HomeContent() {
                 {t('platform_desc')}
               </p>
               {/* Три карточки: белые, тень, иконка-закладка сверху */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-                <div className="relative bg-white rounded-xl shadow-md pt-10 pb-6 px-6 flex flex-col items-start gap-3 text-left">
-                  <div className="absolute -top-1.5 left-5 w-7 h-8 bg-[#ebedff] flex items-center justify-center shadow-md" style={{ clipPath: 'polygon(0 0, 100% 0, 100% 85%, 50% 100%, 0 85%)' }}>
-                    <svg className="w-3 h-3 text-[#3347ff]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                    </svg>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-5">
+                {[
+                  [t('platform_card1_line1'), t('platform_card1_line2'), t('platform_card1_line3'), false],
+                  [t('platform_card2_line1'), t('platform_card2_line2'), t('platform_card2_line3'), false],
+                  [t('platform_card3_line1'), t('platform_card3_line2'), t('platform_card3_line3'), true],
+                ].map(([l1, l2, l3, center], idx) => (
+                  <div key={idx} className={`relative bg-white rounded-2xl shadow-md pt-10 pb-5 px-4 md:pt-10 md:pb-6 md:px-6 flex flex-col items-start gap-2 text-left${center ? ' col-span-2 md:col-span-1 w-[calc(50%-8px)] md:w-auto mx-auto md:mx-0' : ''}`}>
+                    <div className="absolute -top-1.5 left-4 md:left-5 w-7 h-8 bg-[#ebedff] flex items-center justify-center shadow-md" style={{ clipPath: 'polygon(0 0, 100% 0, 100% 85%, 50% 100%, 0 85%)' }}>
+                      <svg className="w-3 h-3 text-[#3347ff]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                    <div className="text-gray-900 font-bold text-sm md:text-base leading-snug">
+                      <div>{l1}</div>
+                      <div>{l2}</div>
+                      <div>{l3}</div>
+                    </div>
                   </div>
-                  <div className="text-gray-900 font-bold text-base leading-snug mt-1">
-                    <div>{t('platform_card1_line1')}</div>
-                    <div>{t('platform_card1_line2')}</div>
-                    <div>{t('platform_card1_line3')}</div>
-                  </div>
-                </div>
-                <div className="relative bg-white rounded-xl shadow-md pt-10 pb-6 px-6 flex flex-col items-start gap-3 text-left">
-                  <div className="absolute -top-1.5 left-5 w-7 h-8 bg-[#ebedff] flex items-center justify-center shadow-md" style={{ clipPath: 'polygon(0 0, 100% 0, 100% 85%, 50% 100%, 0 85%)' }}>
-                    <svg className="w-3 h-3 text-[#3347ff]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                    </svg>
-                  </div>
-                  <div className="text-gray-900 font-bold text-base leading-snug mt-1">
-                    <div>{t('platform_card2_line1')}</div>
-                    <div>{t('platform_card2_line2')}</div>
-                    <div>{t('platform_card2_line3')}</div>
-                  </div>
-                </div>
-                <div className="relative bg-white rounded-xl shadow-md pt-10 pb-6 px-6 flex flex-col items-start gap-3 text-left">
-                  <div className="absolute -top-1.5 left-5 w-7 h-8 bg-[#ebedff] flex items-center justify-center shadow-md" style={{ clipPath: 'polygon(0 0, 100% 0, 100% 85%, 50% 100%, 0 85%)' }}>
-                    <svg className="w-3 h-3 text-[#3347ff]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                    </svg>
-                  </div>
-                  <div className="text-gray-900 font-bold text-base leading-snug mt-1">
-                    <div>{t('platform_card3_line1')}</div>
-                    <div>{t('platform_card3_line2')}</div>
-                    <div>{t('platform_card3_line3')}</div>
-                  </div>
-                </div>
+                ))}
               </div>
             </div>
 
             {/* Right Column - Квадрат с фоном как в хиро: картинки + цвет, лого слева сверху, телефон по центру */}
-            <div className="relative flex items-center justify-center py-8">
+            <div className="hidden md:flex relative items-center justify-center py-8">
               <div className="relative w-full max-w-[380px] md:max-w-[480px] lg:max-w-[560px] aspect-square rounded-xl md:rounded-2xl overflow-hidden bg-[#061230]">
                 <div className="absolute inset-0 opacity-85 scale-x-[-1]" style={{ backgroundImage: 'url(/images/back1.png)', backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat' }} />
                 <div className="absolute inset-0 opacity-85 scale-x-[-1]" style={{ backgroundImage: 'url(/images/back2.png)', backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat' }} />
@@ -422,7 +604,7 @@ function HomeContent() {
       {/* Email signup Block */}
       <section className="py-16 md:py-24">
         <div className="container mx-auto px-4">
-          <div className="bg-[#061230] relative overflow-hidden rounded-2xl py-16 md:py-24 -mx-4 md:-mx-8 px-4 md:px-6 lg:px-8 flex justify-center">
+          <div className="bg-[#061230] relative overflow-hidden rounded-2xl py-16 md:py-24 px-6 md:px-10 lg:px-14 flex justify-center">
             <div className="absolute inset-0 opacity-85" style={{ backgroundImage: 'url(/images/small.png)', backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat' }} />
             <div className="relative z-10 w-full max-w-6xl flex flex-col md:flex-row md:items-center gap-8 md:gap-12">
               <div className="flex-1">
@@ -704,7 +886,7 @@ function HomeContent() {
         <div className="container mx-auto px-4">
           <div className="mb-12">
             <div className="mb-4">
-              <span className="text-[#3347ff] text-base">07 — 08</span>
+              <span className="text-[#3347ff] text-base">07 - 08</span>
             </div>
             <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-6">
               <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-gray-900">
@@ -816,7 +998,7 @@ function HomeContent() {
       {/* Registration slide-out panel */}
       <>
         <div
-          className={`fixed inset-0 z-[100] transition-opacity duration-300 ${showRegisterPanel ? 'bg-transparent' : 'bg-transparent pointer-events-none'}`}
+          className={`fixed inset-0 z-[100] transition-opacity duration-300 ${showRegisterPanel ? 'bg-[#010617]/70 backdrop-blur-[2px]' : 'bg-transparent pointer-events-none'}`}
           onClick={() => {
             setShowRegisterPanel(false);
             setError('');
@@ -831,16 +1013,52 @@ function HomeContent() {
           aria-hidden="true"
         />
         <div
-          className={`fixed top-0 right-0 h-full w-full max-w-[400px] bg-[#0a1835] backdrop-blur-xl shadow-2xl z-[101] flex flex-col transition-transform duration-300 ease-out border-l border-white/5 ${showRegisterPanel ? 'translate-x-0' : 'translate-x-full pointer-events-none'}`}
+          className={`fixed inset-x-0 bottom-0 top-auto h-[92dvh] max-h-[92dvh] w-full bg-[#0a1835] backdrop-blur-xl shadow-2xl z-[101] flex flex-col transition-transform duration-300 ease-out rounded-t-2xl border border-white/10 md:rounded-none md:border-white/5 md:border-t-0 md:border-r-0 md:border-b-0 md:inset-y-0 md:left-auto md:right-0 md:h-full md:max-h-none md:max-w-[380px] ${showRegisterPanel ? 'translate-y-0 md:translate-x-0' : 'translate-y-full md:translate-y-0 md:translate-x-full pointer-events-none'}`}
           role="dialog"
           aria-modal="true"
           aria-labelledby="panel-title"
           aria-hidden={!showRegisterPanel}
         >
             <h2 id="panel-title" className="sr-only">{showForgotPassword ? ta('restore_password') : panelMode === 'login' ? ta('login_title') : ta('register_title')}</h2>
-            {!showForgotPassword && (
-            <div className="relative pt-8 px-6 pb-4">
-              <div className="flex w-full gap-2 p-1 rounded-xl bg-white/5">
+            {/* Error toast */}
+            <div
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                zIndex: 10,
+                padding: '0 16px',
+                transform: errorVisible ? 'translateY(0)' : 'translateY(-110%)',
+                opacity: errorVisible ? 1 : 0,
+                transition: 'transform 280ms cubic-bezier(0.34,1.2,0.64,1), opacity 280ms ease',
+                pointerEvents: errorVisible ? 'auto' : 'none',
+              }}
+            >
+              <div
+                className="rounded-b-xl px-4 py-3 text-[13px] leading-[1.5] text-white font-semibold flex items-center justify-between gap-3"
+                style={{ background: 'rgba(220,38,38,0.55)', backdropFilter: 'blur(8px)', boxShadow: '0 4px 20px rgba(220,38,38,0.2)' }}
+              >
+                <span>{error}</span>
+                <button
+                  type="button"
+                  onClick={() => { setErrorVisible(false); setTimeout(() => setError(''), 300) }}
+                  className="shrink-0 text-white/70 hover:text-white transition-colors"
+                  aria-label="Закрыть"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <div className="relative px-6 sm:px-6 pt-4 pb-3.5">
+              {showForgotPassword ? (
+                <div style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }} className="pb-2">
+                  <span className="text-[15px] font-semibold text-white">{ta('restore_password')}</span>
+                </div>
+              ) : (
+              <div className="relative flex" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
                 <button
                   type="button"
                   onClick={() => {
@@ -852,9 +1070,12 @@ function HomeContent() {
                     setPromoCode('');
                     setShowForgotPassword(false);
                   }}
-                  className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-                    panelMode === 'register' ? 'bg-white/15 text-white shadow-sm' : 'text-gray-400 hover:text-white'
-                  }`}
+                  style={{
+                    color: panelMode === 'register' ? '#fff' : 'rgba(255,255,255,0.4)',
+                    fontWeight: panelMode === 'register' ? 600 : 400,
+                    transition: 'color 150ms ease, font-weight 150ms ease',
+                  }}
+                  className="flex-1 h-9 text-[15px] bg-transparent border-0 outline-none cursor-pointer pb-1.5"
                 >
                   {ta('register_title')}
                 </button>
@@ -869,44 +1090,48 @@ function HomeContent() {
                     setPromoCode('');
                     setShowForgotPassword(false);
                   }}
-                  className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-                    panelMode === 'login' ? 'bg-white/15 text-white shadow-sm' : 'text-gray-400 hover:text-white'
-                  }`}
+                  style={{
+                    color: panelMode === 'login' ? '#fff' : 'rgba(255,255,255,0.4)',
+                    fontWeight: panelMode === 'login' ? 600 : 400,
+                    transition: 'color 150ms ease, font-weight 150ms ease',
+                  }}
+                  className="flex-1 h-9 text-[15px] bg-transparent border-0 outline-none cursor-pointer pb-1.5"
                 >
                   {ta('login_title')}
                 </button>
+                {/* Sliding indicator */}
+                <span
+                  aria-hidden="true"
+                  style={{
+                    position: 'absolute',
+                    bottom: '-1px',
+                    left: 0,
+                    width: '50%',
+                    height: '2px',
+                    borderRadius: '2px',
+                    background: '#2478ff',
+                    transform: panelMode === 'login' ? 'translateX(100%)' : 'translateX(0)',
+                    transition: 'transform 200ms ease',
+                  }}
+                />
               </div>
+              )}
             </div>
-            )}
-            <div className="flex-1 overflow-y-auto px-6 pb-12">
+            <div className="flex-1 overflow-y-auto px-6 sm:px-6 pb-4 sm:pb-5">
               {showForgotPassword ? (
-                <div className="space-y-5 pt-8">
-                  <button
-                    type="button"
-                    onClick={() => setShowForgotPassword(false)}
-                    className="text-sm text-gray-400 hover:text-white transition-colors flex items-center gap-1 -ml-1"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                    </svg>
-                    {ta('back_to_login')}
-                  </button>
+                <div className="space-y-5">
                   <div>
-                    <h3 className="text-lg font-semibold text-white mb-1">{ta('restore_password')}</h3>
-                    <p className="text-sm text-gray-400 mb-4">
+                    <p className="text-xs text-gray-400 mb-3">
                       {ta('restore_password_desc')}
                     </p>
-                    <div className="space-y-2">
-                      <label htmlFor="forgot-email" className="block text-xs font-medium text-gray-400 ml-1">{tc('email')}</label>
-                      <input
-                        id="forgot-email"
-                        type="email"
-                        value={forgotPasswordEmail}
-                        onChange={(e) => setForgotPasswordEmail(e.target.value)}
-                        placeholder={tc('enter_email')}
-                        className="panel-auth-input w-full py-3 px-4 rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:ring-0 focus:shadow-none focus:border-white/10 focus:bg-white/[0.08] transition-all"
-                      />
-                    </div>
+                    <FloatInput
+                      id="forgot-email"
+                      type="email"
+                      value={forgotPasswordEmail}
+                      onChange={(e) => setForgotPasswordEmail(e.target.value)}
+                      label={tc('email')}
+                      icon="email"
+                    />
                     <button
                       type="button"
                       onClick={() => {
@@ -918,17 +1143,27 @@ function HomeContent() {
                         // STUB: вызвать API восстановления пароля когда будет готов эндпоинт
                         toast(ta('restore_alert'), 'info');
                       }}
-                      className="w-full mt-4 py-3.5 rounded-xl btn-accent text-white font-semibold active:scale-[0.99] transition-all shadow-lg shadow-[#3347ff]/20"
+                      className="w-full mt-3 py-2.5 rounded-xl btn-accent text-white font-semibold active:scale-[0.99] transition-all shadow-lg shadow-[#3347ff]/20"
                     >
                       {ta('restore_btn')}
                     </button>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowForgotPassword(false)}
+                    className="text-sm text-gray-400 hover:text-white transition-colors flex items-center gap-1 -ml-1"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    </svg>
+                    {ta('back_to_login')}
+                  </button>
                 </div>
               ) : (
-              <form className="space-y-5" onSubmit={handleFormSubmit}>
+              <form className="space-y-4" onSubmit={handleFormSubmit}>
                 <button
                   type="button"
-                  className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl bg-white/8 border border-white/15 text-white font-medium hover:bg-white/12 transition-colors"
+                  className="w-full flex items-center justify-center gap-2 py-2 rounded-xl bg-white/8 border border-white/15 text-white text-sm font-medium hover:bg-white/12 transition-colors"
                 >
                   <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
                     <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -938,67 +1173,55 @@ function HomeContent() {
                   </svg>
                   {tc('continue_with_google')}
                 </button>
-                <div className="relative py-2">
+                <div className="relative py-0.5">
                   <div className="absolute inset-0 flex items-center">
                     <div className="w-full border-t border-white/10" />
                   </div>
                   <div className="relative flex justify-center">
-                    <span className="px-3 bg-[#0a1835] text-xs text-gray-500">{tc('or')}</span>
+                    <span className="px-2.5 bg-[#0a1835] text-xs text-gray-500">{tc('or')}</span>
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <label htmlFor="panel-email" className="block text-xs font-medium text-gray-400 ml-1">{tc('email')}</label>
-                  <input
-                    id="panel-email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder={tc('enter_email')}
-                    required
-                    disabled={isSubmitting}
-                    className="panel-auth-input w-full py-3 px-4 rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:ring-0 focus:shadow-none focus:border-white/10 focus:bg-white/[0.08] transition-all disabled:opacity-50"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label htmlFor="panel-password" className="block text-xs font-medium text-gray-400 ml-1">{tc('password')}</label>
-                  <input
+                <FloatInput
+                  id="panel-email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  label={tc('email')}
+                  required
+                  disabled={isSubmitting}
+                  icon="email"
+                />
+                <div>
+                  <FloatInput
                     id="panel-password"
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder={tc('enter_password')}
+                    label={tc('password')}
                     required
-                    minLength={8}
+                    minLength={6}
                     disabled={isSubmitting}
-                    className="panel-auth-input w-full py-3 px-4 rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:ring-0 focus:shadow-none focus:border-white/10 focus:bg-white/[0.08] transition-all disabled:opacity-50"
+                    icon="password"
                   />
                   {panelMode === 'register' && (
-                    <p className="text-xs text-gray-500 ml-1">{ta('password_hint')}</p>
+                    <p className="mt-1 text-[11px] leading-[1.2] text-gray-500">{ta('password_hint')}</p>
                   )}
                 </div>
                 {panelMode === 'register' && (
-                  <div className="space-y-2">
-                    <label htmlFor="panel-confirm-password" className="block text-xs font-medium text-gray-400 ml-1">{tc('confirm_password')}</label>
-                    <input
-                      id="panel-confirm-password"
-                      type="password"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      placeholder={tc('confirm_password')}
-                      required
-                      minLength={8}
-                      disabled={isSubmitting}
-                      className="panel-auth-input w-full py-3 px-4 rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:ring-0 focus:shadow-none focus:border-white/10 focus:bg-white/[0.08] transition-all disabled:opacity-50"
-                    />
-                  </div>
-                )}
-                {error && (
-                  <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400">
-                    {error}
-                  </div>
+                  <FloatInput
+                    id="panel-confirm-password"
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    label={tc('confirm_password')}
+                    required
+                    minLength={6}
+                    disabled={isSubmitting}
+                    icon="password"
+                  />
                 )}
                 {panelMode === 'login' && (
-                  <div className="flex justify-end -mt-1">
+                  <div className="flex justify-end -mt-0.5">
                     <button
                       type="button"
                       onClick={() => setShowForgotPassword(true)}
@@ -1009,37 +1232,32 @@ function HomeContent() {
                   </div>
                 )}
                 {panelMode === 'register' && (
-                  <div className="space-y-2">
-                    <label htmlFor="panel-promo" className="block text-xs font-medium text-gray-400 ml-1">{tc('promo_code')} <span className="text-gray-600">({tc('optional')})</span></label>
-                    <input
-                      id="panel-promo"
-                      type="text"
-                      value={promoCode}
-                      onChange={(e) => setPromoCode(e.target.value)}
-                      placeholder={tc('enter_promo')}
-                      disabled={isSubmitting}
-                      className="panel-auth-input w-full py-3 px-4 rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:ring-0 focus:shadow-none focus:border-white/10 focus:bg-white/[0.08] transition-all disabled:opacity-50"
-                    />
-                  </div>
+                  <FloatInput
+                    id="panel-promo"
+                    value={promoCode}
+                    onChange={(e) => setPromoCode(e.target.value)}
+                    label={<>{tc('promo_code')} <span className="opacity-60">({tc('optional')})</span></>}
+                    disabled={isSubmitting}
+                  />
                 )}
                 {panelMode === 'register' && (
-                  <label className="flex items-start gap-3 cursor-pointer group">
+                  <label className="flex items-start gap-2.5 cursor-pointer group">
                     <input
                       type="checkbox"
                       checked={agreeToTerms}
                       onChange={(e) => setAgreeToTerms(e.target.checked)}
                       disabled={isSubmitting}
-                      className="mt-1 w-4 h-4 rounded border-white/30 bg-white/5 text-[#3347ff] focus:ring-[#3347ff]/50 focus:ring-offset-0 disabled:opacity-50"
+                      className="mt-0.5 w-4 h-4 rounded border-white/30 bg-white/5 text-[#3347ff] focus:ring-[#3347ff]/50 focus:ring-offset-0 disabled:opacity-50 cursor-pointer"
                     />
-                    <span className="text-sm text-gray-400 group-hover:text-gray-300 transition-colors">
+                    <span className="text-xs text-gray-400 group-hover:text-gray-300 transition-colors">
                       {ta('agree_with')} <Link href="/policy/terms" className="text-gray-400 hover:text-[#3347ff] transition-colors underline decoration-gray-600/30 underline-offset-2">{ta('terms_link')}</Link> {ta('agree_and')} <Link href="/policy/privacy" className="text-gray-400 hover:text-[#3347ff] transition-colors underline decoration-gray-600/30 underline-offset-2">{ta('privacy_link')}</Link>
                     </span>
                   </label>
                 )}
                 <button
                   type="submit"
-                  disabled={(panelMode === 'register' && !agreeToTerms) || isSubmitting}
-                  className="w-full py-3.5 rounded-xl btn-accent text-white font-semibold active:scale-[0.99] transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-[#3347ff]/20"
+                  disabled={isSubmitting}
+                  className="w-full py-2 rounded-xl btn-accent text-white font-semibold active:scale-[0.99] transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-[#3347ff]/20"
                 >
                   {isSubmitting 
                     ? (panelMode === 'login' ? ta('logging_in') : ta('registering')) 
@@ -1050,15 +1268,15 @@ function HomeContent() {
               )}
             </div>
             {panelMode === 'register' ? (
-              <div className="p-6 border-t border-white/10 bg-[#0a1835]/80">
+              <div className="p-3 sm:p-4 border-t border-white/10 bg-[#0a1835]/80">
                 <p className="text-xs text-center text-gray-500 leading-relaxed font-medium">
                   {ta('data_protection')} <Link href="/policy/terms" className="text-gray-400 hover:text-[#3347ff] transition-colors underline decoration-gray-600/30 underline-offset-2">{ta('policy_link')}</Link> {ta('agree_and')} <Link href="/policy/aml-kyc" className="text-gray-400 hover:text-[#3347ff] transition-colors underline decoration-gray-600/30 underline-offset-2">{ta('aml_link')}</Link>.
                 </p>
               </div>
             ) : (
-              <div className="p-6 border-t border-white/10 bg-[#0a1835]/80">
+              <div className="p-3 sm:p-4 border-t border-white/10 bg-[#0a1835]/80">
                 <div>
-                  <p className="text-xs text-center text-gray-500 mb-3 font-medium">{ta('follow_socials')}</p>
+                  <p className="text-xs text-center text-gray-500 mb-2 font-medium">{ta('follow_socials')}</p>
                   <div className="flex justify-center gap-4">
                     <a href="https://www.instagram.com/comfortrade/" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white transition-colors" aria-label="Instagram">
                       <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">

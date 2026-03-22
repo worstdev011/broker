@@ -130,14 +130,14 @@ export function useCandleMode({
 
   /**
    * Live свеча для рендера с учётом аниматора.
-   * Если передан animatedCandle — применяем transform к нему (иначе анимированная live рисуется как classic).
+   * Если передан animatedCandle - применяем transform к нему (иначе анимированная live рисуется как classic).
    */
   const getLiveCandleForRender = (animatedCandle: Candle | null): Candle | null => {
     const mode = modeRef.current;
     const source = animatedCandle ?? getRenderLiveCandle();
     if (!source) return null;
 
-    // animatedCandle уже прошёл через getRenderLiveCandle при null — но когда animatedCandle есть,
+    // animatedCandle уже прошёл через getRenderLiveCandle при null - но когда animatedCandle есть,
     // getRenderLiveCandle не вызывался. Значит source = raw animated. Нужно применить transform.
     if (!animatedCandle) return source; // getRenderLiveCandle уже применил transform
 

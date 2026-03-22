@@ -36,21 +36,21 @@ const PAYMENT_METHODS: Array<{
 }> = [
   { id: 'CARD', label: 'Карта Visa/Master', image: '/images/visa%20master.webp', speed: 'Мгновенно', minAmount: 200, maxAmount: 1000 },
   { id: 'PRIVAT24', label: 'Privat24', image: '/images/privat24.png', speed: 'Мгновенно', minAmount: 200, maxAmount: 1000 },
-  { id: 'CARD_UAH', label: 'Перевод на карту (UAH)', image: '/images/creditcard.png', speed: '1–5 мин', minAmount: 200, maxAmount: 1000 },
+  { id: 'CARD_UAH', label: 'Перевод на карту (UAH)', image: '/images/creditcard.png', speed: '1-5 мин', minAmount: 200, maxAmount: 1000 },
   { id: 'BINANCE_PAY', label: 'Binance Pay', image: '/images/binancepay.png', speed: 'Мгновенно', minAmount: 200, maxAmount: 1000 },
-  { id: 'USDT_TRC20', label: 'Tether (TRC-20)', image: '/images/tether.png', speed: '1–5 мин', minAmount: 200, maxAmount: 1000 },
-  { id: 'BTC', label: 'Bitcoin', speed: '1–5 мин', minAmount: 200, maxAmount: 1000 },
-  { id: 'ETH', label: 'Ethereum', speed: '1–5 мин', minAmount: 200, maxAmount: 1000 },
-  { id: 'USDC', label: 'USD Coin', speed: '1–5 мин', minAmount: 200, maxAmount: 1000 },
-  { id: 'BNB', label: 'BNB', speed: '1–5 мин', minAmount: 200, maxAmount: 1000 },
-  { id: 'XRP', label: 'XRP', speed: '1–5 мин', minAmount: 200, maxAmount: 1000 },
-  { id: 'SOL', label: 'Solana', speed: '1–5 мин', minAmount: 200, maxAmount: 1000 },
-  { id: 'DOGE', label: 'Dogecoin', speed: '1–5 мин', minAmount: 200, maxAmount: 1000 },
-  { id: 'ADA', label: 'Cardano', speed: '1–5 мин', minAmount: 200, maxAmount: 1000 },
-  { id: 'AVAX', label: 'Avalanche', speed: '1–5 мин', minAmount: 200, maxAmount: 1000 },
-  { id: 'MATIC', label: 'Polygon', speed: '1–5 мин', minAmount: 200, maxAmount: 1000 },
-  { id: 'LTC', label: 'Litecoin', speed: '1–5 мин', minAmount: 200, maxAmount: 1000 },
-  { id: 'DOT', label: 'Polkadot', speed: '1–5 мин', minAmount: 200, maxAmount: 1000 },
+  { id: 'USDT_TRC20', label: 'Tether (TRC-20)', image: '/images/tether.png', speed: '1-5 мин', minAmount: 200, maxAmount: 1000 },
+  { id: 'BTC', label: 'Bitcoin', speed: '1-5 мин', minAmount: 200, maxAmount: 1000 },
+  { id: 'ETH', label: 'Ethereum', speed: '1-5 мин', minAmount: 200, maxAmount: 1000 },
+  { id: 'USDC', label: 'USD Coin', speed: '1-5 мин', minAmount: 200, maxAmount: 1000 },
+  { id: 'BNB', label: 'BNB', speed: '1-5 мин', minAmount: 200, maxAmount: 1000 },
+  { id: 'XRP', label: 'XRP', speed: '1-5 мин', minAmount: 200, maxAmount: 1000 },
+  { id: 'SOL', label: 'Solana', speed: '1-5 мин', minAmount: 200, maxAmount: 1000 },
+  { id: 'DOGE', label: 'Dogecoin', speed: '1-5 мин', minAmount: 200, maxAmount: 1000 },
+  { id: 'ADA', label: 'Cardano', speed: '1-5 мин', minAmount: 200, maxAmount: 1000 },
+  { id: 'AVAX', label: 'Avalanche', speed: '1-5 мин', minAmount: 200, maxAmount: 1000 },
+  { id: 'MATIC', label: 'Polygon', speed: '1-5 мин', minAmount: 200, maxAmount: 1000 },
+  { id: 'LTC', label: 'Litecoin', speed: '1-5 мин', minAmount: 200, maxAmount: 1000 },
+  { id: 'DOT', label: 'Polkadot', speed: '1-5 мин', minAmount: 200, maxAmount: 1000 },
 ];
 
 const WITHDRAW_PAYMENT_METHODS = PAYMENT_METHODS.filter((m) =>
@@ -409,7 +409,7 @@ export function WalletTab() {
         <div className="flex flex-1 min-h-0 overflow-auto">
         {walletTab === 'deposit' && (
           <>
-            {/* Левая колонка — форма */}
+            {/* Левая колонка - форма */}
 <div className="flex-1 min-w-0 min-h-0 p-3 sm:p-6 md:p-8">
             <div className="w-full">
               <h1 className="text-lg sm:text-2xl font-bold text-white mb-0.5 sm:mb-1">Пополнение счёта</h1>
@@ -462,7 +462,7 @@ export function WalletTab() {
             </div>
           )}
 
-          {/* Двухколоночный layout: слева — способы оплаты, справа — сумма */}
+          {/* Двухколоночный layout: слева - способы оплаты, справа - сумма */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 sm:gap-6 mb-5 sm:mb-8">
           {/* 1. Выбор способа оплаты */}
           <div className="rounded-xl sm:rounded-2xl border border-white/[0.08] bg-[#030E28] p-4 sm:p-6">
@@ -602,7 +602,7 @@ export function WalletTab() {
           </div>
           </div>
 
-          {/* Кнопка оплаты — на мобилке (на десктопе в сайдбаре) */}
+          {/* Кнопка оплаты - на мобилке (на десктопе в сайдбаре) */}
           <div className="lg:hidden mb-5 sm:mb-8">
             <div className="rounded-lg sm:rounded-xl border border-white/[0.08] bg-[#030E28] p-3 sm:p-4 mb-3 sm:mb-4">
               <div className="flex justify-between items-center mb-2">
@@ -737,7 +737,7 @@ export function WalletTab() {
                         </Link>
                       </div>
                     </div>
-                    {/* Последние выводы — показываем и при неверифицированном аккаунте */}
+                    {/* Последние выводы - показываем и при неверифицированном аккаунте */}
                     <div>
                       <div className="flex items-center justify-between mb-4">
                         <h2 className="text-base font-semibold text-white">Последние выводы</h2>
@@ -819,11 +819,11 @@ export function WalletTab() {
                 )}
                 {success && (
                   <div className="mb-4 sm:mb-6 p-3 sm:p-4 rounded-lg sm:rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs sm:text-sm">
-                    Заявка на вывод создана. Средства будут переведены в течение 1–3 рабочих дней.
+                    Заявка на вывод создана. Средства будут переведены в течение 1-3 рабочих дней.
                   </div>
                 )}
 
-                {/* Двухколоночный layout: слева — способы вывода, справа — сумма */}
+                {/* Двухколоночный layout: слева - способы вывода, справа - сумма */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 sm:gap-6 mb-5 sm:mb-8">
                 {/* 1. Выбор способа вывода */}
                 <div className="rounded-xl sm:rounded-2xl border border-white/[0.08] bg-[#030E28] p-4 sm:p-6">
@@ -938,7 +938,7 @@ export function WalletTab() {
                 </div>
                 </div>
 
-                {/* Кнопка вывода — на мобилке */}
+                {/* Кнопка вывода - на мобилке */}
                 <div className="lg:hidden mb-5 sm:mb-8">
                   <div className="rounded-lg sm:rounded-xl border border-white/[0.08] bg-[#030E28] p-3 sm:p-4 mb-3 sm:mb-4">
                   <div className="flex justify-between items-center mb-2">
@@ -1186,7 +1186,7 @@ export function WalletTab() {
         </div>
       </div>
 
-      {/* Правая часть — Summary (от хедера до низа, только для Пополнение и Вывод; для Вывода — только если верифицирован) */}
+      {/* Правая часть - Summary (от хедера до низа, только для Пополнение и Вывод; для Вывода - только если верифицирован) */}
       {((walletTab === 'deposit') || (walletTab === 'withdraw' && isVerified)) && (
         <div className="hidden lg:flex w-[320px] shrink-0 px-4 py-6 flex-col gap-6 self-stretch min-h-[calc(100vh-3.5rem)] bg-gradient-to-br from-[#0a1638] via-[#07152f] to-[#040d1f] border-l border-white/10 sticky top-0">
           {walletTab === 'deposit' && (

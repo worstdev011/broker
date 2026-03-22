@@ -3,7 +3,7 @@
 import { useEffect, useRef, RefObject } from 'react';
 import { logger } from '@/lib/logger';
 import { getChartSettings } from '@/lib/chartSettings';
-import { renderCandles } from './render/renderCandles';
+import { renderCandles, renderCandleMinMaxLabels } from './render/renderCandles';
 import { renderPriceLine } from './render/renderPriceLine';
 import { renderCrosshair, renderCrosshairTimeLabel } from './crosshair/renderCrosshair';
 import { renderOhlcPanel } from './ohlc/renderOhlcPanel';
@@ -431,6 +431,11 @@ export function useRenderLoop({
         renderPriceLine({ ctx, viewport, currentPrice: liveCandle.close, width, height: mainHeight, digits });
       }
 
+      // Min/max price labels
+      if (candles.length > 0) {
+        renderCandleMinMaxLabels({ ctx, viewport, candles, liveCandle, width, height: mainHeight, digits });
+      }
+
       // Expiration overlay: animated vertical line
       const rawExpirationTimestamp = p.getExpirationTime?.();
       if (rawExpirationTimestamp != null && Number.isFinite(rawExpirationTimestamp) && viewport.timeEnd > viewport.timeStart) {
@@ -527,6 +532,37 @@ export function useRenderLoop({
         expirationTargetTimeRef.current = null;
         expirationAnimStartTimeRef.current = null;
         expirationAnimStartValueRef.current = null;
+      }
+
+      // Trade expiry vertical lines - fixed marker at each open trade's expiresAt
+      if (p.getTrades) {
+        const openTrades = p.getTrades().filter(t => t.expiresAt > now - 500);
+        const PRICE_LABEL_AREA_WIDTH = 60;
+        const TIME_LABEL_HEIGHT = 25;
+        for (const trade of openTrades) {
+          const tx = ((trade.expiresAt - viewport.timeStart) / (viewport.timeEnd - viewport.timeStart)) * width;
+          const maxX = width - PRICE_LABEL_AREA_WIDTH;
+          if (tx < 0 || tx > maxX) continue;
+          const isCall = trade.direction === 'CALL';
+          const lineColor = isCall ? 'rgba(74, 222, 128, 0.55)' : 'rgba(248, 113, 113, 0.55)';
+          const dotColor = isCall ? '#4ade80' : '#f87171';
+          ctx.save();
+          // Dashed vertical line
+          ctx.strokeStyle = lineColor;
+          ctx.lineWidth = 1.5;
+          ctx.setLineDash([4, 4]);
+          ctx.beginPath();
+          ctx.moveTo(tx, 0);
+          ctx.lineTo(tx, mainHeight - TIME_LABEL_HEIGHT);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          // Small dot at top
+          ctx.fillStyle = dotColor;
+          ctx.beginPath();
+          ctx.arc(tx, 8, 4, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
       }
 
       // CALL/PUT button hover highlight

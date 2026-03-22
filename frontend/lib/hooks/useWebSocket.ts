@@ -312,7 +312,7 @@ export function useWebSocket({ activeInstrumentRef, activeTimeframeRef, onPriceU
 
         try {
           if (event.data instanceof Blob) {
-            // Capture activeId now — ref may change by the time the async callback runs
+            // Capture activeId now - ref may change by the time the async callback runs
             const capturedActiveId = activeInstrumentRefRef.current?.current ?? null;
             event.data.arrayBuffer().then((buf) => {
               if (buf.byteLength >= 2 && new DataView(buf).getUint8(0) === 0x01) {
@@ -392,14 +392,14 @@ export function useWebSocket({ activeInstrumentRef, activeTimeframeRef, onPriceU
       const currentState = wsStateRef.current;
 
       if (!ws || ws.readyState !== WebSocket.OPEN) {
-        // Don't auto-retry from poll after max attempts — wait for user action or remount
+        // Don't auto-retry from poll after max attempts - wait for user action or remount
         if (reconnectAttemptsRef.current >= MAX_RECONNECT_ATTEMPTS) return;
         if (!isConnectingRef.current && currentState !== 'connecting' && currentState !== 'closed') {
           connect();
         }
         return;
       }
-      // Connection succeeded — reset attempts counter
+      // Connection succeeded - reset attempts counter
       if (reconnectAttemptsRef.current > 0) {
         reconnectAttemptsRef.current = 0;
       }

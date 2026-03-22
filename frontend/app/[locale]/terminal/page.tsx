@@ -3,11 +3,16 @@
 import Image from 'next/image';
 import { Link } from '@/components/navigation';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { useRouter } from '@/components/navigation';
-import { TrendingUp, Wallet, GraduationCap, UserCircle, Bell, PlusCircle, Plus, Minus, History, Newspaper, Repeat, MessageCircle, ChevronsRight } from 'lucide-react';
+import { useRouter, usePathname, useParams } from 'next/navigation';
+import { useTranslations } from 'next-intl';
+import { TrendingUp, Wallet, UserCircle, PlusCircle, Plus, Minus, History, Newspaper, Repeat, MessageCircle, ChevronsRight, Clock, Copy, Check, Calculator } from 'lucide-react';
 import { useTerminalSnapshot } from '@/lib/hooks/useTerminalSnapshot';
 import { AuthGuard } from '@/components/auth/AuthGuard';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { useVerificationStatus } from '@/lib/hooks/useVerification';
+import { useDisplayName } from '@/lib/hooks/useDisplayName';
+import ReactCountryFlag from 'react-country-flag';
+import { NotificationsBell } from '@/components/NotificationsBell';
 
 import { ChartContainer } from '@/components/chart/ChartContainer';
 import { SentimentBar } from '@/components/chart/SentimentBar';
@@ -28,7 +33,7 @@ import type { IndicatorConfig } from '@/components/chart/internal/indicators/ind
 import { getAllIndicators } from '@/components/chart/internal/indicators/indicatorRegistry';
 import { api } from '@/lib/api/api';
 import { useAccountSwitch } from '@/lib/hooks/useAccountSwitch';
-import { formatCurrencySymbol } from '@/lib/formatCurrency';
+import { formatCurrencySymbol, getCurrencyIcon } from '@/lib/formatCurrency';
 import { logger } from '@/lib/logger';
 import {
   type TerminalLayout,
@@ -45,6 +50,7 @@ import { toast as showToast } from '@/stores/toast.store';
 import type { AccountSnapshot } from '@/types/account';
 import { FALLBACK_SUPPORT_CHANNEL_URL } from '@/lib/constants';
 import { CurrencyCountryModal } from '@/components/CurrencyCountryModal';
+import { OnboardingTour, ONBOARDING_STORAGE_KEY } from '@/components/terminal/OnboardingTour';
 import { NewsModal } from './components/NewsModal';
 import { ChartSettingsModal } from './components/ChartSettingsModal';
 import { TimeSelectionModal } from './components/TimeSelectionModal';
@@ -63,12 +69,25 @@ function formatTimeDisplay(seconds: number): string {
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 }
 
-export default function TerminalPage() {
+type TerminalPageProps = {
+  defaultAccount?: 'demo' | 'real';
+};
+
+export function TerminalPageContent({ defaultAccount = 'real' }: TerminalPageProps) {
   const router = useRouter();
+  const pathname = usePathname();
+  const params = useParams<{ locale: string }>();
+  const localeParam = params?.locale;
+  const locale = Array.isArray(localeParam) ? localeParam[0] : localeParam;
+  const terminalPath = `/${locale ?? 'ru'}/terminal`;
+  const terminalDemoPath = `${terminalPath}/demo`;
+  const isDemoRoute = pathname?.endsWith('/terminal/demo') ?? false;
   const { logout, user } = useAuth();
+  const tTerminal = useTranslations('terminal');
+  const kycStatus = useVerificationStatus();
   const { switchAccount } = useAccountSwitch();
 
-  // Single read of saved layout — all state initializers use this object
+  // Single read of saved layout - all state initializers use this object
   const initialLayoutRef = useRef<TerminalLayout | null>(
     typeof window !== 'undefined' ? loadLayoutFromLocalStorage() : null,
   );
@@ -95,7 +114,7 @@ export default function TerminalPage() {
         if (currentInst) {
           setPayoutPercent(currentInst.payoutPercent);
         } else if (data.length > 0) {
-          // Stale instrument ID (e.g. from old localStorage) — reset to default
+          // Stale instrument ID (e.g. from old localStorage) - reset to default
           const fallback = data.find((inst) => inst.id === DEFAULT_INSTRUMENT_ID) ?? data[0]!;
           setInstrument(fallback.id);
           setPayoutPercent(fallback.payoutPercent);
@@ -118,7 +137,7 @@ export default function TerminalPage() {
 
   const [chartType, setChartType] = useState<ChartType>(il?.chartType === 'line' ? 'line' : 'candles');
   const { data } = useTerminalSnapshot(instrument);
-  const [accountType, setAccountType] = useState<'demo' | 'real'>('demo');
+  const [accountType, setAccountType] = useState<'demo' | 'real'>(defaultAccount);
   const [activeMenu, setActiveMenu] = useState<string>('торговля');
   const [time, setTime] = useState<string>(il?.tradeTime ?? '60');
   const [amount, setAmount] = useState<string>(il?.tradeAmount ?? '100');
@@ -137,7 +156,18 @@ export default function TerminalPage() {
   const [hideBalance, setHideBalance] = useState<boolean>(il?.hideBalance ?? false);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [showCurrencyModal, setShowCurrencyModal] = useState(false);
+  const [showOnboardingTour, setShowOnboardingTour] = useState(false);
   const [userCurrency, setUserCurrency] = useState<string | null>(null);
+  const [userCountry, setUserCountry] = useState<string | null>(null);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [userCreatedAt, setUserCreatedAt] = useState<string | null>(null);
+  const [idCopied, setIdCopied] = useState(false);
+  const accountTypeShort = accountType === 'demo' ? 'Демо' : 'Реал';
+  const accountTypeBadgeClass = accountType === 'demo'
+    ? 'bg-[#2478ff]/20 text-[#6ba4ff] border border-[#2478ff]/40'
+    : 'bg-white/[0.08] text-white/70 border border-white/[0.15]';
+  const { displayName: displayIdentity, avatarInitial, isGuest } = useDisplayName();
   
   const snapshot = useAccountStore((s) => s.snapshot);
   const [candleMode, setCandleMode] = useState<CandleMode>(
@@ -170,6 +200,7 @@ export default function TerminalPage() {
   }, [data, instrument]);
 
   const [showTradesHistory, setShowTradesHistory] = useState<boolean>(false);
+  const [tradeOpenedTrigger, setTradeOpenedTrigger] = useState<number>(0);
   const [showNews, setShowNews] = useState<boolean>(false);
   const [editingIndicatorId, setEditingIndicatorId] = useState<string | null>(null);
 
@@ -312,7 +343,7 @@ export default function TerminalPage() {
 
   const handleLogout = async () => {
     await logout();
-    router.push('/');
+    router.push(`/${locale ?? 'ru'}`);
   };
 
   useEffect(() => {
@@ -329,10 +360,18 @@ export default function TerminalPage() {
 
   const loadUserProfile = useCallback(async () => {
     try {
-      const response = await api<{ user: { avatarUrl?: string | null; currency?: string | null } }>('/api/user/profile');
+      const response = await api<{ user: { avatarUrl?: string | null; currency?: string | null; country?: string | null; email?: string | null; id?: string | null; createdAt?: string | null } }>('/api/user/profile');
       setAvatarUrl(response.user.avatarUrl || null);
       setUserCurrency(response.user.currency ?? null);
+      setUserCountry(response.user.country ?? null);
+      setUserEmail(response.user.email ?? null);
+      setUserId(response.user.id ?? null);
+      setUserCreatedAt(response.user.createdAt ?? null);
       if (!response.user.currency) {
+        // Сброс, иначе тур не стартует: в localStorage часто остаётся ключ после тестов / старого сценария
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem(ONBOARDING_STORAGE_KEY);
+        }
         setShowCurrencyModal(true);
       }
     } catch (error) {
@@ -352,6 +391,23 @@ export default function TerminalPage() {
       }
     }
   }, [snapshot, accountType]);
+
+  useEffect(() => {
+    const targetAccount: 'demo' | 'real' = isDemoRoute ? 'demo' : 'real';
+    const applyRouteAccount = async () => {
+      await switchAccount(targetAccount);
+    };
+    void applyRouteAccount();
+  }, [isDemoRoute, switchAccount]);
+
+  const handleAccountSwitch = useCallback(async (target: 'demo' | 'real') => {
+    const switched = await switchAccount(target);
+    if (!switched) return;
+    const targetPath = target === 'demo' ? terminalDemoPath : terminalPath;
+    if (pathname !== targetPath) {
+      router.push(targetPath);
+    }
+  }, [pathname, router, switchAccount, terminalDemoPath, terminalPath]);
 
   const [resetDemoLoading, setResetDemoLoading] = useState<boolean>(false);
   const [buyPercentage, setBuyPercentage] = useState<number>(50);
@@ -421,6 +477,26 @@ export default function TerminalPage() {
   };
 
   const displayCurrency = snapshot?.currency ?? userCurrency ?? 'USD';
+
+  const countryCode = (() => {
+    const c = userCountry;
+    if (!c || c === 'OTHER') return null;
+    const t = c.trim();
+    return t.length === 2 ? t.toUpperCase() : null;
+  })();
+
+  const truncateEmail = (email: string): string => {
+    const at = email.indexOf('@');
+    if (at < 0) return email;
+    const local = email.slice(0, at);
+    const domain = email.slice(at);
+    if (local.length <= 10) return email;
+    return `${local.slice(0, 8)}…${domain}`;
+  };
+
+  const joinedDate = userCreatedAt
+    ? new Date(userCreatedAt).toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })
+    : null;
 
   const getCurrentBalance = () => {
     if (!snapshot) return { balance: '0.00', currency: userCurrency ?? 'USD' };
@@ -685,8 +761,23 @@ export default function TerminalPage() {
 
       candleChartRef.current?.addTradeOverlayFromDTO(res.trade);
       lineChartRef.current?.addTradeOverlayFromDTO(res.trade);
-    } catch (e: any) {
-      showToast(e?.message ?? 'Ошибка открытия сделки', 'error');
+      setTradeOpenedTrigger((v) => v + 1);
+    } catch (e: unknown) {
+      const err = e as Error & { response?: { data?: { error?: string; message?: string } } };
+      const api = err.response?.data;
+      const code = api?.error;
+      const apiMsg = api?.message;
+      const insufficient =
+        code === 'INSUFFICIENT_BALANCE'
+        || err.message === 'INSUFFICIENT_BALANCE'
+        || apiMsg === 'Insufficient balance'
+        || err.message === 'Insufficient balance';
+      showToast(
+        insufficient
+          ? tTerminal('errors.insufficient_balance')
+          : (err.message || tTerminal('errors.open_trade_failed')),
+        'error',
+      );
     } finally {
       setIsTrading(false);
     }
@@ -696,8 +787,7 @@ export default function TerminalPage() {
   // and above bottom indicators (RSI, MACD, etc.), moving together with the chart.
   const zoomBottomOffsetPx = useMemo(() => {
     if (chartType !== 'candles') {
-      // For line chart we don't have bottom indicator panels yet
-      return 8;
+      return 30;
     }
 
     const overlays = overlayRegistry.getVisibleOverlays();
@@ -731,9 +821,27 @@ export default function TerminalPage() {
 
   return (
     <AuthGuard requireAuth>
-      {/* Currency selection modal */}
+      {/* Country & currency first; then onboarding tour for new users (see onComplete) */}
       {showCurrencyModal && (
-        <CurrencyCountryModal onComplete={() => { setShowCurrencyModal(false); loadUserProfile(); }} />
+        <CurrencyCountryModal
+          onComplete={() => {
+            setShowCurrencyModal(false);
+            void loadUserProfile();
+            // После закрытия модалки даём кадр на размонтирование оверлея, иначе тур иногда не цепляет DOM
+            if (typeof window !== 'undefined') {
+              window.setTimeout(() => setShowOnboardingTour(true), 150);
+            } else {
+              setShowOnboardingTour(true);
+            }
+          }}
+        />
+      )}
+      {showOnboardingTour && (
+        <OnboardingTour
+          onComplete={() => {
+            setShowOnboardingTour(false);
+          }}
+        />
       )}
       <div ref={fullscreenContainerRef} className="terminal-page h-[100dvh] max-h-[100dvh] md:h-screen md:max-h-screen bg-[#061230] flex flex-col overflow-hidden">
       {/* Header */}
@@ -742,9 +850,7 @@ export default function TerminalPage() {
           <div className="flex items-center gap-2 sm:gap-3">
             <Image src="/images/logo.png" alt="Comfortrade" width={40} height={40} className="h-8 sm:h-10 w-auto object-contain" />
             <span className="hidden sm:inline text-base sm:text-xl font-semibold text-white uppercase truncate max-w-[140px] sm:max-w-none">Comfortrade</span>
-            <button type="button" className="hidden sm:flex w-9 h-9 sm:w-10 sm:h-10 rounded-lg items-center justify-center text-white md:hover:bg-white/10 transition-colors shrink-0">
-              <Bell className="w-4 h-4 sm:w-5 sm:h-5" />
-            </button>
+            <NotificationsBell dropdownAlign="left" zIndex={60} />
           </div>
 
           <div className="flex items-center gap-2 sm:gap-4">
@@ -765,7 +871,11 @@ export default function TerminalPage() {
                   <img src={avatarUrl?.startsWith('/') ? avatarUrl : `${process.env.NEXT_PUBLIC_API_URL || ''}${avatarUrl}`} alt="" className="w-full h-full object-cover rounded-full" />
                 ) : (
                   <div className="w-full h-full rounded-full bg-gradient-to-br from-[#3347ff] via-[#3d52ff] to-[#1f2a45] flex items-center justify-center text-sm font-bold text-white">
-                    {(user?.email || '?').charAt(0).toUpperCase()}
+                    {isGuest ? (
+                      <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-white/80">
+                        <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/>
+                      </svg>
+                    ) : avatarInitial}
                   </div>
                 )}
               </div>
@@ -773,52 +883,159 @@ export default function TerminalPage() {
               {showProfileModal && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setShowProfileModal(false)} />
-                  <div className="absolute left-full right-auto top-full mt-2 -ml-32 w-72 bg-[#091C56] border border-white/5 rounded-lg shadow-xl z-50 overflow-hidden md:left-1/2 md:ml-0 md:-translate-x-1/2">
-                    <div className="p-3 space-y-2.5">
-                      <div className="flex items-center gap-2.5 p-2.5 rounded-lg">
-                        <div className="w-10 h-10 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0 ring-2 ring-white/20 ring-offset-2 ring-offset-[#1a2438] bg-gradient-to-br from-[#3347ff]/30 to-[#1f2a45]">
-                          {avatarUrl ? <img src={avatarUrl?.startsWith('/') ? avatarUrl : `${process.env.NEXT_PUBLIC_API_URL || ''}${avatarUrl}`} alt="" className="w-full h-full object-cover rounded-full" /> : <span className="text-sm font-bold text-white">{(user?.email || '?').charAt(0).toUpperCase()}</span>}
+                  <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 w-[340px] bg-[#0d1e3a] border border-white/[0.08] rounded-2xl shadow-[0_16px_48px_rgba(0,0,0,0.6)] z-50 overflow-hidden">
+
+                    {/* ── Hero header с градиентом ── */}
+                    <div className="relative px-5 pt-5 pb-4 bg-gradient-to-br from-[#1a2d5a] via-[#0f1e40] to-[#0d1e3a]">
+                      {/* Декоративные круги */}
+                      <div className="absolute top-0 right-0 w-32 h-32 rounded-full bg-[#3347ff]/10 blur-2xl pointer-events-none" />
+                      <div className="absolute bottom-0 left-0 w-20 h-20 rounded-full bg-[#3347ff]/5 blur-xl pointer-events-none" />
+
+                      <div className="relative flex items-center gap-3.5">
+                        {/* Аватар */}
+                        <div className="relative shrink-0">
+                          <div className="w-14 h-14 rounded-full ring-2 ring-white/20 ring-offset-2 ring-offset-[#0d1e3a] overflow-hidden shadow-lg">
+                            {avatarUrl ? (
+                              <img src={avatarUrl?.startsWith('/') ? avatarUrl : `${process.env.NEXT_PUBLIC_API_URL || ''}${avatarUrl}`} alt="" className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full bg-gradient-to-br from-[#3347ff] to-[#1e2fcc] flex items-center justify-center text-lg font-bold text-white">
+                                {isGuest ? (
+                                  <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6 text-white/80">
+                                    <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/>
+                                  </svg>
+                                ) : avatarInitial}
+                              </div>
+                            )}
+                          </div>
+                          {/* Онлайн-индикатор */}
+                          <div className={`absolute bottom-0.5 right-0.5 w-3 h-3 rounded-full border-2 border-[#0d1e3a] ${accountType === 'demo' ? 'bg-sky-400' : 'bg-emerald-400'}`} />
                         </div>
+
+                        {/* Имя + флаг + тип счёта */}
                         <div className="flex-1 min-w-0">
-                          <div className="text-white font-medium text-sm truncate">{user?.email || 'Пользователь'}</div>
-                          <div className="text-white/60 text-xs">{accountType === 'demo' ? 'Демо-счёт' : 'Реальный счёт'}</div>
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="text-white font-semibold text-sm truncate">{displayIdentity}</span>
+                            {countryCode && (
+                              <ReactCountryFlag
+                                countryCode={countryCode}
+                                svg
+                                style={{ width: '1.15em', height: '1.15em', borderRadius: '2px', flexShrink: 0 }}
+                              />
+                            )}
+                          </div>
+                          <div className="mt-1">
+                            <span className="text-[11px] text-white/45 font-medium">{accountType === 'demo' ? 'Демо-счёт' : 'Реальный счёт'}</span>
+                          </div>
                         </div>
                       </div>
-                      <div className="p-2.5 rounded-lg bg-white/5 flex items-center justify-between gap-3">
+
+                      {/* Инфо-строки: ID / Email / Дата регистрации */}
+                      <div className="relative mt-3.5 space-y-2">
+                        {userId && (
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <img src="/images/hashtag.png" alt="" className="w-3.5 h-3.5 shrink-0 object-contain opacity-70" />
+                            <span className="text-[12px] text-white/80 tabular-nums">ID {userId}</span>
+                            <button
+                              type="button"
+                              onClick={() => { navigator.clipboard.writeText(userId); setIdCopied(true); setTimeout(() => setIdCopied(false), 1500); }}
+                              className="shrink-0 p-1 rounded-lg text-white/40 md:hover:text-white md:hover:bg-white/10 transition-colors"
+                              title={idCopied ? 'Скопировано' : 'Копировать ID'}
+                            >
+                              {idCopied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                            </button>
+                          </div>
+                        )}
+                        {userEmail && (
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <img src="/images/mail.png" alt="" className="w-3.5 h-3.5 shrink-0 object-contain opacity-70" />
+                            <span className="text-[12px] text-white/80 truncate min-w-0" title={userEmail}>{truncateEmail(userEmail)}</span>
+                          </div>
+                        )}
+                        {joinedDate && (
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <img src="/images/calendar.png" alt="" className="w-3.5 h-3.5 shrink-0 object-contain opacity-70" />
+                            <span className="text-[12px] text-white/70">{joinedDate}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Баланс */}
+                      <div className="relative mt-4 rounded-xl bg-white/[0.05] border border-white/[0.07] px-4 py-3 flex items-center justify-between">
                         <div>
-                          <div className="text-white/60 text-xs mb-0.5">Баланс</div>
-                          <div className={`text-white font-semibold text-base ${hideBalance ? '' : balanceAnimation === 'increase' ? 'text-green-400' : balanceAnimation === 'decrease' ? 'text-red-400' : ''}`}>
+                          <div className="text-[10px] text-white/40 uppercase tracking-wider font-medium mb-0.5">Баланс</div>
+                          <div className={`text-xl font-bold transition-colors duration-500 ${balanceAnimation === 'increase' ? 'text-green-400' : balanceAnimation === 'decrease' ? 'text-red-400' : 'text-white'}`}>
                             {hideBalance ? '••••••' : snapshot ? `${displayedBalance} ${formatCurrencySymbol(snapshot.currency)}` : '...'}
                           </div>
                         </div>
-                        <Link href="/profile?tab=wallet" onClick={() => setShowProfileModal(false)} className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-gradient-to-r from-[#3347ff] to-[#1e2fcc] text-white text-xs font-semibold md:hover:from-[#3347ff]/90 md:hover:to-[#1e2fcc]/90 transition-all shadow-lg shadow-[#3347ff]/20">
-                          <PlusCircle className="w-4 h-4" />
-                          <span>Пополнить</span>
+                        <Link
+                          href="/profile?tab=wallet"
+                          onClick={() => setShowProfileModal(false)}
+                          className="shrink-0 h-8 inline-flex items-center gap-1.5 px-3 rounded-lg bg-gradient-to-r from-[#3347ff] to-[#1e2fcc] text-white text-xs font-semibold md:hover:opacity-90 transition-opacity shadow-md shadow-[#3347ff]/20"
+                        >
+                          <PlusCircle className="w-3.5 h-3.5" />
+                          Пополнить
                         </Link>
                       </div>
+
+                      {/* Быстрые действия */}
+                      <div className="relative mt-2 grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => { setShowProfileModal(false); setShowAccountModal(true); }}
+                          className="flex flex-col items-center gap-1 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.06] md:hover:bg-white/[0.08] transition-colors"
+                        >
+                          <Repeat className="w-4 h-4 text-[#7b8fff]" />
+                          <span className="text-[10px] text-white/50 font-medium">Сменить счёт</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setHideBalance((v) => !v)}
+                          className="flex flex-col items-center gap-1 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.06] md:hover:bg-white/[0.08] transition-colors"
+                        >
+                          <svg className="w-4 h-4 text-[#7b8fff]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            {hideBalance
+                              ? <><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></>
+                              : <><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></>
+                            }
+                          </svg>
+                          <span className="text-[10px] text-white/50 font-medium">{hideBalance ? 'Показать' : 'Скрыть'} баланс</span>
+                        </button>
+                      </div>
                     </div>
-                    <div className="border-t border-white/10 p-3 space-y-1">
-                      <button type="button" onClick={() => { setShowProfileModal(false); setShowAccountModal(true); }} className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-white md:hover:bg-white/10 transition-colors text-sm text-left">
-                        <Repeat className="w-4 h-4" />
-                        <span>Переключить счёт</span>
-                      </button>
-                      <Link href="/profile" onClick={() => setShowProfileModal(false)} className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-white md:hover:bg-white/10 transition-colors text-sm">
-                        <UserCircle className="w-4 h-4" />
-                        <span>Профиль</span>
+
+
+                    {/* ── Навигация ── */}
+                    <div className="px-3 py-2 space-y-0.5">
+                      <Link href="/profile" onClick={() => setShowProfileModal(false)} className="group h-10 px-3 rounded-xl flex items-center gap-3 md:hover:bg-white/[0.06] transition-colors duration-150">
+                        <div className="w-7 h-7 rounded-lg bg-white/[0.06] flex items-center justify-center shrink-0 group-hover:bg-[#3347ff]/20 transition-colors">
+                          <UserCircle className="w-3.5 h-3.5 text-white/50 group-hover:text-[#7b8fff] transition-colors" />
+                        </div>
+                        <span className="text-[13px] text-white/70 group-hover:text-white transition-colors flex-1">Профиль</span>
+                        <svg className="w-3.5 h-3.5 text-white/30 group-hover:text-white/60 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
                       </Link>
-                      <Link href="/profile?tab=wallet" onClick={() => setShowProfileModal(false)} className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-white md:hover:bg-white/10 transition-colors text-sm">
-                        <Wallet className="w-4 h-4" />
-                        <span>Кошелёк</span>
+                      <Link href="/profile?tab=wallet" onClick={() => setShowProfileModal(false)} className="group h-10 px-3 rounded-xl flex items-center gap-3 md:hover:bg-white/[0.06] transition-colors duration-150">
+                        <div className="w-7 h-7 rounded-lg bg-white/[0.06] flex items-center justify-center shrink-0 group-hover:bg-[#3347ff]/20 transition-colors">
+                          <Wallet className="w-3.5 h-3.5 text-white/50 group-hover:text-[#7b8fff] transition-colors" />
+                        </div>
+                        <span className="text-[13px] text-white/70 group-hover:text-white transition-colors flex-1">Кошелёк</span>
+                        <svg className="w-3.5 h-3.5 text-white/30 group-hover:text-white/60 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
                       </Link>
-                      <Link href="/profile?tab=support" onClick={() => setShowProfileModal(false)} className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-white md:hover:bg-white/10 transition-colors text-sm">
-                        <MessageCircle className="w-4 h-4" />
-                        <span>Поддержка</span>
+                      <Link href="/profile?tab=support" onClick={() => setShowProfileModal(false)} className="group h-10 px-3 rounded-xl flex items-center gap-3 md:hover:bg-white/[0.06] transition-colors duration-150">
+                        <div className="w-7 h-7 rounded-lg bg-white/[0.06] flex items-center justify-center shrink-0 group-hover:bg-[#3347ff]/20 transition-colors">
+                          <MessageCircle className="w-3.5 h-3.5 text-white/50 group-hover:text-[#7b8fff] transition-colors" />
+                        </div>
+                        <span className="text-[13px] text-white/70 group-hover:text-white transition-colors flex-1">Поддержка</span>
+                        <svg className="w-3.5 h-3.5 text-white/30 group-hover:text-white/60 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
                       </Link>
                     </div>
-                    <div className="border-t border-white/10 p-3">
-                      <button onClick={() => { setShowProfileModal(false); handleLogout(); }} className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-red-400 md:hover:bg-red-500/10 transition-colors text-sm">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
-                        <span>Выйти</span>
+
+                    {/* ── Футер ── */}
+                    <div className="px-3 pb-2 pt-1 border-t border-white/[0.05]">
+                      <button onClick={() => { setShowProfileModal(false); handleLogout(); }} className="group w-full h-10 px-3 rounded-xl flex items-center gap-3 text-[#ff4655] md:hover:bg-[rgba(255,69,85,0.08)] transition-colors duration-150">
+                        <div className="w-7 h-7 rounded-lg bg-[rgba(255,69,85,0.08)] flex items-center justify-center shrink-0">
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+                        </div>
+                        <span className="text-[13px] font-medium">Выйти</span>
                       </button>
                     </div>
                   </div>
@@ -832,7 +1049,7 @@ export default function TerminalPage() {
                   <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                 </button>
               )}
-              <div className="flex flex-col relative pr-3" data-account-modal>
+              <div data-tour="balance" className="flex flex-col relative pr-3" data-account-modal>
                 <div className="flex items-center gap-1.5 cursor-pointer md:hover:opacity-80 transition-opacity" data-account-modal onClick={async () => { await loadAllBalances(); setShowAccountModal(true); }}>
                   <span className="text-xs text-white font-medium">{accountType === 'demo' ? 'Демо-счёт' : 'Реальный счёт'}</span>
                   <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
@@ -845,7 +1062,7 @@ export default function TerminalPage() {
                     <div className="fixed inset-0 z-[140]" onClick={() => setShowAccountModal(false)} />
                     <div className="absolute top-full right-0 left-auto mt-2 w-72 bg-[#091C56] border border-white/5 rounded-lg shadow-xl z-[150] md:left-1/2 md:right-auto md:-translate-x-1/2" data-account-modal>
                       <div className="p-3 space-y-2.5">
-                        <div className={`flex items-start gap-2.5 p-2.5 rounded-lg cursor-pointer transition-colors ${accountType === 'real' ? 'bg-white/10' : 'md:hover:bg-white/5'}`} onClick={async () => { await switchAccount('real'); setShowAccountModal(false); }}>
+                        <div className={`flex items-start gap-2.5 p-2.5 rounded-lg cursor-pointer transition-colors ${accountType === 'real' ? 'bg-white/10' : 'md:hover:bg-white/5'}`} onClick={async () => { await handleAccountSwitch('real'); setShowAccountModal(false); }}>
                           <div className="mt-0.5">{accountType === 'real' ? <div className="w-4 h-4 rounded-full bg-[#3347ff] flex items-center justify-center"><div className="w-1.5 h-1.5 rounded-full bg-[#061230]" /></div> : <div className="w-4 h-4 rounded-full border-2 border-[#3347ff]" />}</div>
                           <div className="flex-1 min-w-0 flex items-center justify-between gap-2">
                             <div>
@@ -858,7 +1075,7 @@ export default function TerminalPage() {
                             </Link>
                           </div>
                         </div>
-                        <div className={`flex items-start gap-2.5 p-2.5 rounded-lg cursor-pointer transition-colors ${accountType === 'demo' ? 'bg-white/10' : 'md:hover:bg-white/5'}`} onClick={async () => { await switchAccount('demo'); setShowAccountModal(false); }}>
+                        <div className={`flex items-start gap-2.5 p-2.5 rounded-lg cursor-pointer transition-colors ${accountType === 'demo' ? 'bg-white/10' : 'md:hover:bg-white/5'}`} onClick={async () => { await handleAccountSwitch('demo'); setShowAccountModal(false); }}>
                           <div className="mt-0.5">{accountType === 'demo' ? <div className="w-4 h-4 rounded-full bg-[#3347ff] flex items-center justify-center"><div className="w-1.5 h-1.5 rounded-full bg-[#061230]" /></div> : <div className="w-4 h-4 rounded-full border-2 border-[#3347ff]" />}</div>
                           <div className="flex-1">
                             <div className="text-white font-medium mb-0.5 text-sm">Демо-счёт</div>
@@ -886,14 +1103,14 @@ export default function TerminalPage() {
         </div>
       </header>
 
-      {/* Main Content Area — на мобилке нижняя навигация в потоке (не fixed), решает баг на iOS */}
+      {/* Main Content Area - на мобилке нижняя навигация в потоке (не fixed), решает баг на iOS */}
       <div className="flex-1 flex flex-col md:flex-row min-h-0 min-w-0 overflow-hidden">
-        {/* Left Sidebar — скрыт на мобилке, на десктопе слева */}
+        {/* Left Sidebar - скрыт на мобилке, на десктопе слева */}
         <aside className="hidden md:flex w-[88px] shrink-0 bg-[#05122a] border-r border-white/10 flex-col items-center py-2.5 gap-2">
           <div className="flex-1 flex flex-col items-center gap-2 w-full min-h-0">
             {/* Кнопка истории сделок */}
             <button
-              onClick={() => setShowTradesHistory((prev) => !prev)}
+              onClick={() => { setShowTradesHistory((prev) => !prev); setShowNews(false); }}
               className={`flex flex-col items-center justify-center gap-1 w-full h-14 px-1.5 rounded-lg transition-colors ${
                 showTradesHistory
                   ? 'bg-[#3347ff]/20 text-white'
@@ -901,12 +1118,12 @@ export default function TerminalPage() {
               }`}
             >
               <History className="w-5 h-5 stroke-[3]" />
-              <span className="text-[10px] font-semibold leading-tight text-center">История сделок</span>
+              <span className="text-[11px] font-bold leading-tight text-center">История</span>
             </button>
             
             {/* Кнопка новостей */}
             <button
-              onClick={() => setShowNews(true)}
+              onClick={() => { setShowNews((prev) => !prev); setShowTradesHistory(false); }}
               className={`flex flex-col items-center justify-center gap-1 w-full h-14 px-1.5 rounded-lg transition-colors ${
                 showNews
                   ? 'bg-[#3347ff]/20 text-white'
@@ -914,23 +1131,7 @@ export default function TerminalPage() {
               }`}
             >
               <Newspaper className="w-5 h-5 stroke-[3]" />
-              <span className="text-[10px] font-semibold leading-tight text-center">Новости</span>
-            </button>
-
-            {/* Кнопка обучения */}
-            <button
-              onClick={() => {
-                setActiveMenu('обучение');
-                window.location.href = '/profile?tab=education';
-              }}
-              className={`flex flex-col items-center justify-center gap-1 w-full h-14 px-1.5 rounded-lg transition-colors ${
-                activeMenu === 'обучение'
-                  ? 'bg-[#3347ff]/20 text-white'
-                  : 'text-gray-400 md:hover:text-white md:hover:bg-white/5'
-              }`}
-            >
-              <GraduationCap className="w-5 h-5 stroke-[3]" />
-              <span className="text-[10px] font-semibold leading-tight text-center">Обучение</span>
+              <span className="text-[11px] font-bold leading-tight text-center">Новости</span>
             </button>
 
             {/* Кнопка торгового профиля */}
@@ -943,7 +1144,7 @@ export default function TerminalPage() {
               }`}
             >
               <TrendingUp className="w-5 h-5 stroke-[3]" />
-              <span className="text-[10px] font-semibold leading-tight text-center">Торговый профиль</span>
+              <span className="text-[11px] font-bold leading-tight text-center">Торговля</span>
             </Link>
 
             {/* Кнопка кошелька */}
@@ -956,7 +1157,7 @@ export default function TerminalPage() {
               }`}
             >
               <Wallet className="w-5 h-5 stroke-[3]" />
-              <span className="text-[10px] font-semibold leading-tight text-center">Кошелек</span>
+              <span className="text-[11px] font-bold leading-tight text-center">Кошелек</span>
             </Link>
 
             {/* Кнопка личного профиля */}
@@ -969,10 +1170,11 @@ export default function TerminalPage() {
               }`}
             >
               <UserCircle className="w-5 h-5 stroke-[3]" />
-              <span className="text-[10px] font-semibold leading-tight text-center">Личный профиль</span>
+              <span className="text-[11px] font-bold leading-tight text-center">Профиль</span>
             </Link>
 
           </div>
+
           <a
             href={process.env.NEXT_PUBLIC_SUPPORT_CHANNEL_URL || FALLBACK_SUPPORT_CHANNEL_URL}
             target="_blank"
@@ -980,30 +1182,46 @@ export default function TerminalPage() {
             className="flex flex-col items-center justify-center gap-1 w-[72px] h-12 px-1.5 rounded-lg bg-white/10 transition-colors text-gray-400 md:hover:text-white md:hover:bg-white/15 mt-1 mx-auto"
           >
             <Image src="/images/support.png" alt="Поддержка" width={20} height={20} className="w-5 h-5 object-contain" />
-            <span className="text-[9px] font-semibold leading-tight text-center">Поддержка</span>
+            <span className="text-[11px] font-bold leading-tight text-center">Поддержка</span>
           </a>
         </aside>
 
-        {/* Trades History Panel */}
+        {/* Trades History Panel - на десктопе inline (сдвигает график), на мобилке fixed оверлей */}
         {showTradesHistory && (
           <>
+            {/* Backdrop только на мобилке */}
             <div
-              className="fixed left-0 md:left-[88px] top-0 right-0 bottom-0 z-40"
+              className="fixed inset-0 z-40 md:hidden"
               onClick={() => setShowTradesHistory(false)}
               aria-hidden
             />
-            <div onClick={(e) => e.stopPropagation()}>
-              <TradesHistoryModal onClose={() => setShowTradesHistory(false)} />
+            <div className="shrink-0 md:animate-in md:slide-in-from-left-2 md:duration-200" onClick={(e) => e.stopPropagation()}>
+              <TradesHistoryModal onClose={() => setShowTradesHistory(false)} refreshTrigger={tradeOpenedTrigger} />
             </div>
           </>
         )}
 
-        {/* Page Content — на мобилке первый (выше сайдбара) */}
+        {/* News Panel - то же поведение: на десктопе inline, на мобилке fixed оверлей */}
+        {showNews && (
+          <>
+            {/* Backdrop только на мобилке */}
+            <div
+              className="fixed inset-0 z-40 md:hidden"
+              onClick={() => setShowNews(false)}
+              aria-hidden
+            />
+            <div className="shrink-0 md:animate-in md:slide-in-from-left-2 md:duration-200" onClick={(e) => e.stopPropagation()}>
+              <NewsModal onClose={() => setShowNews(false)} />
+            </div>
+          </>
+        )}
+
+        {/* Page Content - на мобилке первый (выше сайдбара) */}
         <main ref={mainRef} className="flex-1 min-h-0 min-w-0 relative order-1">
           {/* Chart Controls (поверх графика) */}
           <div className="absolute top-2 left-2 sm:top-3 sm:left-3 z-10 flex flex-wrap items-center gap-1 max-w-[calc(100%-0.5rem)]">
             {/* 1. Валютная пара */}
-            <div className="bg-[#1e2a40] rounded-lg transition-colors duration-300 ease-in-out hover:bg-[#263248]">
+            <div data-tour="instrument" className="bg-[#1e2a40] rounded-lg transition-colors duration-300 ease-in-out hover:bg-[#263248]">
               <InstrumentMenu
                 instrument={instrument}
                 onInstrumentChange={handleInstrumentChange}
@@ -1021,7 +1239,7 @@ export default function TerminalPage() {
             </div>
 
             {/* 3. Таймфрейм */}
-            <div className="bg-[#1e2a40] rounded-lg transition-colors duration-300 ease-in-out hover:bg-[#263248]">
+            <div data-tour="timeframe" className="bg-[#1e2a40] rounded-lg transition-colors duration-300 ease-in-out hover:bg-[#263248]">
               <TimeframeMenu
                 timeframe={timeframe}
                 onTimeframeChange={setTimeframe}
@@ -1093,7 +1311,7 @@ export default function TerminalPage() {
           )}
 
           {/* Chart wrapper */}
-          <div ref={chartContainerRef} className="absolute inset-0 min-w-0 min-h-0 overflow-hidden flex flex-col md:flex-row pt-10 md:pt-0">
+          <div ref={chartContainerRef} data-tour="chart" className="absolute inset-0 min-w-0 min-h-0 overflow-hidden flex flex-col md:flex-row pt-10 md:pt-0">
             {/* График: canvas занимает всю высоту, кнопки зума внутри, у нижнего края графика */}
             <div className="flex-1 min-w-0 min-h-0 relative">
               <ChartContainer
@@ -1130,9 +1348,9 @@ export default function TerminalPage() {
                 onInstrumentChange={handleInstrumentChange}
               />
 
-              {/* Zoom — кнопки зума закреплены у нижнего края графика, над индикаторами */}
+              {/* Zoom — только десктоп; на телефоне pinch/жесты */}
               <div
-                className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2 z-10 pointer-events-auto"
+                className="absolute left-1/2 -translate-x-1/2 hidden md:flex items-center gap-2 z-10 pointer-events-auto"
                 style={{ bottom: zoomBottomOffsetPx }}
               >
                 <button
@@ -1159,7 +1377,7 @@ export default function TerminalPage() {
                 </button>
               </div>
 
-              {/* Return to latest — только стрелка, фон как у кнопок графика, ближе к правому краю */}
+              {/* Return to latest - только стрелка, фон как у кнопок графика, ближе к правому краю */}
               {showReturnToLatest && (
                 <button
                   type="button"
@@ -1178,9 +1396,20 @@ export default function TerminalPage() {
                   <ChevronsRight className="w-4 h-4" />
                 </button>
               )}
+
+              {/* Настройки графика — только телефон, слева снизу поверх канваса (как стиль верхней панели) */}
+              <button
+                type="button"
+                onClick={() => setShowChartSettingsModal(true)}
+                className="md:hidden absolute z-10 left-2 bottom-[34px] w-9 h-9 flex items-center justify-center rounded-lg bg-[#1e2a40] text-gray-200 border border-white/[0.06] shadow-md active:bg-[#263248] pointer-events-auto"
+                title="Настройки графика"
+                aria-label="Настройки графика"
+              >
+                <Image src="/images/settings.png" alt="" width={20} height={20} className="w-4 h-4 object-contain opacity-90" />
+              </button>
             </div>
             
-            {/* SentimentBar — на мобилке горизонтально под графиком, на десктопе вертикально справа */}
+            {/* SentimentBar - на мобилке горизонтально под графиком, на десктопе вертикально справа */}
             <div className="shrink-0 flex flex-row md:flex-col items-center md:items-stretch gap-1.5 sm:gap-2 px-2 sm:px-3 md:px-2 py-1.5 sm:py-2 md:py-3 bg-[#05122a]/80 md:w-12">
               {/* На мобилке: горизонтальная компоновка */}
               <div className="md:hidden flex items-center gap-1.5 sm:gap-2 w-full">
@@ -1225,132 +1454,165 @@ export default function TerminalPage() {
           </div>
         </main>
 
-        {/* Right Sidebar — на мобилке внизу под графиком с градиентом, на десктопе справа; pb-safe для iPhone */}
+        {/* Right Sidebar - на мобилке внизу под графиком с градиентом, на десктопе справа; pb-safe для iPhone */}
         <aside className="w-full md:w-48 shrink-0 min-h-0 bg-gradient-to-b from-[#081428] to-[#050f20] md:bg-[#06122c] border-t md:border-t-0 md:border-l border-white/10 p-2 sm:p-3 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))] md:pb-3 flex flex-col gap-2 sm:gap-3 order-2">
-          {/* Time + Amount — на мобилке в ряд */}
+          {/* Time + Amount - на мобилке в ряд */}
           <div className="flex flex-row md:flex-col gap-2 sm:gap-3">
           {/* Time Input */}
-          <div className="flex flex-col gap-1 relative flex-1 md:flex-none min-w-0" ref={timeFieldRef}>
+          <div data-tour="time-field" className="flex flex-col gap-1 relative flex-1 md:flex-none min-w-0" ref={timeFieldRef}>
             <label className="text-xs text-gray-400">Время</label>
-            <div className="flex items-center gap-0 bg-white/10 rounded-lg overflow-hidden px-1">
-              {/* Minus Button */}
-              <button
-                type="button"
-                onClick={() => {
-                  const current = Number.parseInt(time || '60', 10);
-                  const newValue = Math.max(5, current - 5);
-                  setTime(String(newValue));
-                  candleChartRef.current?.setExpirationSeconds(newValue);
-                  lineChartRef.current?.setExpirationSeconds(newValue);
-                }}
-                className="w-9 h-10 shrink-0 flex items-center justify-center text-white"
-              >
-                <Minus className="w-3.5 h-3.5" />
-              </button>
-              <div className="w-px h-4 bg-white/25 rounded-full self-center shrink-0" />
-              {/* Time Display - кликабельное поле */}
-              <div 
-                className="flex-1 px-2 py-2 text-white text-center text-sm font-medium cursor-pointer md:hover:bg-white/5 transition-colors flex items-center justify-center min-w-0"
+            <div className="flex flex-col bg-white/10 rounded-lg overflow-hidden">
+              {/* Time Display - кликабельное поле сверху */}
+              <div
+                className="w-full px-3 py-3 text-white text-left text-sm font-medium cursor-pointer md:hover:bg-white/5 transition-colors flex items-center gap-1.5"
                 onClick={() => setShowTimeModal(true)}
               >
+                <Clock className="w-3.5 h-3.5 text-white/50 shrink-0" />
                 <span>{formatTimeDisplay(Number.parseInt(time || '60', 10))}</span>
               </div>
-              <div className="w-px h-4 bg-white/25 rounded-full self-center shrink-0" />
-              {/* Plus Button */}
-              <button
-                type="button"
-                onClick={() => {
-                  const current = Number.parseInt(time || '60', 10);
-                  const newValue = Math.min(300, current + 5);
-                  setTime(String(newValue));
-                  candleChartRef.current?.setExpirationSeconds(newValue);
-                  lineChartRef.current?.setExpirationSeconds(newValue);
-                }}
-                className="w-9 h-10 shrink-0 flex items-center justify-center text-white"
-              >
-                <Plus className="w-3.5 h-3.5" />
-              </button>
             </div>
+              {/* Minus / Plus - только десктоп; на мобилке меняют время через модалку */}
+              <div className="hidden md:flex items-center gap-1.5 mt-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const current = Number.parseInt(time || '60', 10);
+                    const newValue = Math.max(5, current - 5);
+                    setTime(String(newValue));
+                    candleChartRef.current?.setExpirationSeconds(newValue);
+                    lineChartRef.current?.setExpirationSeconds(newValue);
+                  }}
+                  className="flex-1 h-7 flex items-center justify-center text-white rounded-md bg-gradient-to-b from-[#222c42] to-[#1e2a40] border border-white/[0.05] md:hover:from-[#252f46] md:hover:to-[#1f2b42] transition-colors"
+                >
+                  <Minus className="w-3 h-3" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const current = Number.parseInt(time || '60', 10);
+                    const newValue = Math.min(300, current + 5);
+                    setTime(String(newValue));
+                    candleChartRef.current?.setExpirationSeconds(newValue);
+                    lineChartRef.current?.setExpirationSeconds(newValue);
+                  }}
+                  className="flex-1 h-7 flex items-center justify-center text-white rounded-md bg-gradient-to-b from-[#222c42] to-[#1e2a40] border border-white/[0.05] md:hover:from-[#252f46] md:hover:to-[#1f2b42] transition-colors"
+                >
+                  <Plus className="w-3 h-3" />
+                </button>
+              </div>
 
             {/* Time Selection Modal */}
             {showTimeModal && (
               <>
-                <div 
+                <div
                   className="fixed inset-0 z-40"
                   onClick={() => setShowTimeModal(false)}
                 />
-                <div 
-                  className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 w-48 bg-[#1a2438] rounded-lg shadow-xl p-3 border border-white/5 md:bottom-auto md:left-auto md:translate-x-0 md:mb-0 md:right-full md:mr-2 md:top-0"
+                <div
+                  className="absolute bottom-full left-[calc(50%+12px)] -translate-x-1/2 mb-2 z-50 w-56 max-w-[calc(100vw-1rem)] bg-[#0d1e3a] rounded-xl shadow-2xl border border-white/[0.08] md:bottom-auto md:left-auto md:max-w-none md:translate-x-0 md:mb-0 md:right-full md:mr-2 md:top-0 md:w-56"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <TimeSelectionModal
-                  currentSeconds={Number.parseInt(time || '60', 10)}
-                  onSelect={(seconds) => {
-                    setTime(String(seconds));
-                    candleChartRef.current?.setExpirationSeconds(seconds);
-                    lineChartRef.current?.setExpirationSeconds(seconds);
-                  }}
-                  onClose={() => setShowTimeModal(false)}
-                />
+                    currentSeconds={Number.parseInt(time || '60', 10)}
+                    onSelect={(seconds) => {
+                      setTime(String(seconds));
+                      candleChartRef.current?.setExpirationSeconds(seconds);
+                      lineChartRef.current?.setExpirationSeconds(seconds);
+                    }}
+                    onClose={() => setShowTimeModal(false)}
+                  />
                 </div>
               </>
             )}
           </div>
 
           {/* Amount Input */}
-          <div className="flex flex-col gap-1 relative flex-1 md:flex-none min-w-0" ref={amountFieldRef}>
+          <div data-tour="amount-field" className="flex flex-col gap-1 relative flex-1 md:flex-none min-w-0" ref={amountFieldRef}>
             <label className="text-xs text-gray-400">Сумма</label>
-            <div className="flex items-center gap-0 bg-white/10 rounded-lg overflow-hidden px-1">
-              {/* Minus Button */}
-              <button
-                type="button"
-                onClick={() => {
-                  const current = Number.parseFloat(amount || '100');
-                  const newValue = Math.max(1, current - 10);
-                  setAmount(String(newValue));
-                }}
-                className="w-9 h-10 shrink-0 flex items-center justify-center text-white"
-                aria-label="Уменьшить сумму на 10"
-              >
-                <Minus className="w-3.5 h-3.5" aria-hidden />
-              </button>
-              <div className="w-px h-4 bg-white/25 rounded-full self-center shrink-0" />
-              {/* Amount Display - кликабельное поле */}
-              <div
-                role="button"
-                tabIndex={0}
-                className="flex-1 px-2 py-2 text-white text-center text-sm font-medium cursor-pointer md:hover:bg-white/5 transition-colors flex items-center justify-center min-w-0"
-                onClick={() => setShowAmountModal(true)}
-                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowAmountModal(true); } }}
-                aria-label={`Сумма сделки: ${Number.parseFloat(amount || '100').toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}. Нажмите для изменения`}
-              >
-                <span>{Number.parseFloat(amount || '100').toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            <div className="flex flex-col bg-white/10 rounded-lg overflow-hidden">
+              {/* Amount Input - прямой ввод + кнопка калькулятора */}
+              <div className="w-full flex items-center">
+                <span className="text-white/50 shrink-0 text-sm leading-none pl-3">{getCurrencyIcon(displayCurrency)}</span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={amount}
+                  onChange={(e) => {
+                    const raw = e.target.value.replace(/[^0-9.]/g, '');
+                    const parts = raw.split('.');
+                    const cleaned = parts.length > 2
+                      ? `${parts[0]}.${parts.slice(1).join('')}`
+                      : raw;
+                    if ((cleaned.split('.')[1]?.length ?? 0) <= 2) {
+                      setAmount(cleaned);
+                    }
+                  }}
+                  onBlur={() => {
+                    const parsed = Number.parseFloat(amount.replace(',', '.'));
+                    if (!Number.isFinite(parsed) || parsed < 1) {
+                      setAmount('1');
+                    } else if (parsed > 50000) {
+                      setAmount('50000');
+                    } else {
+                      setAmount(String(parsed));
+                    }
+                  }}
+                  onFocus={() => setShowAmountModal(true)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') e.currentTarget.blur();
+                  }}
+                  className="flex-1 min-w-0 px-2 py-3 bg-transparent text-white text-sm font-medium outline-none placeholder:text-white/30"
+                  placeholder="100"
+                  aria-label="Сумма сделки"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowAmountModal(true)}
+                  className="px-2.5 py-2.5 text-white/40 md:hover:text-white/70 transition-colors shrink-0"
+                  aria-label="Открыть калькулятор"
+                  title="Открыть калькулятор"
+                >
+                  <Calculator className="w-4 h-4" />
+                </button>
               </div>
-              <div className="w-px h-4 bg-white/25 rounded-full self-center shrink-0" />
-              {/* Plus Button */}
-              <button
-                type="button"
-                onClick={() => {
-                  const current = Number.parseFloat(amount || '100');
-                  const newValue = Math.min(50000, current + 10);
-                  setAmount(String(newValue));
-                }}
-                className="w-9 h-10 shrink-0 flex items-center justify-center text-white"
-                aria-label="Увеличить сумму на 10"
-              >
-                <Plus className="w-3.5 h-3.5" aria-hidden />
-              </button>
             </div>
+              {/* Minus / Plus - только десктоп; на мобилке сумма через поле / калькулятор */}
+              <div className="hidden md:flex items-center gap-1.5 mt-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const current = Number.parseFloat(amount || '100');
+                    const newValue = Math.max(1, current - 10);
+                    setAmount(String(newValue));
+                  }}
+                  className="flex-1 h-7 flex items-center justify-center text-white rounded-md bg-gradient-to-b from-[#222c42] to-[#1e2a40] border border-white/[0.05] md:hover:from-[#252f46] md:hover:to-[#1f2b42] transition-colors"
+                  aria-label="Уменьшить сумму на 10"
+                >
+                  <Minus className="w-3 h-3" aria-hidden />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const current = Number.parseFloat(amount || '100');
+                    const newValue = Math.min(50000, current + 10);
+                    setAmount(String(newValue));
+                  }}
+                  className="flex-1 h-7 flex items-center justify-center text-white rounded-md bg-gradient-to-b from-[#222c42] to-[#1e2a40] border border-white/[0.05] md:hover:from-[#252f46] md:hover:to-[#1f2b42] transition-colors"
+                  aria-label="Увеличить сумму на 10"
+                >
+                  <Plus className="w-3 h-3" aria-hidden />
+                </button>
+              </div>
 
             {/* Amount Calculator Modal */}
             {showAmountModal && (
               <>
-                <div 
+                <div
                   className="fixed inset-0 z-40"
                   onClick={() => setShowAmountModal(false)}
                 />
-                <div 
-                  className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 w-48 bg-[#1a2438] rounded-lg shadow-xl overflow-hidden p-3 border border-white/5 md:bottom-auto md:left-auto md:translate-x-0 md:mb-0 md:right-full md:mr-2 md:top-0"
+                <div
+                  className="absolute bottom-full right-0 left-auto translate-x-0 mb-2 z-50 w-64 max-w-[calc(100vw-1rem)] bg-[#0d1e3a] rounded-xl shadow-2xl overflow-hidden border border-white/[0.08] md:bottom-auto md:left-auto md:max-w-none md:mb-0 md:right-full md:mr-2 md:top-0 md:translate-x-0 md:w-64"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <AmountCalculatorModal
@@ -1361,14 +1623,15 @@ export default function TerminalPage() {
                     }}
                     onClose={() => setShowAmountModal(false)}
                     payoutPercent={payoutPercent}
+                    currency={displayCurrency}
                   />
-              </div>
-            </>
+                </div>
+              </>
             )}
           </div>
           </div>
 
-          {/* Payout display — desktop */}
+          {/* Payout display - desktop */}
           <div className="hidden md:flex flex-row md:flex-col gap-2 md:gap-1.5 items-center justify-center py-2 md:py-3">
             <div className="text-xl md:text-2xl font-bold text-green-400">
               +{payoutPercent}%
@@ -1379,7 +1642,7 @@ export default function TerminalPage() {
           </div>
 
           {/* Trade buttons */}
-          <div className="flex flex-row md:flex-col gap-1.5 sm:gap-2 md:gap-2.5 items-stretch md:items-stretch shrink-0">
+          <div data-tour="trade-buttons" className="flex flex-row md:flex-col gap-1.5 sm:gap-2 md:gap-2.5 items-stretch md:items-stretch shrink-0">
             <button
               className="flex-1 md:flex-none w-full py-2.5 sm:py-3 md:py-3.5 px-3 md:px-4 text-white font-semibold text-sm md:text-base rounded-lg transition-all flex items-center justify-center tracking-wide shadow-lg shadow-green-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
               style={{ background: 'linear-gradient(135deg, #4fc63f 0%, #45b833 50%, #3aa028 100%)' }}
@@ -1428,23 +1691,8 @@ export default function TerminalPage() {
             </button>
           </div>
 
-          {/* Совет от трейдера + кнопки внизу сайдбара — скрыто на мобилке */}
+          {/* Кнопки внизу сайдбара - скрыто на мобилке */}
           <div className="hidden md:flex mt-auto flex-col gap-3">
-          <div className="rounded-lg bg-white/10 p-3">
-            <div className="flex items-center gap-2 mb-1.5">
-              <Image
-                src="/images/44.jpg"
-                alt="Трейдер"
-                width={32}
-                height={32}
-                className="w-8 h-8 rounded-full object-cover shrink-0"
-              />
-              <div className="text-xs font-semibold text-white">Совет от трейдера</div>
-            </div>
-            <p className="text-[11px] font-medium text-gray-400 leading-relaxed">
-              Не рискуйте суммой больше той, которую готовы потерять. Фиксируйте прибыль по частям и не держите одну сделку «до упора».
-            </p>
-          </div>
           <div className="flex items-center gap-1.5">
             <button
               type="button"
@@ -1484,10 +1732,10 @@ export default function TerminalPage() {
           </div>
         </aside>
 
-        {/* Нижняя навигация — на мобилке в потоке после секции кнопок (не fixed), pb-safe для iOS */}
+        {/* Нижняя навигация - на мобилке в потоке после секции кнопок (не fixed), pb-safe для iOS */}
         <nav className="md:hidden shrink-0 order-3 flex items-center justify-around py-1.5 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] border-t border-white/10 bg-gradient-to-t from-[#05122a] via-[#06122c] to-[#0a1635]">
         <button
-          onClick={() => setShowTradesHistory((prev) => !prev)}
+          onClick={() => { setShowTradesHistory((prev) => !prev); setShowNews(false); }}
           className={`flex flex-col items-center gap-1 px-2 py-2 rounded-lg min-w-[52px] transition-colors ${
             showTradesHistory ? 'text-[#7b8fff]' : 'text-white/50 md:hover:text-white/80'
           }`}
@@ -1497,7 +1745,7 @@ export default function TerminalPage() {
         </button>
         <div className="w-px h-6 bg-white/15 shrink-0" aria-hidden />
         <button
-          onClick={() => setShowNews(true)}
+          onClick={() => { setShowNews((prev) => !prev); setShowTradesHistory(false); }}
           className="flex flex-col items-center gap-1 px-2 py-2 rounded-lg min-w-[52px] text-white/50 md:hover:text-white/80 transition-colors"
         >
           <Newspaper className="w-5 h-5 stroke-[3]" />
@@ -1677,10 +1925,10 @@ export default function TerminalPage() {
 
         const title =
           cfg.type === 'Stochastic'
-            ? 'Stochastic — настройки'
+            ? 'Stochastic - настройки'
             : cfg.type === 'BollingerBands'
-              ? 'Боллинджер — настройки'
-              : `${cfg.type} — настройки`;
+              ? 'Боллинджер - настройки'
+              : `${cfg.type} - настройки`;
 
         return (
           <>
@@ -1712,11 +1960,11 @@ export default function TerminalPage() {
         );
       })()}
 
-      {/* News Modal */}
-      {showNews && (
-        <NewsModal onClose={() => setShowNews(false)} />
-      )}
     </div>
   </AuthGuard>
   );
+}
+
+export default function TerminalPage() {
+  return <TerminalPageContent defaultAccount="real" />;
 }

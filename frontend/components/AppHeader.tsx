@@ -3,14 +3,70 @@
 import Image from 'next/image';
 import { useState, useEffect } from 'react';
 import { Link, useRouter, usePathname } from '@/components/navigation';
-import { Wallet, UserCircle, Bell, PlusCircle, Repeat, MessageCircle, ArrowLeft } from 'lucide-react';
+import { Wallet, UserCircle, Repeat, MessageCircle, ArrowLeft, ChevronRight, TrendingUp, PlusCircle } from 'lucide-react';
+import { NotificationsBell } from '@/components/NotificationsBell';
 import { useTranslations } from 'next-intl';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { useDisplayName } from '@/lib/hooks/useDisplayName';
 import { api } from '@/lib/api/api';
 import { useAccountStore } from '@/stores/account.store';
 import { useAccountSwitch } from '@/lib/hooks/useAccountSwitch';
 import { formatCurrencySymbol } from '@/lib/formatCurrency';
 import type { AccountSnapshot } from '@/types/account';
+
+type NotificationType = 'system' | 'trade' | 'deposit' | 'promo';
+
+interface Notification {
+  id: string;
+  type: NotificationType;
+  title: string;
+  message: string;
+  time: string;
+  read: boolean;
+}
+
+const HARDCODED_NOTIFICATIONS: Notification[] = [
+  {
+    id: '1',
+    type: 'promo',
+    title: 'Добро пожаловать!',
+    message: 'Рады видеть вас на платформе Comfortrade. Начните с демо-счёта - без риска.',
+    time: 'только что',
+    read: false,
+  },
+  {
+    id: '2',
+    type: 'deposit',
+    title: 'Пополнение счёта',
+    message: 'Ваш реальный счёт успешно пополнен. Средства доступны для торговли.',
+    time: '2 ч назад',
+    read: false,
+  },
+  {
+    id: '3',
+    type: 'trade',
+    title: 'Сделка закрыта',
+    message: 'EUR/USD · CALL · Выигрыш +340 UAH. Отличный результат!',
+    time: '5 ч назад',
+    read: false,
+  },
+  {
+    id: '4',
+    type: 'system',
+    title: 'Обновление платформы',
+    message: 'Добавлены новые активы и улучшена производительность графика.',
+    time: 'вчера',
+    read: true,
+  },
+  {
+    id: '5',
+    type: 'promo',
+    title: 'Бонус 20% на депозит',
+    message: 'Только до конца недели - пополните счёт и получите бонус 20%.',
+    time: '2 дня назад',
+    read: true,
+  },
+];
 
 export function AppHeader() {
   const router = useRouter();
@@ -30,6 +86,13 @@ export function AppHeader() {
     demo: { balance: string; currency: string } | null;
     real: { balance: string; currency: string } | null;
   }>({ demo: null, real: null });
+  const terminalHref = accountType === 'demo' ? '/terminal/demo' : '/terminal';
+  const accountTypeShort = accountType === 'demo' ? 'Демо' : 'Реал';
+  const accountTypeBadgeClass = accountType === 'demo'
+    ? 'bg-[#2478ff]/20 text-[#6ba4ff] border border-[#2478ff]/40'
+    : 'bg-[#1f9d5a]/20 text-[#44d08a] border border-[#1f9d5a]/40';
+
+  const { displayName: displayIdentity, avatarInitial, isGuest } = useDisplayName();
 
   useEffect(() => {
     const initSnapshot = async () => {
@@ -53,6 +116,15 @@ export function AppHeader() {
       }
     };
     loadProfile();
+
+    const handleProfileUpdated = (e: Event) => {
+      const detail = (e as CustomEvent<{ avatarUrl?: string | null }>).detail;
+      if (detail && 'avatarUrl' in detail) {
+        setAvatarUrl(detail.avatarUrl || null);
+      }
+    };
+    document.addEventListener('profile-updated', handleProfileUpdated);
+    return () => document.removeEventListener('profile-updated', handleProfileUpdated);
   }, []);
 
   useEffect(() => {
@@ -80,6 +152,7 @@ export function AppHeader() {
     document.addEventListener('keydown', handleEsc);
     return () => document.removeEventListener('keydown', handleEsc);
   }, []);
+
 
   const loadAllBalances = async () => {
     try {
@@ -111,14 +184,12 @@ export function AppHeader() {
 
 
   return (
-    <header className="bg-[#05122a] border-b border-white/10 shrink-0">
+    <header className="bg-[#05122a] border-b border-white/10 shrink-0 relative z-[160]">
       <div className="px-3 sm:px-6 py-2.5 sm:py-3.5 flex items-center justify-between">
         <div className="flex items-center gap-2 sm:gap-3">
           <Image src="/images/logo.png" alt="Comfortrade" width={40} height={40} className="h-8 sm:h-10 w-auto object-contain" />
           <span className="hidden sm:inline text-base sm:text-xl font-semibold text-white uppercase truncate max-w-[140px] sm:max-w-none">Comfortrade</span>
-          <button type="button" className="hidden sm:flex w-9 h-9 sm:w-10 sm:h-10 rounded-lg items-center justify-center text-white md:hover:bg-white/10 transition-colors shrink-0" aria-label={t('notifications')}>
-            <Bell className="w-4 h-4 sm:w-5 sm:h-5" aria-hidden />
-          </button>
+          <NotificationsBell dropdownAlign="left" zIndex={180} />
         </div>
 
         <div className="flex items-center gap-2 sm:gap-4">
@@ -139,58 +210,66 @@ export function AppHeader() {
                 <img src={avatarUrl?.startsWith('/') ? avatarUrl : `${process.env.NEXT_PUBLIC_API_URL || ''}${avatarUrl}`} alt="" className="w-full h-full object-cover rounded-full" aria-hidden />
               ) : (
                 <div className="w-full h-full rounded-full bg-gradient-to-br from-[#3347ff] via-[#3d52ff] to-[#1f2a45] flex items-center justify-center text-sm font-bold text-white">
-                  {(user?.email || '?').charAt(0).toUpperCase()}
+                  {isGuest ? (
+                    <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-white/80">
+                      <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/>
+                    </svg>
+                  ) : avatarInitial}
                 </div>
               )}
             </div>
 
             {showProfileModal && (
               <>
-                <div className="fixed inset-0 z-40" onClick={() => setShowProfileModal(false)} aria-hidden="true" />
-                <div role="menu" aria-label="Меню профиля" className="absolute left-full right-auto top-full mt-2 -ml-32 w-72 bg-[#1a2438] border border-white/5 rounded-lg shadow-xl z-50 overflow-hidden md:left-1/2 md:ml-0 md:-translate-x-1/2">
-                  <div className="p-3 space-y-2.5">
-                    <div className="flex items-center gap-2.5 p-2.5 rounded-lg">
-                      <div className="w-10 h-10 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0 ring-2 ring-white/20 ring-offset-2 ring-offset-[#1a2438] bg-gradient-to-br from-[#3347ff]/30 to-[#1f2a45]">
-                        {avatarUrl ? <img src={avatarUrl?.startsWith('/') ? avatarUrl : `${process.env.NEXT_PUBLIC_API_URL || ''}${avatarUrl}`} alt="" className="w-full h-full object-cover rounded-full" /> : <span className="text-sm font-bold text-white">{(user?.email || '?').charAt(0).toUpperCase()}</span>}
+                <div className="fixed inset-0 z-[170]" onClick={() => setShowProfileModal(false)} aria-hidden="true" />
+                <div role="menu" aria-label="Меню профиля" className="absolute left-full right-auto top-full mt-2 -ml-32 w-[280px] bg-[#1a2438] border border-white/[0.08] rounded-[14px] backdrop-blur-[12px] shadow-[0_8px_32px_rgba(0,0,0,0.5)] z-[180] overflow-hidden p-2 md:left-1/2 md:ml-0 md:-translate-x-1/2">
+                  <div className="px-3 py-3 border-b border-white/[0.06]">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 bg-[#2478ff]">
+                        {isGuest ? (
+                          <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-white/80">
+                            <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/>
+                          </svg>
+                        ) : (
+                          <span className="text-sm font-semibold text-white">{avatarInitial}</span>
+                        )}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="text-white font-medium text-sm truncate">{user?.email || t('user')}</div>
-                        <div className="text-white/60 text-xs">{accountType === 'demo' ? t('demo_account') : t('real_account')}</div>
-                      </div>
-                    </div>
-                    <div className="p-2.5 rounded-lg bg-white/5 flex items-center justify-between gap-3">
-                      <div>
-                        <div className="text-white/60 text-xs mb-0.5">{t('balance')}</div>
-                        <div className="text-white font-semibold text-base">
-                          {hideBalance ? '••••••' : snapshot ? `${displayedBalance} ${formatCurrencySymbol(snapshot.currency)}` : '...'}
+                        <div className="text-white text-sm font-medium truncate">{displayIdentity}</div>
+                        <div className={`mt-1 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${accountTypeBadgeClass}`}>
+                          {accountType === 'demo' ? t('demo_account') : t('real_account')}
                         </div>
                       </div>
-                      <Link href="/profile?tab=wallet" onClick={() => setShowProfileModal(false)} className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-gradient-to-r from-[#3347ff] to-[#1e2fcc] text-white text-xs font-semibold md:hover:from-[#3347ff]/90 md:hover:to-[#1e2fcc]/90 transition-all shadow-lg shadow-[#3347ff]/20">
-                        <PlusCircle className="w-4 h-4" />
-                        <span>{t('topup')}</span>
-                      </Link>
                     </div>
                   </div>
-                  <div className="border-t border-white/10 p-3 space-y-1">
-                    <button type="button" role="menuitem" onClick={() => { setShowProfileModal(false); setShowAccountModal(true); loadAllBalances(); }} className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-white md:hover:bg-white/10 transition-colors text-sm text-left">
-                      <Repeat className="w-4 h-4" aria-hidden />
-                      <span>{t('switch_account')}</span>
-                    </button>
-                    <Link href="/profile" onClick={() => setShowProfileModal(false)} className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-white md:hover:bg-white/10 transition-colors text-sm">
-                      <UserCircle className="w-4 h-4" />
-                      <span>{t('profile')}</span>
-                    </Link>
-                    <Link href="/profile?tab=wallet" onClick={() => setShowProfileModal(false)} className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-white md:hover:bg-white/10 transition-colors text-sm">
-                      <Wallet className="w-4 h-4" />
-                      <span>{t('wallet')}</span>
-                    </Link>
-                    <Link href="/profile?tab=support" onClick={() => setShowProfileModal(false)} className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-white md:hover:bg-white/10 transition-colors text-sm">
-                      <MessageCircle className="w-4 h-4" />
-                      <span>{t('support')}</span>
+                  <div className="px-3 pt-3 pb-2 flex justify-center">
+                    <Link href="/profile?tab=wallet" onClick={() => setShowProfileModal(false)} className="shrink-0 h-7 inline-flex items-center px-3 rounded-md border border-[#2478ff] text-[#2478ff] text-xs font-medium md:hover:bg-[#2478ff]/10 transition-colors duration-150">
+                      <span>{t('topup_account')}</span>
                     </Link>
                   </div>
-                  <div className="border-t border-white/10 p-3">
-                    <button type="button" role="menuitem" onClick={() => { setShowProfileModal(false); handleLogout(); }} className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-red-400 md:hover:bg-red-500/10 transition-colors text-sm" aria-label={t('logout')}>
+                  <div className="px-2 pb-1 space-y-1">
+                    <button type="button" role="menuitem" onClick={() => { setShowProfileModal(false); setShowAccountModal(true); loadAllBalances(); }} className="group w-full h-[38px] px-3 rounded-lg flex items-center gap-2.5 text-left md:hover:bg-white/[0.06] transition-colors duration-150">
+                      <Repeat className="w-4 h-4 text-white/50 group-hover:text-white transition-colors duration-150" aria-hidden />
+                      <span className="text-[13px] text-white/80 group-hover:text-white transition-colors duration-150">{t('switch_account')}</span>
+                      <span className="ml-auto text-[11px] text-white/50 group-hover:text-white/80 transition-colors duration-150">{accountTypeShort}</span>
+                      <ChevronRight className="w-4 h-4 text-white/50 group-hover:text-white transition-colors duration-150" />
+                    </button>
+                    <Link href="/profile" onClick={() => setShowProfileModal(false)} className="group h-[38px] px-3 rounded-lg flex items-center gap-2.5 md:hover:bg-white/[0.06] transition-colors duration-150">
+                      <UserCircle className="w-4 h-4 text-white/50 group-hover:text-white transition-colors duration-150" />
+                      <span className="text-[13px] text-white/80 group-hover:text-white transition-colors duration-150">{t('profile')}</span>
+                    </Link>
+                    <Link href="/profile?tab=wallet" onClick={() => setShowProfileModal(false)} className="group h-[38px] px-3 rounded-lg flex items-center gap-2.5 md:hover:bg-white/[0.06] transition-colors duration-150">
+                      <Wallet className="w-4 h-4 text-white/50 group-hover:text-white transition-colors duration-150" />
+                      <span className="text-[13px] text-white/80 group-hover:text-white transition-colors duration-150">{t('wallet')}</span>
+                    </Link>
+                    <Link href="/profile?tab=support" onClick={() => setShowProfileModal(false)} className="group h-[38px] px-3 rounded-lg flex items-center gap-2.5 md:hover:bg-white/[0.06] transition-colors duration-150">
+                      <MessageCircle className="w-4 h-4 text-white/50 group-hover:text-white transition-colors duration-150" />
+                      <span className="text-[13px] text-white/80 group-hover:text-white transition-colors duration-150">{t('support')}</span>
+                    </Link>
+                  </div>
+                  <div className="border-t border-white/[0.06] my-1" />
+                  <div className="px-2 pb-2">
+                    <button type="button" role="menuitem" onClick={() => { setShowProfileModal(false); handleLogout(); }} className="w-full h-[38px] px-3 rounded-lg flex items-center gap-2.5 text-[#ff4655] md:hover:bg-[rgba(255,69,85,0.08)] transition-colors duration-150" aria-label={t('logout')}>
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
                       <span>{t('logout')}</span>
                     </button>
@@ -247,7 +326,7 @@ export function AppHeader() {
             </div>
 
             {isProfilePage ? (
-              <Link href="/terminal" className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-2 sm:py-2.5 rounded-lg bg-white/10 hover:bg-white/15 text-white text-xs sm:text-sm font-medium transition-all shrink-0" title={t('terminal')}>
+              <Link href={terminalHref} className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-2 sm:py-2.5 rounded-lg bg-white/10 hover:bg-white/15 text-white text-xs sm:text-sm font-medium transition-all shrink-0" title={t('terminal')}>
                 <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
                 <span>{t('terminal')}</span>
               </Link>

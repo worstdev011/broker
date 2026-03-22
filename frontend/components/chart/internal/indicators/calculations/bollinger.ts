@@ -1,5 +1,5 @@
 /**
- * bollinger.ts — Bollinger Bands
+ * bollinger.ts - Bollinger Bands
  *
  * Middle = SMA(close, period)
  * StdDev = standard deviation of close over period
@@ -34,9 +34,9 @@ function stdDev(values: number[], mean: number, start: number, period: number): 
 /**
  * Bollinger Bands: upper, middle, lower
  *
- * @param candles — массив закрытых свечей
- * @param period — период (обычно 20)
- * @param stdDevMult — множитель стандартного отклонения (обычно 2)
+ * @param candles - массив закрытых свечей
+ * @param period - период (обычно 20)
+ * @param stdDevMult - множитель стандартного отклонения (обычно 2)
  */
 export function calculateBollingerBands(
   candles: Candle[],

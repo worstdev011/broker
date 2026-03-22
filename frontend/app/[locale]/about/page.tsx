@@ -50,14 +50,11 @@ export default function AboutPage() {
                 {t('subtitle')}
               </p>
             </div>
-            <div className="flex-shrink-0 w-[5.5rem] h-[5.5rem] md:w-[6.5rem] md:h-[6.5rem] rounded-2xl bg-[#ebedff] flex items-center justify-center overflow-hidden">
-              <Image src="/images/about.png" alt="" width={48} height={48} className="w-10 h-10 md:w-12 md:h-12 object-contain" />
-            </div>
           </div>
         </div>
       </section>
 
-      {/* Mission block — фон aboutmain, текст и ноутбук поверх */}
+      {/* Mission block - фон aboutmain, текст и ноутбук поверх */}
       <section className="relative py-16 md:py-24 overflow-x-hidden min-h-[600px] md:min-h-[700px]">
         <div className="absolute inset-0">
           <Image

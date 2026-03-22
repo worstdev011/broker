@@ -1,5 +1,5 @@
 /**
- * ChartTypeMenu — выпадающее меню для выбора типа графика
+ * ChartTypeMenu - выпадающее меню для выбора типа графика
  * Свечи/Линия + режимы свечей (Classic/Heikin Ashi/Bars)
  * Иконки из public/images: liner.png, candler.png, barser.png, ashier.png
  */

@@ -2,7 +2,7 @@
  * FLOW L-UI-2: Render Time Axis - метки времени снизу
  * 
  * Используется для линейного графика.
- * Таймфреймов НЕТ — это просто время.
+ * Таймфреймов НЕТ - это просто время.
  */
 
 import type { TimePriceViewport } from './viewport.types';

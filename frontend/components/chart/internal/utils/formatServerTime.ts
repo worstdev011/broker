@@ -1,5 +1,5 @@
 /**
- * FLOW T5 — Format Server Time (Pure Function)
+ * FLOW T5 - Format Server Time (Pure Function)
  * Только входной ts, без Date.now(). Пример: "19:45:02 UTC+2"
  * offsetMinutes = -date.getTimezoneOffset() (клиентский offset: положительный = восток)
  * Теперь использует настройки часового пояса из chartSettings

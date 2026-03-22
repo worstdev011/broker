@@ -153,12 +153,12 @@ export function VerificationSection() {
               <li className="flex items-start gap-2">
                 <FileText className="w-4 h-4 shrink-0 mt-0.5" />
                 <span>
-                  Подтверждение адреса проживания — не старше 3 месяцев (опционально)
+                  Подтверждение адреса проживания - не старше 3 месяцев (опционально)
                 </span>
               </li>
             </ul>
             <p className="text-[11px] sm:text-xs text-white/40 mt-4">
-              Форматы: JPG, PNG, PDF. Максимальный размер файла — 10 МБ.
+              Форматы: JPG, PNG, PDF. Максимальный размер файла - 10 МБ.
             </p>
           </div>
 
@@ -184,7 +184,7 @@ export function VerificationSection() {
               Выберите вашу страну
             </h3>
             <p className="text-xs text-white/50">
-              Страна гражданства — нужна для подбора подходящих документов
+              Страна гражданства - нужна для подбора подходящих документов
             </p>
           </div>
 

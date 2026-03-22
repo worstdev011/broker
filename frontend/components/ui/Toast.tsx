@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Toast notifications — заменяет window.alert()
+ * Toast notifications - заменяет window.alert()
  * Неблокирующие уведомления в углу экрана
  */
 

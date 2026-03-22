@@ -1,4 +1,4 @@
-import Redis from 'ioredis';
+import { Redis } from 'ioredis';
 import { env } from '../config/env.js';
 import { logger } from '../shared/logger.js';
 
@@ -41,7 +41,7 @@ export async function connectRedis(): Promise<KeyValueStore> {
 
   redis = new Redis(url, { lazyConnect: true });
 
-  redis.on('error', (err) => {
+  redis.on('error', (err: Error) => {
     logger.error({ err }, 'Redis error');
   });
 

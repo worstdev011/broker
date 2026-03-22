@@ -1,5 +1,5 @@
 /**
- * FLOW O4 — Overlay Panel UI (React)
+ * FLOW O4 - Overlay Panel UI (React)
  * Панель активных объектов: название, глаз (показать/скрыть), крест (удалить).
  * Обычный React UI, НЕ canvas. Связь только через Overlay Registry.
  */
