@@ -36,6 +36,9 @@ export function useVerificationStatus(): VerificationStatus {
         if (s === 'verified' || s === 'pending' || s === 'rejected') {
           setStatus(s);
           localStorage.setItem(VERIFICATION_STORAGE_KEY, s);
+        } else {
+          setStatus('none');
+          localStorage.removeItem(VERIFICATION_STORAGE_KEY);
         }
       })
       .catch(() => {

@@ -7,6 +7,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { authApi, ApiError } from '../api/client';
 import { parseValidationError } from '../api/validationError';
+import { VERIFICATION_STORAGE_KEY } from './useVerification';
 
 function getErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof ApiError) {
@@ -132,14 +133,22 @@ export function useAuth() {
   }, []);
 
   const logout = useCallback(async () => {
+    const clearClient = () => {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem(VERIFICATION_STORAGE_KEY);
+      }
+    };
+
     try {
       await authApi.logout();
+      clearClient();
       setState({
         user: null,
         isLoading: false,
         isAuthenticated: false,
       });
     } catch (error) {
+      clearClient();
       // Even if logout fails, clear local state
       setState({
         user: null,
