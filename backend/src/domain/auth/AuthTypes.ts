@@ -1,7 +1,8 @@
 export interface User {
   id: string;
   email: string;
-  password: string;
+  password: string | null;
+  googleId?: string | null;
   createdAt: Date;
   updatedAt: Date;
   firstName?: string | null;
@@ -39,8 +40,13 @@ export interface LoginInput {
   password: string;
 }
 
+/** Safe user shape returned from auth/profile APIs */
+export type AuthUserPublic = Omit<User, 'password' | 'twoFactorSecret' | 'twoFactorBackupCodes'> & {
+  hasPassword: boolean;
+};
+
 export interface AuthResult {
-  user: Omit<User, 'password' | 'twoFactorSecret' | 'twoFactorBackupCodes'>;
+  user: AuthUserPublic;
   sessionToken: string;
 }
 

@@ -2,7 +2,14 @@ import type { UserRepository } from '../../ports/repositories/UserRepository.js'
 import type { SessionRepository } from '../../ports/repositories/SessionRepository.js';
 import type { AccountService } from '../accounts/AccountService.js';
 import { AccountType } from '../accounts/AccountTypes.js';
-import type { RegisterInput, LoginInput, AuthResult, AuthResult2FA, User } from './AuthTypes.js';
+import type {
+  RegisterInput,
+  LoginInput,
+  AuthResult,
+  AuthResult2FA,
+  User,
+  AuthUserPublic,
+} from './AuthTypes.js';
 import {
   InvalidCredentialsError,
   UserAlreadyExistsError,
@@ -12,12 +19,12 @@ import {
 import { UserNotFoundError } from '../user/UserErrors.js';
 import { hashPassword, verifyPassword, hashToken, generateSessionToken } from '../../utils/crypto.js';
 import { generateUserId } from '../../utils/userId.js';
-import { generateTempToken, verifyTempToken } from '../../utils/tempTokens.js';
+import { createTempToken, verifyTempToken } from '../../utils/tempTokens.js';
 import { TwoFactorService } from '../user/TwoFactorService.js';
 import { SESSION_TTL_DAYS } from '../../config/constants.js';
 
-/** Fields safe to return in API responses */
-function toUserDTO(user: User) {
+/** Fields safe to return in API responses (no secrets, no googleId) */
+export function toAuthUserPublic(user: User): AuthUserPublic {
   return {
     id: user.id,
     email: user.email,
@@ -28,10 +35,18 @@ function toUserDTO(user: User) {
     nickname: user.nickname,
     phone: user.phone,
     country: user.country,
+    currency: user.currency,
     dateOfBirth: user.dateOfBirth,
     avatarUrl: user.avatarUrl,
     twoFactorEnabled: user.twoFactorEnabled ?? false,
+    kycStatus: user.kycStatus,
+    kycApplicantId: user.kycApplicantId,
+    hasPassword: !!user.password,
   };
+}
+
+function toUserDTO(user: User): AuthUserPublic {
+  return toAuthUserPublic(user);
 }
 
 export class AuthService {
@@ -66,6 +81,17 @@ export class AuthService {
     return sessionToken;
   }
 
+  private async generateUniqueUserId(): Promise<string> {
+    const maxAttempts = 10;
+    for (let i = 0; i < maxAttempts; i++) {
+      const userId = generateUserId();
+      if (!(await this.userRepository.existsById(userId))) {
+        return userId;
+      }
+    }
+    throw new Error('Failed to generate unique user ID');
+  }
+
   async register(
     input: RegisterInput,
     userAgent?: string | null,
@@ -78,13 +104,7 @@ export class AuthService {
 
     const passwordHash = await hashPassword(input.password);
 
-    let userId = '';
-    const maxAttempts = 10;
-    for (let i = 0; i < maxAttempts; i++) {
-      userId = generateUserId();
-      if (!(await this.userRepository.existsById(userId))) break;
-      if (i === maxAttempts - 1) throw new Error('Failed to generate unique user ID');
-    }
+    const userId = await this.generateUniqueUserId();
 
     const user = await this.userRepository.create({
       id: userId,
@@ -118,7 +138,56 @@ export class AuthService {
     }
 
     if (user.twoFactorEnabled && user.twoFactorSecret) {
-      const tempToken = generateTempToken(user.id);
+      const tempToken = await createTempToken(user.id);
+      return { requires2FA: true, tempToken, userId: user.id };
+    }
+
+    const sessionToken = await this.createSession(user.id, userAgent, ipAddress);
+
+    return { user: toUserDTO(user), sessionToken };
+  }
+
+  async loginWithGoogle(
+    googleId: string,
+    email: string,
+    firstName: string | undefined,
+    lastName: string | undefined,
+    userAgent?: string | null,
+    ipAddress?: string | null,
+  ): Promise<AuthResult | AuthResult2FA> {
+    let user = await this.userRepository.findByGoogleId(googleId);
+
+    if (!user) {
+      const existingByEmail = await this.userRepository.findByEmail(email);
+      if (existingByEmail) {
+        if (existingByEmail.googleId && existingByEmail.googleId !== googleId) {
+          throw new InvalidCredentialsError();
+        }
+        if (!existingByEmail.googleId) {
+          await this.userRepository.linkGoogleId(existingByEmail.id, googleId);
+        }
+        user = await this.userRepository.findById(existingByEmail.id);
+      }
+    }
+
+    if (!user) {
+      const userId = await this.generateUniqueUserId();
+      user = await this.userRepository.createGoogleUser({
+        id: userId,
+        email,
+        googleId,
+        firstName: firstName ?? null,
+        lastName: lastName ?? null,
+      });
+
+      if (this.accountService) {
+        await this.accountService.createAccount({ userId: user.id, type: AccountType.REAL });
+        await this.accountService.createAccount({ userId: user.id, type: AccountType.DEMO });
+      }
+    }
+
+    if (user.twoFactorEnabled && user.twoFactorSecret) {
+      const tempToken = await createTempToken(user.id);
       return { requires2FA: true, tempToken, userId: user.id };
     }
 
@@ -133,7 +202,7 @@ export class AuthService {
     userAgent?: string | null,
     ipAddress?: string | null,
   ): Promise<AuthResult> {
-    const userId = verifyTempToken(tempToken);
+    const userId = await verifyTempToken(tempToken);
     if (!userId) {
       throw new InvalidSessionError('Invalid or expired temporary token');
     }
@@ -148,17 +217,8 @@ export class AuthService {
     }
 
     const isValidToken = await this.twoFactorService.verifyToken(user.twoFactorSecret, code);
-    const isValidBackup = user.twoFactorBackupCodes
-      ? this.twoFactorService.verifyBackupCode(code, user.twoFactorBackupCodes)
-      : false;
-
-    if (!isValidToken && !isValidBackup) {
+    if (!isValidToken) {
       throw new InvalidCredentialsError('Invalid 2FA code');
-    }
-
-    if (isValidBackup && user.twoFactorBackupCodes) {
-      const updatedCodes = this.twoFactorService.removeBackupCode(code, user.twoFactorBackupCodes);
-      await this.userRepository.updateBackupCodes(user.id, updatedCodes);
     }
 
     const sessionToken = await this.createSession(user.id, userAgent, ipAddress);
@@ -171,7 +231,7 @@ export class AuthService {
     await this.sessionRepository.deleteByToken(tokenHash);
   }
 
-  async getMe(sessionToken: string): Promise<ReturnType<typeof toUserDTO>> {
+  async getMe(sessionToken: string): Promise<AuthUserPublic> {
     const tokenHash = hashToken(sessionToken);
 
     const session = await this.sessionRepository.findByToken(tokenHash);

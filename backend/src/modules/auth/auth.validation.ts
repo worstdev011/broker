@@ -17,7 +17,7 @@ export type LoginInput = z.infer<typeof loginSchema>;
 
 export const verify2FASchema = z.object({
   tempToken: z.string().min(1, 'Temporary token is required').trim(),
-  code: z.string().length(6, '2FA code must be 6 digits').regex(/^\d{6}$/, '2FA code must contain only digits'),
+  code: z.string().regex(/^\d{6}$/, 'Code must be 6 digits'),
 });
 
 export type Verify2FAInput = z.infer<typeof verify2FASchema>;

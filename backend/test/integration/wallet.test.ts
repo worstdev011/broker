@@ -51,24 +51,29 @@ describe('Wallet Flow Integration', () => {
       const balanceBefore = JSON.parse(balanceBeforeRes.body);
       expect(Number(balanceBefore.balance)).toBe(0);
 
-      // Deposit
+      // Deposit (BetaTransfer): без ключей — 503; с ключами — 201 + paymentUrl, баланс до вебхука не меняется
       const depositRes = await app!.inject({
         method: 'POST',
         url: '/api/wallet/deposit',
         headers: cookieHeader(cookie!),
         payload: {
-          amount: 200,
-          paymentMethod: 'CARD',
+          amount: 300,
         },
       });
 
-      expect(depositRes.statusCode).toBe(200);
+      if (depositRes.statusCode === 503) {
+        const errBody = JSON.parse(depositRes.body);
+        expect(errBody.error).toBe('PAYMENT_NOT_CONFIGURED');
+        return;
+      }
+
+      expect(depositRes.statusCode).toBe(201);
       const depositBody = JSON.parse(depositRes.body);
       expect(depositBody.transactionId).toBeDefined();
-      expect(depositBody.status).toBeDefined();
-      expect(depositBody.amount).toBe(200);
+      expect(depositBody.status).toBe('PENDING');
+      expect(depositBody.amount).toBe(300);
+      expect(depositBody.paymentUrl).toMatch(/^https?:\/\//i);
 
-      // Balance should reflect deposit
       const balanceAfterRes = await app!.inject({
         method: 'GET',
         url: '/api/wallet/balance',
@@ -76,14 +81,14 @@ describe('Wallet Flow Integration', () => {
       });
       expect(balanceAfterRes.statusCode).toBe(200);
       const balanceAfter = JSON.parse(balanceAfterRes.body);
-      expect(Number(balanceAfter.balance)).toBe(200);
+      expect(Number(balanceAfter.balance)).toBe(0);
     });
 
     it.skipIf(!app)('should reject deposit without auth', async () => {
       const res = await app!.inject({
         method: 'POST',
         url: '/api/wallet/deposit',
-        payload: { amount: 200, paymentMethod: 'CARD' },
+        payload: { amount: 300 },
       });
       expect(res.statusCode).toBe(401);
     });
@@ -94,7 +99,7 @@ describe('Wallet Flow Integration', () => {
         method: 'POST',
         url: '/api/wallet/deposit',
         headers: cookieHeader(cookie!),
-        payload: { amount: 100, paymentMethod: 'CARD' },
+        payload: { amount: 100 },
       });
       expect(res.statusCode).toBe(400);
     });

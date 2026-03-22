@@ -1,7 +1,9 @@
 import type { FastifyInstance } from 'fastify';
 import { WalletController } from './wallet.controller.js';
 import { requireAuth } from '../auth/auth.middleware.js';
-import { depositSchema, withdrawSchema, getBalanceSchema } from './wallet.schema.js';
+import { depositSchema, withdrawSchema, getBalanceSchema, walletWebhookSchema } from './wallet.schema.js';
+import { withdrawBodySchema, depositBodySchema } from './wallet.validation.js';
+import { validateBody } from '../../shared/validation/validateBody.js';
 import {
   getDepositService,
   getWithdrawService,
@@ -17,15 +19,25 @@ export async function registerWalletRoutes(app: FastifyInstance) {
     getTransactionRepository(),
   );
 
-  app.post<{ Body: { amount: number; paymentMethod: string } }>('/api/wallet/deposit', {
+  app.post<{ Body: { amount: number } }>('/api/wallet/deposit', {
     schema: depositSchema,
-    preHandler: [requireAuth],
+    preHandler: [requireAuth, validateBody(depositBodySchema)],
   }, (request, reply) => walletController.deposit(request, reply));
 
-  app.post<{ Body: { amount: number; paymentMethod: string } }>('/api/wallet/withdraw', {
-    schema: withdrawSchema,
-    preHandler: [requireAuth],
-  }, (request, reply) => walletController.withdraw(request, reply));
+  app.post<{ Body: { amount: number; cardNumber: string; twoFactorCode?: string } }>(
+    '/api/wallet/withdraw',
+    {
+      schema: withdrawSchema,
+      preHandler: [requireAuth, validateBody(withdrawBodySchema)],
+    },
+    (request, reply) => walletController.withdraw(request, reply),
+  );
+
+  app.post(
+    '/api/wallet/webhook',
+    { schema: walletWebhookSchema },
+    (request, reply) => walletController.betaTransferWebhook(request, reply),
+  );
 
   app.get('/api/wallet/balance', {
     schema: getBalanceSchema,

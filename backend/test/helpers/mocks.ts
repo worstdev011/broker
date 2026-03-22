@@ -142,6 +142,10 @@ export function mockTransactionRepository(
       const tx: Transaction = {
         ...data,
         id: `tx-${Date.now()}`,
+        provider: data.provider ?? null,
+        externalId: data.externalId ?? null,
+        externalStatus: data.externalStatus ?? null,
+        cardLastFour: data.cardLastFour ?? null,
         createdAt: new Date(),
         confirmedAt: null,
       };
@@ -154,6 +158,16 @@ export function mockTransactionRepository(
       if (tx) {
         tx.status = 'CONFIRMED' as any;
         tx.confirmedAt = new Date();
+      }
+    },
+    update: async (id: string, patch) => {
+      if (overrides?.update) return overrides.update(id, patch);
+      const tx = transactions.get(id);
+      if (tx) {
+        if (patch.status !== undefined) tx.status = patch.status as any;
+        if (patch.externalId !== undefined) tx.externalId = patch.externalId;
+        if (patch.externalStatus !== undefined) tx.externalStatus = patch.externalStatus;
+        if (patch.confirmedAt !== undefined) tx.confirmedAt = patch.confirmedAt;
       }
     },
     getBalance: async (accountId: string) => {

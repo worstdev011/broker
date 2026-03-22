@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Link } from '@/components/navigation';
+import { useState, useEffect, useRef } from 'react';
+import { Link, usePathname, useRouter } from '@/components/navigation';
 import { Tag, ExternalLink, History, ChevronRight, Shield, FileCheck, Calendar, Mail, CheckCircle2 } from 'lucide-react';
 import { api } from '@/lib/api/api';
 import { useIsVerified } from '@/lib/hooks/useVerification';
+import { toast } from '@/stores/toast.store';
 
 type PaymentMethodId =
   | 'CARD'
@@ -54,12 +55,27 @@ const PAYMENT_METHODS: Array<{
 ];
 
 const WITHDRAW_PAYMENT_METHODS = PAYMENT_METHODS.filter((m) =>
-  ['CARD', 'PRIVAT24', 'CARD_UAH', 'BINANCE_PAY', 'USDT_TRC20'].includes(m.id)
+  ['CARD', 'PRIVAT24', 'CARD_UAH', 'BINANCE_PAY', 'USDT_TRC20'].includes(m.id),
 );
 
-const MIN_AMOUNT_UAH = 200;
-const MAX_AMOUNT_UAH = 1000;
-const QUICK_AMOUNTS = [200, 500, 1000];
+const MIN_AMOUNT_UAH = 300;
+const MAX_AMOUNT_UAH = 29_999;
+
+/** Пополнение через BetaTransfer: только карта UAH */
+const BETATRANSFER_DEPOSIT_METHODS = PAYMENT_METHODS.filter((m) => m.id === 'CARD').map((m) => ({
+  ...m,
+  minAmount: MIN_AMOUNT_UAH,
+  maxAmount: MAX_AMOUNT_UAH,
+}));
+
+/** Вывод через BetaTransfer: только карта UAH */
+const BETATRANSFER_WITHDRAW_METHODS = WITHDRAW_PAYMENT_METHODS.filter((m) => m.id === 'CARD').map((m) => ({
+  ...m,
+  minAmount: MIN_AMOUNT_UAH,
+  maxAmount: MAX_AMOUNT_UAH,
+}));
+
+const QUICK_AMOUNTS = [300, 500, 1000, 5000];
 
 const METHOD_LABELS: Record<string, string> = {
   CARD: 'Карта Visa/Master',
@@ -209,6 +225,10 @@ interface WalletTransaction {
 
 export function WalletTab() {
   const isVerified = useIsVerified();
+  const pathname = usePathname();
+  const router = useRouter();
+  const depositReturnHandledRef = useRef(false);
+
   const [emailVerified, setEmailVerified] = useState(() => {
     if (typeof window === 'undefined') return false;
     return localStorage.getItem('email-verified') === '1';
@@ -241,7 +261,10 @@ export function WalletTab() {
   const [promoApplied, setPromoApplied] = useState(false);
 
   const [withdrawPaymentMethod, setWithdrawPaymentMethod] = useState<PaymentMethodId>('CARD');
-  const [withdrawAmount, setWithdrawAmount] = useState('200');
+  const [withdrawAmount, setWithdrawAmount] = useState('300');
+  const [withdrawCardNumber, setWithdrawCardNumber] = useState('');
+  const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
+  const [withdrawTwoFactorCode, setWithdrawTwoFactorCode] = useState('');
 
   const [historyFilter, setHistoryFilter] = useState<'all' | 'deposits' | 'withdrawals'>('all');
   const [historyDateValue, setHistoryDateValue] = useState<string>(() => {
@@ -292,9 +315,44 @@ export function WalletTab() {
     fetchTransactions();
   }, []);
 
+  const refreshTwoFactorFlag = () => {
+    api<{ user: { twoFactorEnabled?: boolean } }>('/api/auth/me')
+      .then((r) => setTwoFactorEnabled(!!r.user?.twoFactorEnabled))
+      .catch(() => setTwoFactorEnabled(false));
+  };
+
+  useEffect(() => {
+    refreshTwoFactorFlag();
+  }, []);
+
+  useEffect(() => {
+    if (depositReturnHandledRef.current || typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const d = params.get('deposit');
+    if (!d) return;
+    depositReturnHandledRef.current = true;
+    if (d === 'success') {
+      toast(
+        'Платёж обрабатывается. Баланс обновится после подтверждения.',
+        'info',
+      );
+    } else if (d === 'fail') {
+      toast('Платёж не выполнен', 'error');
+    }
+    router.replace(pathname);
+  }, [pathname, router]);
+
+  useEffect(() => {
+    const onProfile = () => refreshTwoFactorFlag();
+    document.addEventListener('profile-updated', onProfile);
+    return () => document.removeEventListener('profile-updated', onProfile);
+  }, []);
+
   useEffect(() => {
     setError(null);
     setSuccess(false);
+    setWithdrawTwoFactorCode('');
+    setWithdrawCardNumber('');
   }, [walletTab]);
 
   const numAmount = parseFloat(amount) || 0;
@@ -311,13 +369,20 @@ export function WalletTab() {
     setSuccess(false);
     setSubmitting(true);
     try {
-      await api<{ transactionId: string; status: string; amount: number; currency: string }>(
-        '/api/wallet/deposit',
-        {
-          method: 'POST',
-          body: JSON.stringify({ amount: numAmount, paymentMethod }),
-        }
-      );
+      const result = await api<{
+        transactionId: string;
+        paymentUrl: string;
+        status: string;
+        amount: number;
+        currency: string;
+      }>('/api/wallet/deposit', {
+        method: 'POST',
+        body: JSON.stringify({ amount: numAmount }),
+      });
+      if (result.paymentUrl) {
+        window.location.href = result.paymentUrl;
+        return;
+      }
       setSuccess(true);
       setAmount('500');
       setPromoCode('');
@@ -339,8 +404,15 @@ export function WalletTab() {
     setPromoApplied(true);
   };
 
+  const withdrawPanDigits = withdrawCardNumber.replace(/\D/g, '');
   const withdrawNumAmount = parseFloat(withdrawAmount) || 0;
-  const isValidWithdraw = withdrawNumAmount >= MIN_AMOUNT_UAH && withdrawNumAmount <= MAX_AMOUNT_UAH && (balance?.balance ?? 0) >= withdrawNumAmount;
+  const isValidWithdraw =
+    withdrawNumAmount >= MIN_AMOUNT_UAH &&
+    withdrawNumAmount <= MAX_AMOUNT_UAH &&
+    (balance?.balance ?? 0) >= withdrawNumAmount;
+  const withdrawCardOk = withdrawPanDigits.length >= 16 && withdrawPanDigits.length <= 19;
+  const withdrawOtpOk = !twoFactorEnabled || /^\d{6}$/.test(withdrawTwoFactorCode);
+  const canSubmitWithdraw = isValidWithdraw && withdrawCardOk && withdrawOtpOk;
 
   const handleWithdraw = async () => {
     if (!isValidWithdraw) {
@@ -351,33 +423,58 @@ export function WalletTab() {
       );
       return;
     }
+    if (!withdrawCardOk) {
+      setError('Укажите номер карты (16–19 цифр)');
+      return;
+    }
+    if (twoFactorEnabled && !/^\d{6}$/.test(withdrawTwoFactorCode)) {
+      setError('Введите 6-значный код из Google Authenticator');
+      return;
+    }
     setError(null);
     setSuccess(false);
     setSubmitting(true);
     try {
+      const body: Record<string, unknown> = {
+        amount: withdrawNumAmount,
+        cardNumber: withdrawPanDigits,
+      };
+      if (twoFactorEnabled) {
+        body.twoFactorCode = withdrawTwoFactorCode;
+      }
       await api<{ transactionId: string; status: string; amount: number; currency: string }>(
         '/api/wallet/withdraw',
         {
           method: 'POST',
-          body: JSON.stringify({ amount: withdrawNumAmount, paymentMethod: withdrawPaymentMethod }),
+          body: JSON.stringify(body),
         }
       );
       setSuccess(true);
-      setWithdrawAmount('200');
+      setWithdrawAmount('300');
+      setWithdrawCardNumber('');
+      setWithdrawTwoFactorCode('');
       fetchBalance();
       fetchTransactions();
       document.dispatchEvent(new CustomEvent('wallet-updated'));
       setTimeout(() => setSuccess(false), 4000);
     } catch (e: unknown) {
-      const err = e as { message?: string; response?: { data?: { message?: string; error?: string } } };
-      setError(err.response?.data?.message || err.response?.data?.error || err.message || 'Ошибка вывода');
+      const err = e as {
+        message?: string;
+        response?: { data?: { message?: string; error?: string } };
+      };
+      const code = err.response?.data?.error;
+      if (code === 'TWO_FACTOR_REQUIRED' || code === 'TWO_FACTOR_INVALID') {
+        setError(err.response?.data?.message || 'Неверный или отсутствующий код 2FA');
+      } else {
+        setError(err.response?.data?.message || err.response?.data?.error || err.message || 'Ошибка вывода');
+      }
     } finally {
       setSubmitting(false);
     }
   };
 
-  const selectedMethod = PAYMENT_METHODS.find((m) => m.id === paymentMethod);
-  const selectedWithdrawMethod = WITHDRAW_PAYMENT_METHODS.find((m) => m.id === withdrawPaymentMethod);
+  const selectedMethod = BETATRANSFER_DEPOSIT_METHODS.find((m) => m.id === paymentMethod);
+  const selectedWithdrawMethod = BETATRANSFER_WITHDRAW_METHODS.find((m) => m.id === withdrawPaymentMethod);
 
   if (loading && txLoading) {
     return <WalletPageSkeleton />;
@@ -414,7 +511,7 @@ export function WalletTab() {
             <div className="w-full">
               <h1 className="text-lg sm:text-2xl font-bold text-white mb-0.5 sm:mb-1">Пополнение счёта</h1>
           <p className="text-xs sm:text-sm text-white/50 mb-5 sm:mb-8">
-            Выберите способ оплаты и введите сумму для безопасного пополнения.
+            Оплата банковской картой UAH через BetaTransfer (300–29&nbsp;999 UAH). После подтверждения вы будете перенаправлены на страницу оплаты.
           </p>
 
           {/* Email verification banner */}
@@ -475,7 +572,7 @@ export function WalletTab() {
             <div className="relative">
               <div className="max-h-[280px] overflow-y-auto scrollbar-dropdown">
                 <div className="grid grid-cols-2 gap-2">
-                {PAYMENT_METHODS.map((m) => {
+                {BETATRANSFER_DEPOSIT_METHODS.map((m) => {
                 const isSelected = paymentMethod === m.id;
                 const isInstant = m.speed === 'Мгновенно';
                 return (
@@ -535,7 +632,7 @@ export function WalletTab() {
             <div className="space-y-5">
               <div>
                 {(() => {
-                  const selected = PAYMENT_METHODS.find((m) => m.id === paymentMethod);
+                  const selected = BETATRANSFER_DEPOSIT_METHODS.find((m) => m.id === paymentMethod);
                   const minA = selected?.minAmount ?? MIN_AMOUNT_UAH;
                   const maxA = selected?.maxAmount ?? MAX_AMOUNT_UAH;
                   return (
@@ -819,7 +916,7 @@ export function WalletTab() {
                 )}
                 {success && (
                   <div className="mb-4 sm:mb-6 p-3 sm:p-4 rounded-lg sm:rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs sm:text-sm">
-                    Заявка на вывод создана. Средства будут переведены в течение 1-3 рабочих дней.
+                    Заявка на вывод принята. Обработка до 24 часов.
                   </div>
                 )}
 
@@ -834,7 +931,7 @@ export function WalletTab() {
                   <div className="relative">
                     <div className="max-h-[280px] overflow-y-auto scrollbar-dropdown">
                       <div className="grid grid-cols-2 gap-2">
-                        {WITHDRAW_PAYMENT_METHODS.map((m) => {
+                        {BETATRANSFER_WITHDRAW_METHODS.map((m) => {
                           const isSelected = withdrawPaymentMethod === m.id;
                           const isInstant = m.speed === 'Мгновенно';
                           return (
@@ -892,7 +989,7 @@ export function WalletTab() {
                   <div className="space-y-5">
                     <div>
                       {(() => {
-                        const selected = WITHDRAW_PAYMENT_METHODS.find((m) => m.id === withdrawPaymentMethod);
+                        const selected = BETATRANSFER_WITHDRAW_METHODS.find((m) => m.id === withdrawPaymentMethod);
                         const minA = selected?.minAmount ?? MIN_AMOUNT_UAH;
                         const maxA = selected?.maxAmount ?? MAX_AMOUNT_UAH;
                         return (
@@ -918,6 +1015,20 @@ export function WalletTab() {
                         );
                       })()}
                     </div>
+                    <div className="mt-5">
+                      <label className="block text-sm font-semibold text-white/40 mb-2">
+                        Номер карты получателя
+                      </label>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        autoComplete="off"
+                        placeholder="16–19 цифр"
+                        value={withdrawCardNumber}
+                        onChange={(e) => setWithdrawCardNumber(e.target.value.replace(/[^\d\s]/g, '').slice(0, 23))}
+                        className="w-full px-3 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white font-mono text-sm tracking-wide placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-[#3347ff]/50"
+                      />
+                    </div>
                     <div className="flex flex-wrap gap-3">
                       {QUICK_AMOUNTS.map((a) => (
                         <button
@@ -936,6 +1047,28 @@ export function WalletTab() {
                     </div>
                   </div>
                 </div>
+
+                {twoFactorEnabled && (
+                  <div className="lg:col-span-2 rounded-xl sm:rounded-2xl border border-white/[0.08] bg-[#030E28] p-4 sm:p-6">
+                    <div className="flex items-center gap-2 mb-3 sm:mb-4">
+                      <span className="flex items-center justify-center w-7 h-7 rounded-full bg-amber-500/20 text-amber-400 text-sm font-bold">
+                        3
+                      </span>
+                      <h2 className="text-base font-semibold text-white">Код из Google Authenticator</h2>
+                    </div>
+                    <p className="text-xs text-white/50 mb-3">Обязательно для вывода при включённой 2FA</p>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      value={withdrawTwoFactorCode}
+                      onChange={(e) => setWithdrawTwoFactorCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      placeholder="000000"
+                      maxLength={6}
+                      className="w-full max-w-[220px] px-3 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white font-mono text-lg tracking-widest text-center focus:outline-none focus:ring-2 focus:ring-[#3347ff]/50"
+                    />
+                  </div>
+                )}
                 </div>
 
                 {/* Кнопка вывода - на мобилке */}
@@ -950,7 +1083,7 @@ export function WalletTab() {
                   <button
                     type="button"
                     onClick={handleWithdraw}
-                    disabled={submitting || !isValidWithdraw}
+                    disabled={submitting || !canSubmitWithdraw}
                     className="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl btn-accent text-white text-xs font-semibold uppercase tracking-wider transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {submitting ? (
@@ -1301,10 +1434,25 @@ export function WalletTab() {
                     </span>
                   </div>
                 </div>
+                {twoFactorEnabled && (
+                  <div className="mt-4 pt-4 border-t border-white/10">
+                    <label className="block text-xs font-medium text-white/60 mb-2">Код из Google Authenticator</label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      value={withdrawTwoFactorCode}
+                      onChange={(e) => setWithdrawTwoFactorCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      placeholder="000000"
+                      maxLength={6}
+                      className="w-full px-3 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white font-mono text-center tracking-widest focus:outline-none focus:ring-2 focus:ring-[#3347ff]/50"
+                    />
+                  </div>
+                )}
                 <button
                   type="button"
                   onClick={handleWithdraw}
-                  disabled={submitting || !isValidWithdraw}
+                  disabled={submitting || !canSubmitWithdraw}
                   className="w-full mt-6 flex items-center justify-center gap-2 px-6 py-4 rounded-xl bg-[#3347ff] hover:bg-[#3347ff]/90 text-white text-xs font-semibold uppercase tracking-wider transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {submitting ? (

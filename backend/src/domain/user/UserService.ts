@@ -1,6 +1,7 @@
 import type { UserRepository, UpdateProfileData } from '../../ports/repositories/UserRepository.js';
 import type { SessionRepository } from '../../ports/repositories/SessionRepository.js';
-import type { User, Session } from '../auth/AuthTypes.js';
+import type { Session, AuthUserPublic } from '../auth/AuthTypes.js';
+import { toAuthUserPublic } from '../auth/AuthService.js';
 import { verifyPassword, hashPassword } from '../../utils/crypto.js';
 import { logger } from '../../shared/logger.js';
 import { TwoFactorService } from './TwoFactorService.js';
@@ -9,6 +10,7 @@ import {
   NicknameAlreadyTakenError,
   PhoneAlreadyTakenError,
   InvalidPasswordError,
+  NoPasswordAccountError,
   UserSessionNotFoundError,
   ForbiddenError,
   InvalidDateOfBirthError,
@@ -27,16 +29,15 @@ export class UserService {
     this.twoFactorService = new TwoFactorService();
   }
 
-  async getProfile(userId: string): Promise<Omit<User, 'password'>> {
+  async getProfile(userId: string): Promise<AuthUserPublic> {
     const user = await this.userRepository.findById(userId);
     if (!user) {
       throw new UserNotFoundError(userId);
     }
-    const { password, ...profile } = user;
-    return profile;
+    return toAuthUserPublic(user);
   }
 
-  async updateProfile(userId: string, data: UpdateProfileData): Promise<Omit<User, 'password'>> {
+  async updateProfile(userId: string, data: UpdateProfileData): Promise<AuthUserPublic> {
     const existingUser = await this.userRepository.findById(userId);
     if (!existingUser) {
       throw new UserNotFoundError(userId);
@@ -76,14 +77,19 @@ export class UserService {
     }
 
     const updatedUser = await this.userRepository.updateProfile(userId, data);
-    const { password, ...profile } = updatedUser;
-    return profile;
+    return toAuthUserPublic(updatedUser);
   }
 
   async deleteProfile(userId: string, password: string): Promise<void> {
     const user = await this.userRepository.findById(userId);
     if (!user) {
       throw new UserNotFoundError(userId);
+    }
+
+    if (!user.password) {
+      throw new NoPasswordAccountError(
+        'Account uses Google sign-in; profile deletion with password is not available',
+      );
     }
 
     const isValid = await verifyPassword(password, user.password);
@@ -107,6 +113,10 @@ export class UserService {
     const user = await this.userRepository.findById(userId);
     if (!user) {
       throw new UserNotFoundError(userId);
+    }
+
+    if (!user.password) {
+      throw new NoPasswordAccountError();
     }
 
     const isValid = await verifyPassword(currentPassword, user.password);
@@ -146,7 +156,7 @@ export class UserService {
     logger.info(`All other sessions revoked for user ${userId}`);
   }
 
-  async enable2FA(userId: string, email: string): Promise<{ qrCode: string; backupCodes: string[] }> {
+  async enable2FA(userId: string, email: string): Promise<{ qrCode: string }> {
     const user = await this.userRepository.findById(userId);
     if (!user) {
       throw new UserNotFoundError(userId);
@@ -155,17 +165,11 @@ export class UserService {
     const secret = this.twoFactorService.generateSecret();
     const qrCode = await this.twoFactorService.generateQRCode(email, secret);
 
-    const backupCodes = this.twoFactorService.generateBackupCodes(8);
-    const hashedBackupCodes = backupCodes.map((code) =>
-      this.twoFactorService.hashBackupCode(code),
-    );
-
     await this.userRepository.updateTwoFactorSecret(userId, secret);
-    await this.userRepository.updateBackupCodes(userId, hashedBackupCodes);
 
     logger.info(`2FA setup initiated for user ${userId}`);
 
-    return { qrCode, backupCodes };
+    return { qrCode };
   }
 
   async verify2FA(userId: string, token: string): Promise<void> {
@@ -183,7 +187,7 @@ export class UserService {
       throw new TwoFactorError('Invalid 2FA code');
     }
 
-    await this.userRepository.enableTwoFactor(userId, user.twoFactorBackupCodes || []);
+    await this.userRepository.enableTwoFactor(userId);
     logger.info(`2FA enabled for user ${userId}`);
   }
 
@@ -191,6 +195,12 @@ export class UserService {
     const user = await this.userRepository.findById(userId);
     if (!user) {
       throw new UserNotFoundError(userId);
+    }
+
+    if (!user.password) {
+      throw new NoPasswordAccountError(
+        'Account uses Google sign-in; use support to disable 2FA if needed',
+      );
     }
 
     const isValidPassword = await verifyPassword(password, user.password);

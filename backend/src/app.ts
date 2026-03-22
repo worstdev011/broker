@@ -27,6 +27,7 @@ const CSRF_SKIP_PATHS = new Set([
   '/api/auth/2fa',
   '/api/auth/logout',
   '/api/kyc/webhook',
+  '/api/wallet/webhook',
 ]);
 
 export async function createApp() {

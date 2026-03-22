@@ -1,7 +1,14 @@
 import { Prisma } from '@prisma/client';
 import { getPrismaClient } from '../../bootstrap/database.js';
 import type { TransactionRepository } from '../../ports/repositories/TransactionRepository.js';
-import type { Transaction, CreateTransactionDto, TransactionType, TransactionStatus, PaymentMethod } from '../../domain/finance/TransactionTypes.js';
+import type {
+  Transaction,
+  CreateTransactionDto,
+  TransactionUpdateDto,
+  TransactionType,
+  TransactionStatus,
+  PaymentMethod,
+} from '../../domain/finance/TransactionTypes.js';
 import { toNumber } from '../../shared/prismaHelpers.js';
 
 export class PrismaTransactionRepository implements TransactionRepository {
@@ -17,6 +24,9 @@ export class PrismaTransactionRepository implements TransactionRepository {
         currency: data.currency,
         paymentMethod: data.paymentMethod,
         provider: data.provider ?? null,
+        externalId: data.externalId ?? null,
+        externalStatus: data.externalStatus ?? null,
+        cardLastFour: data.cardLastFour ?? null,
       },
     });
     return this.toDomain(transaction);
@@ -27,6 +37,24 @@ export class PrismaTransactionRepository implements TransactionRepository {
     await prisma.transaction.update({
       where: { id: transactionId },
       data: { status: 'CONFIRMED', confirmedAt: new Date() },
+    });
+  }
+
+  async update(transactionId: string, data: TransactionUpdateDto): Promise<void> {
+    const prisma = getPrismaClient();
+    const prismaData: Record<string, unknown> = {};
+    if (data.status !== undefined) prismaData.status = data.status;
+    if (data.externalId !== undefined) prismaData.externalId = data.externalId;
+    if (data.externalStatus !== undefined) prismaData.externalStatus = data.externalStatus;
+    if (data.confirmedAt !== undefined) prismaData.confirmedAt = data.confirmedAt;
+    await prisma.transaction.update({
+      where: { id: transactionId },
+      data: prismaData as {
+        status?: TransactionStatus;
+        externalId?: string | null;
+        externalStatus?: string | null;
+        confirmedAt?: Date | null;
+      },
     });
   }
 
@@ -95,6 +123,9 @@ export class PrismaTransactionRepository implements TransactionRepository {
     currency: string;
     paymentMethod: string;
     provider: string | null;
+    externalId: string | null;
+    externalStatus: string | null;
+    cardLastFour: string | null;
     createdAt: Date;
     confirmedAt: Date | null;
   }): Transaction {
@@ -108,6 +139,9 @@ export class PrismaTransactionRepository implements TransactionRepository {
       currency: transaction.currency,
       paymentMethod: transaction.paymentMethod as PaymentMethod,
       provider: transaction.provider,
+      externalId: transaction.externalId,
+      externalStatus: transaction.externalStatus,
+      cardLastFour: transaction.cardLastFour,
       createdAt: transaction.createdAt,
       confirmedAt: transaction.confirmedAt,
     };

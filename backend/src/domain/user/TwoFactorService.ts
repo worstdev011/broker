@@ -1,6 +1,5 @@
 import { generateSecret as otplibGenerateSecret, generateURI, verify as otplibVerify } from 'otplib';
 import QRCode from 'qrcode';
-import { createHash, randomBytes } from 'crypto';
 import { logger } from '../../shared/logger.js';
 
 export class TwoFactorService {
@@ -32,25 +31,5 @@ export class TwoFactorService {
       logger.error({ err: error }, 'Failed to verify TOTP token');
       return false;
     }
-  }
-
-  generateBackupCodes(count = 8): string[] {
-    return Array.from({ length: count }, () =>
-      randomBytes(4).toString('hex').toUpperCase(),
-    );
-  }
-
-  hashBackupCode(code: string): string {
-    return createHash('sha256').update(code).digest('hex');
-  }
-
-  verifyBackupCode(code: string, hashedCodes: string[]): boolean {
-    const hashedCode = this.hashBackupCode(code);
-    return hashedCodes.includes(hashedCode);
-  }
-
-  removeBackupCode(code: string, hashedCodes: string[]): string[] {
-    const hashedCode = this.hashBackupCode(code);
-    return hashedCodes.filter((h) => h !== hashedCode);
   }
 }

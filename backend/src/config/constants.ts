@@ -44,10 +44,10 @@ export const REAL_DEFAULT_CURRENCY = 'UAH';
 
 // ─── Finance (Deposit / Withdraw) ────────────────────────────────────────────
 
-export const DEPOSIT_MIN_AMOUNT = 200;
-export const DEPOSIT_MAX_AMOUNT = 1_000;
-export const WITHDRAW_MIN_AMOUNT = 200;
-export const WITHDRAW_MAX_AMOUNT = 1_000;
+export const DEPOSIT_MIN_AMOUNT = 300;
+export const DEPOSIT_MAX_AMOUNT = 29_999;
+export const WITHDRAW_MIN_AMOUNT = 300;
+export const WITHDRAW_MAX_AMOUNT = 29_999;
 export const DEFAULT_FIAT_CURRENCY = 'UAH';
 
 // ─── Session ──────────────────────────────────────────────────────────────────

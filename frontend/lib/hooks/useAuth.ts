@@ -26,6 +26,7 @@ function getErrorMessage(error: unknown, fallback: string): string {
 interface User {
   id: string;
   email: string;
+  hasPassword?: boolean;
 }
 
 interface AuthState {

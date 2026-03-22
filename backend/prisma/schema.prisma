@@ -10,7 +10,8 @@ datasource db {
 model User {
   id        String   @id // 8-digit numeric ID, assigned at registration
   email     String   @unique
-  password  String
+  password  String? // null for Google-only accounts
+  googleId  String?  @unique
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -183,6 +184,12 @@ model Transaction {
 
   paymentMethod PaymentMethod
   provider      String?
+
+  /// ID операции на стороне BetaTransfer (и др. провайдеров)
+  externalId     String?
+  externalStatus String?
+  /// Только маска / последние 4 цифры карты вывода (полный PAN не храним)
+  cardLastFour   String?
 
   createdAt   DateTime  @default(now())
   confirmedAt DateTime?

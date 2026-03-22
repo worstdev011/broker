@@ -92,6 +92,7 @@ interface UserProfile {
   createdAt: string;
   updatedAt: string;
   twoFactorEnabled?: boolean;
+  hasPassword?: boolean;
 }
 
 const SIDEBAR_ITEMS = [

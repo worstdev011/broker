@@ -9,6 +9,11 @@ interface EnvConfig {
   NODE_ENV: 'development' | 'production' | 'test';
   COOKIE_SECRET: string;
   FRONTEND_URL: string;
+  /** Default locale segment for server-side redirects (matches next-intl default, e.g. `ru`) */
+  FRONTEND_DEFAULT_LOCALE: string;
+  GOOGLE_CLIENT_ID?: string;
+  GOOGLE_CLIENT_SECRET?: string;
+  GOOGLE_REDIRECT_URI?: string;
   XCHANGE_API_KEY: string;
   MAX_UPLOAD_SIZE: number;
   DATABASE_POOL_SIZE: number;
@@ -19,6 +24,9 @@ interface EnvConfig {
   SUMSUB_APP_TOKEN: string;
   SUMSUB_SECRET_KEY: string;
   WEBHOOK_SECRET_KEY: string;
+  BETATRANSFER_PUBLIC_KEY?: string;
+  BETATRANSFER_SECRET_KEY?: string;
+  BETATRANSFER_WEBHOOK_URL?: string;
 }
 
 const DEFAULT_MAX_UPLOAD_SIZE = 5 * 1024 * 1024;
@@ -113,11 +121,20 @@ function validateEnv(): EnvConfig {
   const sumsubSecretKey = process.env.SUMSUB_SECRET_KEY?.trim() ?? '';
   const webhookSecretKey = process.env.WEBHOOK_SECRET_KEY?.trim() ?? '';
 
+  const betaTransferPublicKey = process.env.BETATRANSFER_PUBLIC_KEY?.trim() || undefined;
+  const betaTransferSecretKey = process.env.BETATRANSFER_SECRET_KEY?.trim() || undefined;
+  const betaTransferWebhookUrl = process.env.BETATRANSFER_WEBHOOK_URL?.trim() || undefined;
+
   if (!sumsubAppToken || !sumsubSecretKey || !webhookSecretKey) {
     console.warn(
       '[env] Sumsub KYC vars (SUMSUB_APP_TOKEN, SUMSUB_SECRET_KEY, WEBHOOK_SECRET_KEY) are not set — KYC endpoints will fail at runtime.',
     );
   }
+
+  const googleClientId = process.env.GOOGLE_CLIENT_ID?.trim() || undefined;
+  const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim() || undefined;
+  const googleRedirectUri = process.env.GOOGLE_REDIRECT_URI?.trim() || undefined;
+  const frontendDefaultLocale = process.env.FRONTEND_DEFAULT_LOCALE?.trim() || 'ru';
 
   return {
     PORT: port,
@@ -129,6 +146,10 @@ function validateEnv(): EnvConfig {
     FRONTEND_URL: isProduction
       ? process.env.FRONTEND_URL!.trim()
       : (process.env.FRONTEND_URL?.trim() || DEV_FRONTEND_URL),
+    FRONTEND_DEFAULT_LOCALE: frontendDefaultLocale,
+    GOOGLE_CLIENT_ID: googleClientId,
+    GOOGLE_CLIENT_SECRET: googleClientSecret,
+    GOOGLE_REDIRECT_URI: googleRedirectUri,
     XCHANGE_API_KEY: isProduction
       ? process.env.XCHANGE_API_KEY!.trim()
       : (process.env.XCHANGE_API_KEY?.trim() || ''),
@@ -141,6 +162,9 @@ function validateEnv(): EnvConfig {
     SUMSUB_APP_TOKEN: sumsubAppToken,
     SUMSUB_SECRET_KEY: sumsubSecretKey,
     WEBHOOK_SECRET_KEY: webhookSecretKey,
+    BETATRANSFER_PUBLIC_KEY: betaTransferPublicKey,
+    BETATRANSFER_SECRET_KEY: betaTransferSecretKey,
+    BETATRANSFER_WEBHOOK_URL: betaTransferWebhookUrl,
   };
 }
 

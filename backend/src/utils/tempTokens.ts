@@ -1,49 +1,27 @@
 import { randomBytes } from 'crypto';
+import { getRedisClient } from '../bootstrap/redis.js';
 
-interface TempTokenData {
-  userId: string;
-  expiresAt: number;
-}
+const TEMP_TOKEN_TTL_SEC = 5 * 60; // 5 minutes
+const PREFIX = 'temp_token:';
 
-const MAX_TOKENS = 10_000;
-const TOKEN_TTL_MS = 5 * 60 * 1_000; // 5 minutes
-
-const tempTokens = new Map<string, TempTokenData>();
-
-setInterval(() => {
-  const now = Date.now();
-  for (const [token, data] of tempTokens.entries()) {
-    if (data.expiresAt < now) {
-      tempTokens.delete(token);
-    }
-  }
-}, 60_000);
-
-export function generateTempToken(userId: string): string {
-  if (tempTokens.size >= MAX_TOKENS) {
-    const oldest = tempTokens.keys().next().value;
-    if (oldest) tempTokens.delete(oldest);
-  }
-
+/**
+ * Create a one-time login step-2 token (2FA). Stored in Redis for multi-instance safety.
+ */
+export async function createTempToken(userId: string): Promise<string> {
   const token = randomBytes(32).toString('hex');
-
-  tempTokens.set(token, {
-    userId,
-    expiresAt: Date.now() + TOKEN_TTL_MS,
-  });
-
+  const redis = getRedisClient();
+  await redis.set(`${PREFIX}${token}`, userId, 'EX', TEMP_TOKEN_TTL_SEC);
   return token;
 }
 
-export function verifyTempToken(token: string): string | null {
-  const data = tempTokens.get(token);
-  if (!data) return null;
-
-  if (data.expiresAt < Date.now()) {
-    tempTokens.delete(token);
-    return null;
-  }
-
-  tempTokens.delete(token);
-  return data.userId;
+/**
+ * Validate and consume a temp token. Returns userId or null if missing/expired.
+ */
+export async function verifyTempToken(token: string): Promise<string | null> {
+  const redis = getRedisClient();
+  const key = `${PREFIX}${token}`;
+  const userId = await redis.get(key);
+  if (!userId) return null;
+  await redis.del(key);
+  return userId;
 }

@@ -167,5 +167,5 @@ export const authApi = {
   },
 
   me: () =>
-    apiRequest<{ user: { id: string; email: string } }>('/api/auth/me'),
+    apiRequest<{ user: { id: string; email: string; hasPassword?: boolean } }>('/api/auth/me'),
 };

@@ -33,6 +33,19 @@ export class PrismaUserRepository implements UserRepository {
     return this.mapUser(user);
   }
 
+  async findByGoogleId(googleId: string): Promise<User | null> {
+    const prisma = getPrismaClient();
+    const user = await prisma.user.findUnique({
+      where: { googleId },
+    });
+
+    if (!user) {
+      return null;
+    }
+
+    return this.mapUser(user);
+  }
+
   async existsById(id: string): Promise<boolean> {
     const prisma = getPrismaClient();
     const count = await prisma.user.count({ where: { id } });
@@ -42,7 +55,8 @@ export class PrismaUserRepository implements UserRepository {
   private mapUser(user: {
     id: string;
     email: string;
-    password: string;
+    password: string | null;
+    googleId: string | null;
     createdAt: Date;
     updatedAt: Date;
     firstName: string | null;
@@ -63,6 +77,7 @@ export class PrismaUserRepository implements UserRepository {
       id: user.id,
       email: user.email,
       password: user.password,
+      googleId: user.googleId,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
       firstName: user.firstName,
@@ -87,11 +102,43 @@ export class PrismaUserRepository implements UserRepository {
       data: {
         id: userData.id,
         email: userData.email,
-        password: userData.password,
+        password: userData.password ?? null,
+        googleId: userData.googleId ?? null,
       },
     });
 
     return this.mapUser(user);
+  }
+
+  async createGoogleUser(data: {
+    id: string;
+    email: string;
+    googleId: string;
+    firstName?: string | null;
+    lastName?: string | null;
+  }): Promise<User> {
+    const prisma = getPrismaClient();
+    const user = await prisma.user.create({
+      data: {
+        id: data.id,
+        email: data.email,
+        password: null,
+        googleId: data.googleId,
+        firstName: data.firstName ?? null,
+        lastName: data.lastName ?? null,
+        twoFactorBackupCodes: [],
+      },
+    });
+
+    return this.mapUser(user);
+  }
+
+  async linkGoogleId(userId: string, googleId: string): Promise<void> {
+    const prisma = getPrismaClient();
+    await prisma.user.update({
+      where: { id: userId },
+      data: { googleId },
+    });
   }
 
   async updateProfile(userId: string, data: UpdateProfileData): Promise<User> {
@@ -151,17 +198,20 @@ export class PrismaUserRepository implements UserRepository {
     const prisma = getPrismaClient();
     await prisma.user.update({
       where: { id: userId },
-      data: { twoFactorSecret: secret },
+      data: {
+        twoFactorSecret: secret,
+        ...(secret ? { twoFactorBackupCodes: [] } : {}),
+      },
     });
   }
 
-  async enableTwoFactor(userId: string, backupCodes: string[]): Promise<void> {
+  async enableTwoFactor(userId: string): Promise<void> {
     const prisma = getPrismaClient();
     await prisma.user.update({
       where: { id: userId },
       data: {
         twoFactorEnabled: true,
-        twoFactorBackupCodes: backupCodes,
+        twoFactorBackupCodes: [],
       },
     });
   }
@@ -175,14 +225,6 @@ export class PrismaUserRepository implements UserRepository {
         twoFactorSecret: null,
         twoFactorBackupCodes: [],
       },
-    });
-  }
-
-  async updateBackupCodes(userId: string, backupCodes: string[]): Promise<void> {
-    const prisma = getPrismaClient();
-    await prisma.user.update({
-      where: { id: userId },
-      data: { twoFactorBackupCodes: backupCodes },
     });
   }
 

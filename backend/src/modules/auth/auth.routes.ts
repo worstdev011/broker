@@ -23,6 +23,12 @@ export async function registerAuthRoutes(app: FastifyInstance) {
     return { csrfToken: token };
   });
 
+  app.get('/api/auth/google', (request, reply) => authController.googleOAuthStart(request, reply));
+
+  app.get('/api/auth/google/callback', (request, reply) =>
+    authController.googleOAuthCallback(request, reply),
+  );
+
   app.post<{ Body: RegisterInput }>('/api/auth/register', {
     schema: registerSchema,
     preHandler: [validateBody(registerZodSchema)],

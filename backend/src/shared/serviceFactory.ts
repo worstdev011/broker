@@ -20,6 +20,8 @@ import { TradeService } from '../domain/trades/TradeService.js';
 import { UserService } from '../domain/user/UserService.js';
 import { DepositService } from '../domain/finance/DepositService.js';
 import { WithdrawService } from '../domain/finance/WithdrawService.js';
+import { TwoFactorService } from '../domain/user/TwoFactorService.js';
+import { getBetaTransferService } from '../services/BetaTransferService.js';
 import { TerminalSnapshotAdapter } from '../infrastructure/terminal/TerminalSnapshotAdapter.js';
 import { TerminalSnapshotService } from '../domain/terminal/TerminalSnapshotService.js';
 import type { PriceProvider } from '../ports/pricing/PriceProvider.js';
@@ -127,6 +129,7 @@ export function getDepositService() {
   return (_depositService ??= new DepositService(
     getAccountRepository(),
     getTransactionRepository(),
+    () => getBetaTransferService(),
   ));
 }
 
@@ -134,6 +137,9 @@ export function getWithdrawService() {
   return (_withdrawService ??= new WithdrawService(
     getAccountRepository(),
     getTransactionRepository(),
+    getUserRepository(),
+    new TwoFactorService(),
+    () => getBetaTransferService(),
   ));
 }
 

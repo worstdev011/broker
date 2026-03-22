@@ -24,6 +24,14 @@ export class InvalidPasswordError extends AppError {
   }
 }
 
+export class NoPasswordAccountError extends AppError {
+  constructor(
+    message = 'This account uses Google sign-in; password is not set for this action',
+  ) {
+    super(400, message, 'NO_PASSWORD');
+  }
+}
+
 export class UserSessionNotFoundError extends AppError {
   constructor(sessionId: string) {
     super(404, `Session ${sessionId} not found`, 'SESSION_NOT_FOUND');

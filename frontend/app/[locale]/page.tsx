@@ -2,7 +2,7 @@
 
 import Image from 'next/image'
 import { Suspense, useState, useEffect, FormEvent, ReactNode, ChangeEvent } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { usePathname, useSearchParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { Link, useRouter } from '@/components/navigation'
 import ReactCountryFlag from 'react-country-flag'
@@ -150,8 +150,9 @@ function FloatInput({ id, type = 'text', value, onChange, label, required, minLe
 
 function HomeContent() {
   const router = useRouter()
+  const pathname = usePathname()
   const searchParams = useSearchParams()
-  const { user, isAuthenticated, isLoading, login, register } = useAuth()
+  const { user, isAuthenticated, isLoading, login, register, verify2FA } = useAuth()
   const t = useTranslations('home')
   const ta = useTranslations('auth')
   const tc = useTranslations('common')
@@ -172,6 +173,9 @@ function HomeContent() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showForgotPassword, setShowForgotPassword] = useState(false)
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState('')
+  const [loginAwaiting2FA, setLoginAwaiting2FA] = useState(false)
+  const [loginTempToken, setLoginTempToken] = useState<string | null>(null)
+  const [twoFACode, setTwoFACode] = useState('')
 
   useEffect(() => {
     const id = requestAnimationFrame(() => setHeroReady(true))
@@ -214,6 +218,55 @@ function HomeContent() {
   }, [searchParams, router])
 
   useEffect(() => {
+    const err = searchParams.get('error')
+    if (err?.startsWith('google_')) {
+      const messages: Record<string, string> = {
+        google_denied: ta('google_error_denied'),
+        google_invalid_state: ta('google_error_invalid_state'),
+        google_invalid_callback: ta('google_error_invalid_callback'),
+        google_token_failed: ta('google_error_token_failed'),
+        google_no_id_token: ta('google_error_no_id_token'),
+        google_bad_token: ta('google_error_bad_token'),
+        google_no_email: ta('google_error_no_email'),
+        google_not_configured: ta('google_error_not_configured'),
+        google_login_failed: ta('google_error_login_failed'),
+      }
+      toast(messages[err] ?? ta('google_error_generic'), 'error')
+      router.replace(pathname || '/')
+      return
+    }
+
+    if (searchParams.get('google2fa') === '1') {
+      const tempToken = searchParams.get('tempToken')
+      if (tempToken) {
+        setShowRegisterPanel(true)
+        setPanelMode('login')
+        setLoginAwaiting2FA(true)
+        setLoginTempToken(tempToken)
+        setTwoFACode('')
+        setError('')
+        router.replace(pathname || '/')
+      }
+    }
+  }, [searchParams, router, pathname, ta])
+
+  useEffect(() => {
+    if (!showRegisterPanel) {
+      setLoginAwaiting2FA(false)
+      setLoginTempToken(null)
+      setTwoFACode('')
+    }
+  }, [showRegisterPanel])
+
+  useEffect(() => {
+    if (panelMode === 'register') {
+      setLoginAwaiting2FA(false)
+      setLoginTempToken(null)
+      setTwoFACode('')
+    }
+  }, [panelMode])
+
+  useEffect(() => {
     if (!showRegisterPanel) return
     const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth
     const header = document.querySelector('header') as HTMLElement | null
@@ -227,9 +280,40 @@ function HomeContent() {
     }
   }, [showRegisterPanel])
 
+  const resetLogin2FAStep = () => {
+    setLoginAwaiting2FA(false)
+    setLoginTempToken(null)
+    setTwoFACode('')
+    setError('')
+  }
+
+  const handleGoogleLogin = () => {
+    const prefix = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '')
+    window.location.href = prefix ? `${prefix}/api/auth/google` : '/api/auth/google'
+  }
+
   const handleFormSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setError('')
+
+    if (panelMode === 'login' && loginAwaiting2FA && loginTempToken) {
+      if (!/^\d{6}$/.test(twoFACode)) {
+        setError(ta('twofa_code_invalid'))
+        return
+      }
+      setIsSubmitting(true)
+      const v = await verify2FA(loginTempToken, twoFACode)
+      if (v.success) {
+        resetLogin2FAStep()
+        setShowRegisterPanel(false)
+        router.push('/terminal')
+      } else {
+        setError(v.error || ta('login_error'))
+      }
+      setIsSubmitting(false)
+      return
+    }
+
     setIsSubmitting(true)
 
     if (panelMode === 'register') {
@@ -264,10 +348,15 @@ function HomeContent() {
       if (result.success) {
         setShowRegisterPanel(false)
         router.push('/terminal')
+      } else if ('requires2FA' in result && result.requires2FA && result.tempToken) {
+        setLoginAwaiting2FA(true)
+        setLoginTempToken(result.tempToken)
+        setTwoFACode('')
+        setError('')
       } else {
         setError(result.error || ta('login_error'))
-        setIsSubmitting(false)
       }
+      setIsSubmitting(false)
     }
   }
 
@@ -1161,8 +1250,51 @@ function HomeContent() {
                 </div>
               ) : (
               <form className="space-y-4" onSubmit={handleFormSubmit}>
+                {panelMode === 'login' && loginAwaiting2FA ? (
+                  <>
+                    <div className="space-y-2 pb-1">
+                      <h3 className="text-base font-semibold text-white">{ta('twofa_title')}</h3>
+                      <p className="text-xs text-gray-400 leading-relaxed">{ta('twofa_desc')}</p>
+                    </div>
+                    <p className="text-sm text-gray-300 truncate border-b border-white/10 pb-2" title={email}>
+                      {email}
+                    </p>
+                    <div className="pt-1">
+                      <input
+                        id="panel-2fa-code"
+                        type="text"
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
+                        maxLength={6}
+                        value={twoFACode}
+                        onChange={(e) => setTwoFACode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                        placeholder="000000"
+                        disabled={isSubmitting}
+                        aria-label={ta('twofa_title')}
+                        className="w-full px-3 py-3 rounded-xl bg-white/5 border border-white/15 text-white text-center text-xl tracking-[0.35em] font-mono placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-[#3347ff]/50"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={resetLogin2FAStep}
+                      disabled={isSubmitting}
+                      className="w-full py-2 rounded-xl border border-white/15 text-gray-300 text-sm font-medium hover:bg-white/5 transition-colors disabled:opacity-50"
+                    >
+                      {ta('twofa_back')}
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSubmitting || twoFACode.length !== 6}
+                      className="w-full py-2 rounded-xl btn-accent text-white font-semibold active:scale-[0.99] transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-[#3347ff]/20"
+                    >
+                      {isSubmitting ? ta('twofa_verifying') : ta('twofa_submit')}
+                    </button>
+                  </>
+                ) : (
+                  <>
                 <button
                   type="button"
+                  onClick={handleGoogleLogin}
                   className="w-full flex items-center justify-center gap-2 py-2 rounded-xl bg-white/8 border border-white/15 text-white text-sm font-medium hover:bg-white/12 transition-colors"
                 >
                   <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
@@ -1264,6 +1396,8 @@ function HomeContent() {
                     : (panelMode === 'login' ? tc('login') : ta('register_btn'))
                   }
                 </button>
+                  </>
+                )}
               </form>
               )}
             </div>

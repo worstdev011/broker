@@ -31,6 +31,12 @@ describe('verifyPassword', () => {
     const result = await verifyPassword('WrongPassword', hash);
     expect(result).toBe(false);
   });
+
+  it('should return false when hash is null or empty', async () => {
+    expect(await verifyPassword('x', null)).toBe(false);
+    expect(await verifyPassword('x', undefined)).toBe(false);
+    expect(await verifyPassword('x', '')).toBe(false);
+  });
 });
 
 describe('hashToken', () => {

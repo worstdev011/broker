@@ -37,6 +37,9 @@ export interface Transaction {
   currency: string;
   paymentMethod: PaymentMethod;
   provider: string | null;
+  externalId: string | null;
+  externalStatus: string | null;
+  cardLastFour: string | null;
   createdAt: Date;
   confirmedAt: Date | null;
 }
@@ -50,4 +53,14 @@ export interface CreateTransactionDto {
   currency: string;
   paymentMethod: PaymentMethod;
   provider?: string | null;
+  externalId?: string | null;
+  externalStatus?: string | null;
+  cardLastFour?: string | null;
+}
+
+export interface TransactionUpdateDto {
+  status?: TransactionStatus;
+  externalId?: string | null;
+  externalStatus?: string | null;
+  confirmedAt?: Date | null;
 }

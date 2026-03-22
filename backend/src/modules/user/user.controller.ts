@@ -130,7 +130,7 @@ export class UserController {
     const profile = await this.userService.getProfile(userId);
     const result = await this.userService.enable2FA(userId, profile.email);
 
-    return reply.send({ qrCode: result.qrCode, backupCodes: result.backupCodes });
+    return reply.send({ qrCode: result.qrCode });
   }
 
   async verify2FA(
@@ -142,7 +142,7 @@ export class UserController {
 
     await this.userService.verify2FA(userId, code);
 
-    return reply.send({ success: true, message: '2FA enabled successfully' });
+    return reply.send({ success: true, message: 'Two-factor authentication enabled' });
   }
 
   async disable2FA(
