@@ -1533,6 +1533,19 @@ export function TerminalPageContent({ defaultAccount = 'real' }: TerminalPagePro
               {/* Amount Input - прямой ввод + кнопка калькулятора */}
               <div className="w-full flex items-center">
                 <span className="text-white/50 shrink-0 text-sm leading-none pl-3">{getCurrencyIcon(displayCurrency)}</span>
+                {/* Мобилка: не input — иначе фокус открывает системную клавиатуру; сумма только через калькулятор */}
+                <button
+                  type="button"
+                  onClick={() => setShowAmountModal(true)}
+                  className="md:hidden flex-1 min-w-0 px-2 py-3 bg-transparent text-left text-sm font-medium text-white outline-none focus-visible:ring-2 focus-visible:ring-[#3347ff]/50 rounded-sm"
+                  aria-label="Сумма сделки, открыть калькулятор"
+                >
+                  {amount ? (
+                    <span>{amount}</span>
+                  ) : (
+                    <span className="text-white/30">100</span>
+                  )}
+                </button>
                 <input
                   type="text"
                   inputMode="decimal"
@@ -1561,7 +1574,7 @@ export function TerminalPageContent({ defaultAccount = 'real' }: TerminalPagePro
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') e.currentTarget.blur();
                   }}
-                  className="flex-1 min-w-0 px-2 py-3 bg-transparent text-white text-sm font-medium outline-none placeholder:text-white/30"
+                  className="hidden md:block flex-1 min-w-0 px-2 py-3 bg-transparent text-white text-sm font-medium outline-none placeholder:text-white/30"
                   placeholder="100"
                   aria-label="Сумма сделки"
                 />
