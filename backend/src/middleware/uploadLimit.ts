@@ -1,12 +1,12 @@
 /**
- * Upload size check — reject oversized requests before multipart parsing
+ * Upload size check - reject oversized requests before multipart parsing
  * Saves bandwidth and CPU. Content-Length is checked against MAX_UPLOAD_SIZE + form overhead.
  */
 
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { env } from '../config/env.js';
 
-/** Form overhead (boundary, field names, etc.) — 1MB */
+/** Form overhead (boundary, field names, etc.) - 1MB */
 const FORM_OVERHEAD = 1024 * 1024;
 
 export async function uploadSizeLimit(request: FastifyRequest, reply: FastifyReply): Promise<void> {

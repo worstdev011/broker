@@ -7,16 +7,16 @@
 
 ## Что уже сделано (НЕ трогай)
 
-- `i18n/routing.ts` — конфиг локалей
-- `i18n/request.ts` — загрузка сообщений
-- `middleware.ts` — определение локали
-- `components/navigation.ts` — locale-aware Link/useRouter/usePathname
-- `app/layout.tsx` — root layout
-- `app/[locale]/layout.tsx` — locale layout с NextIntlClientProvider
-- `messages/ru.json`, `messages/en.json`, `messages/ua.json` — файлы переводов (структура создана)
-- `components/Footer.tsx` — ПОЛНОСТЬЮ переведён (образец)
-- `components/SiteHeader.tsx` — ПОЛНОСТЬЮ переведён (образец)
-- `components/AppHeader.tsx` — ПОЛНОСТЬЮ переведён (образец)
+- `i18n/routing.ts` - конфиг локалей
+- `i18n/request.ts` - загрузка сообщений
+- `middleware.ts` - определение локали
+- `components/navigation.ts` - locale-aware Link/useRouter/usePathname
+- `app/layout.tsx` - root layout
+- `app/[locale]/layout.tsx` - locale layout с NextIntlClientProvider
+- `messages/ru.json`, `messages/en.json`, `messages/ua.json` - файлы переводов (структура создана)
+- `components/Footer.tsx` - ПОЛНОСТЬЮ переведён (образец)
+- `components/SiteHeader.tsx` - ПОЛНОСТЬЮ переведён (образец)
+- `components/AppHeader.tsx` - ПОЛНОСТЬЮ переведён (образец)
 
 ## Что нужно сделать
 
@@ -75,30 +75,30 @@ export default function Footer() {
 
 ## Правила
 
-1. **`'use client'`** — ОБЯЗАТЕЛЕН в файлах, использующих `useTranslations`. Если его нет — добавь.
+1. **`'use client'`** - ОБЯЗАТЕЛЕН в файлах, использующих `useTranslations`. Если его нет - добавь.
 2. **Неймспейсы**: используй существующие разделы из `messages/ru.json`:
-   - `common` — общие строки (кнопки, лейблы, переиспользуемые)
-   - `nav` — навигация
-   - `auth` — авторизация/регистрация
-   - `home` — главная страница
-   - `about` — страница "О компании"
-   - `footer` — футер
-   - `profile` — профиль
-   - `terminal` — терминал
-   - `trade` — торговля
-   - `wallet` — кошелёк
-   - `assets` — активы
-   - `education` — обучение
-   - `reviews` — отзывы
-   - `start` — "Как начать"
-   - `policy` — политики
-   - `metadata` — SEO метаданные
+   - `common` - общие строки (кнопки, лейблы, переиспользуемые)
+   - `nav` - навигация
+   - `auth` - авторизация/регистрация
+   - `home` - главная страница
+   - `about` - страница "О компании"
+   - `footer` - футер
+   - `profile` - профиль
+   - `terminal` - терминал
+   - `trade` - торговля
+   - `wallet` - кошелёк
+   - `assets` - активы
+   - `education` - обучение
+   - `reviews` - отзывы
+   - `start` - "Как начать"
+   - `policy` - политики
+   - `metadata` - SEO метаданные
 3. **Ключи**: snake_case, описательные. Пример: `hero_title`, `feature1_desc`, `cta_button`
 4. **НЕ трогай**: имена классов CSS, href-ы, Image src, alt для картинок (если это не текст для пользователя)
 5. **Aria-label**: тоже переводи через `t()`
 6. **Placeholder**: тоже переводи
 7. **Строки ошибок** (alert, setError): переводи через `t()`
-8. **Не ломай** JSX-выражения и интерполяцию — если текст содержит `{переменная}`, используй:
+8. **Не ломай** JSX-выражения и интерполяцию - если текст содержит `{переменная}`, используй:
    ```tsx
    t('key', { variable: value })
    ```
@@ -107,22 +107,22 @@ export default function Footer() {
 ## Файлы для обработки (в порядке приоритета)
 
 ### Страницы (app/[locale]/):
-1. `app/[locale]/page.tsx` — главная (МНОГО текста, формы авторизации)
-2. `app/[locale]/about/page.tsx` — о компании
-3. `app/[locale]/start/page.tsx` — как начать
-4. `app/[locale]/assets/page.tsx` — активы
-5. `app/[locale]/education/page.tsx` — обучение
-6. `app/[locale]/reviews/page.tsx` — отзывы
-7. `app/[locale]/policy/terms/page.tsx` — условия
-8. `app/[locale]/policy/privacy/page.tsx` — конфиденциальность
-9. `app/[locale]/policy/risks/page.tsx` — риски
-10. `app/[locale]/policy/aml-kyc/page.tsx` — AML/KYC
-11. `app/[locale]/terminal/page.tsx` — терминал (ОГРОМНЫЙ файл, много UI текстов)
-12. `app/[locale]/profile/page.tsx` — профиль
-13. `app/[locale]/trade/page.tsx` — торговля
-14. `app/[locale]/wallet/page.tsx` — кошелёк
-15. `app/[locale]/not-found.tsx` — 404
-16. `app/[locale]/error.tsx` — ошибки
+1. `app/[locale]/page.tsx` - главная (МНОГО текста, формы авторизации)
+2. `app/[locale]/about/page.tsx` - о компании
+3. `app/[locale]/start/page.tsx` - как начать
+4. `app/[locale]/assets/page.tsx` - активы
+5. `app/[locale]/education/page.tsx` - обучение
+6. `app/[locale]/reviews/page.tsx` - отзывы
+7. `app/[locale]/policy/terms/page.tsx` - условия
+8. `app/[locale]/policy/privacy/page.tsx` - конфиденциальность
+9. `app/[locale]/policy/risks/page.tsx` - риски
+10. `app/[locale]/policy/aml-kyc/page.tsx` - AML/KYC
+11. `app/[locale]/terminal/page.tsx` - терминал (ОГРОМНЫЙ файл, много UI текстов)
+12. `app/[locale]/profile/page.tsx` - профиль
+13. `app/[locale]/trade/page.tsx` - торговля
+14. `app/[locale]/wallet/page.tsx` - кошелёк
+15. `app/[locale]/not-found.tsx` - 404
+16. `app/[locale]/error.tsx` - ошибки
 17. `app/[locale]/trade/error.tsx`
 18. `app/[locale]/profile/error.tsx`
 19. `app/[locale]/terminal/error.tsx`
@@ -144,7 +144,7 @@ export default function Footer() {
 33. `components/auth/AuthGuard.tsx`
 
 ### Вложенные layouts (SEO metadata):
-34. Все `layout.tsx` внутри `app/[locale]/*/` — заменить статические `export const metadata` на `generateMetadata` с переводами (по образцу `app/[locale]/layout.tsx`)
+34. Все `layout.tsx` внутри `app/[locale]/*/` - заменить статические `export const metadata` на `generateMetadata` с переводами (по образцу `app/[locale]/layout.tsx`)
 
 ## Проверка
 
@@ -152,11 +152,11 @@ export default function Footer() {
 ```bash
 npx next build
 ```
-Если билд проходит — файл обработан корректно.
+Если билд проходит - файл обработан корректно.
 
 ## Как добавить новый язык потом
 
 1. Создать `messages/de.json` (скопировать `ru.json`, перевести)
 2. Добавить `'de'` в массив `locales` в `i18n/routing.ts`
 3. Обновить matcher в `middleware.ts`: `'/(ru|en|ua|de)/:path*'`
-4. Всё — маршруты `/de/*` появятся автоматически
+4. Всё - маршруты `/de/*` появятся автоматически

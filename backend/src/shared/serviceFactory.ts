@@ -1,6 +1,6 @@
 /**
  * Centralized service/repository factory.
- * Singleton instances — created once, shared across all route modules.
+ * Singleton instances - created once, shared across all route modules.
  * Replaces duplicated `new PrismaXxxRepository()` in every route file.
  */
 

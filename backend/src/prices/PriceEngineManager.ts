@@ -170,7 +170,7 @@ export class PriceEngineManager {
 
   /**
    * Returns active (in-progress) candles for all timeframes.
-   * Reads from in-memory state — always consistent, no async lag.
+   * Reads from in-memory state - always consistent, no async lag.
    */
   getActiveCandles(instrumentId: string): Map<string, Candle> {
     const result = new Map<string, Candle>();

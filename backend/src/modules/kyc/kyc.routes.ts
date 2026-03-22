@@ -1,8 +1,8 @@
 /**
  * KYC routes.
  *
- * /api/kyc/init    — create applicant + issue WebSDK token (CSRF-protected, auth optional)
- * /api/kyc/webhook — receive Sumsub review events (CSRF skipped, raw body captured for HMAC)
+ * /api/kyc/init    - create applicant + issue WebSDK token (CSRF-protected, auth optional)
+ * /api/kyc/webhook - receive Sumsub review events (CSRF skipped, raw body captured for HMAC)
  */
 
 import type { FastifyInstance, FastifyRequest } from 'fastify';

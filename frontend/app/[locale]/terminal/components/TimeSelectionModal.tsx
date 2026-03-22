@@ -98,7 +98,7 @@ export function TimeSelectionModal({
 
   return (
     <div className="flex flex-col w-full">
-      {/* ── Дисплей и шаги — как блок суммы в AmountCalculatorModal ── */}
+      {/* ── Дисплей и шаги - как блок суммы в AmountCalculatorModal ── */}
       <div className="px-3 pt-3 pb-2">
         <div className="flex items-center justify-center gap-0.5">
           <ColUnit value={h} onUp={() => adjust('h', 1)} onDown={() => adjust('h', -1)} />
@@ -110,7 +110,7 @@ export function TimeSelectionModal({
         <div className="text-[11px] text-white/35 text-center mt-1">от 5 сек до 5 мин</div>
       </div>
 
-      {/* ── Пресеты — как секция «Калькулятор» ── */}
+      {/* ── Пресеты - как секция «Калькулятор» ── */}
       <div className="border-t border-white/[0.07]">
         <div className="w-full px-3 py-1.5 flex items-center">
           <span className="text-[11px] font-semibold uppercase tracking-wider text-white/40">Интервалы</span>

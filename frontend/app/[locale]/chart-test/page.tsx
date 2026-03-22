@@ -4,8 +4,8 @@ import { useRef, useEffect, useState, useCallback } from 'react';
 import { api } from '@/lib/api/api';
 
 // ═══════════════════════════════════════════════════════════════════════
-// PURE LINE CHART — "Committed Trail" architecture
-// Standalone page with its own WebSocket — no shared hook dependencies.
+// PURE LINE CHART - "Committed Trail" architecture
+// Standalone page with its own WebSocket - no shared hook dependencies.
 // ═══════════════════════════════════════════════════════════════════════
 
 interface Point { time: number; price: number; }
@@ -361,7 +361,7 @@ function draw(
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// React component — standalone WebSocket
+// React component - standalone WebSocket
 // ═══════════════════════════════════════════════════════════════════════
 
 export default function ChartTestPage() {

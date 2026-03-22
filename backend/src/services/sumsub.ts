@@ -89,7 +89,7 @@ export interface SumsubApplicant {
 
 /**
  * Create a new applicant for the given user.
- * Throws SumsubApiError(409) if the applicant already exists — callers should handle this.
+ * Throws SumsubApiError(409) if the applicant already exists - callers should handle this.
  */
 export async function createApplicant(externalUserId: string): Promise<SumsubApplicant> {
   const path = `/resources/applicants?levelName=${LEVEL_NAME}`;

@@ -23,7 +23,7 @@ export function SecuritySection({ profile, onProfileUpdate }: SecuritySectionPro
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [passwordSuccess, setPasswordSuccess] = useState(false);
 
-  // 2FA: idle | show_qr (после enable) | disabling не нужен отдельно — отключение в форме на той же вкладке
+  // 2FA: idle | show_qr (после enable) | disabling не нужен отдельно - отключение в форме на той же вкладке
   const [step2FA, setStep2FA] = useState<'idle' | 'show_qr'>('idle');
   const [qrCode, setQrCode] = useState<string | null>(null);
   const [verifyCode, setVerifyCode] = useState('');
@@ -243,7 +243,7 @@ export function SecuritySection({ profile, onProfileUpdate }: SecuritySectionPro
             </p>
             {profile?.hasPassword === false ? (
               <p className="text-sm text-amber-400/90 max-w-xl">
-                Аккаунт без пароля (вход через Google). Отключение 2FA с паролем недоступно — обратитесь в поддержку при необходимости.
+                Аккаунт без пароля (вход через Google). Отключение 2FA с паролем недоступно - обратитесь в поддержку при необходимости.
               </p>
             ) : (
               <form onSubmit={handleDisable2FA} className="w-full">
@@ -340,7 +340,7 @@ export function SecuritySection({ profile, onProfileUpdate }: SecuritySectionPro
                 disabled={enable2FALoading}
                 className="w-full sm:w-auto px-6 py-3 rounded-xl bg-[#3347ff] hover:bg-[#3347ff]/90 text-white text-sm font-medium uppercase tracking-wider transition-colors disabled:opacity-50"
               >
-                {enable2FALoading ? 'Загрузка...' : 'Подключить Google Authenticator'}
+                {enable2FALoading ? 'Загрузка...' : 'Подключить аутентификатор'}
               </button>
             </div>
           </div>

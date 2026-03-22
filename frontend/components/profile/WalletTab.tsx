@@ -61,15 +61,15 @@ const WITHDRAW_PAYMENT_METHODS = PAYMENT_METHODS.filter((m) =>
 const MIN_AMOUNT_UAH = 300;
 const MAX_AMOUNT_UAH = 29_999;
 
-/** Пополнение через BetaTransfer: только карта UAH */
-const BETATRANSFER_DEPOSIT_METHODS = PAYMENT_METHODS.filter((m) => m.id === 'CARD').map((m) => ({
+/** Доступное пополнение: карта UAH */
+const CARD_DEPOSIT_METHODS_UAH = PAYMENT_METHODS.filter((m) => m.id === 'CARD').map((m) => ({
   ...m,
   minAmount: MIN_AMOUNT_UAH,
   maxAmount: MAX_AMOUNT_UAH,
 }));
 
-/** Вывод через BetaTransfer: только карта UAH */
-const BETATRANSFER_WITHDRAW_METHODS = WITHDRAW_PAYMENT_METHODS.filter((m) => m.id === 'CARD').map((m) => ({
+/** Доступный вывод: карта UAH */
+const CARD_WITHDRAW_METHODS_UAH = WITHDRAW_PAYMENT_METHODS.filter((m) => m.id === 'CARD').map((m) => ({
   ...m,
   minAmount: MIN_AMOUNT_UAH,
   maxAmount: MAX_AMOUNT_UAH,
@@ -473,8 +473,8 @@ export function WalletTab() {
     }
   };
 
-  const selectedMethod = BETATRANSFER_DEPOSIT_METHODS.find((m) => m.id === paymentMethod);
-  const selectedWithdrawMethod = BETATRANSFER_WITHDRAW_METHODS.find((m) => m.id === withdrawPaymentMethod);
+  const selectedMethod = CARD_DEPOSIT_METHODS_UAH.find((m) => m.id === paymentMethod);
+  const selectedWithdrawMethod = CARD_WITHDRAW_METHODS_UAH.find((m) => m.id === withdrawPaymentMethod);
 
   if (loading && txLoading) {
     return <WalletPageSkeleton />;
@@ -509,10 +509,7 @@ export function WalletTab() {
             {/* Левая колонка - форма */}
 <div className="flex-1 min-w-0 min-h-0 p-3 sm:p-6 md:p-8">
             <div className="w-full">
-              <h1 className="text-lg sm:text-2xl font-bold text-white mb-0.5 sm:mb-1">Пополнение счёта</h1>
-          <p className="text-xs sm:text-sm text-white/50 mb-5 sm:mb-8">
-            Оплата банковской картой UAH через BetaTransfer (300–29&nbsp;999 UAH). После подтверждения вы будете перенаправлены на страницу оплаты.
-          </p>
+              <h1 className="text-lg sm:text-2xl font-bold text-white mb-5 sm:mb-8">Пополнение счёта</h1>
 
           {/* Email verification banner */}
           {!emailVerified && (
@@ -569,10 +566,9 @@ export function WalletTab() {
               </span>
               <h2 className="text-base font-semibold text-white">Выберите способ оплаты</h2>
             </div>
-            <div className="relative">
-              <div className="max-h-[280px] overflow-y-auto scrollbar-dropdown">
+            <div className="max-h-[280px] overflow-y-auto scrollbar-dropdown">
                 <div className="grid grid-cols-2 gap-2">
-                {BETATRANSFER_DEPOSIT_METHODS.map((m) => {
+                {CARD_DEPOSIT_METHODS_UAH.map((m) => {
                 const isSelected = paymentMethod === m.id;
                 const isInstant = m.speed === 'Мгновенно';
                 return (
@@ -616,8 +612,6 @@ export function WalletTab() {
                 );
                 })}
                 </div>
-              </div>
-              <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-[#030E28] via-[#030E28]/60 to-transparent pointer-events-none rounded-b-xl" />
             </div>
           </div>
 
@@ -632,7 +626,7 @@ export function WalletTab() {
             <div className="space-y-5">
               <div>
                 {(() => {
-                  const selected = BETATRANSFER_DEPOSIT_METHODS.find((m) => m.id === paymentMethod);
+                  const selected = CARD_DEPOSIT_METHODS_UAH.find((m) => m.id === paymentMethod);
                   const minA = selected?.minAmount ?? MIN_AMOUNT_UAH;
                   const maxA = selected?.maxAmount ?? MAX_AMOUNT_UAH;
                   return (
@@ -928,10 +922,9 @@ export function WalletTab() {
                     <span className="flex items-center justify-center w-7 h-7 rounded-full bg-[#3347ff]/30 text-[#7b8fff] text-sm font-bold">1</span>
                     <h2 className="text-base font-semibold text-white">Выберите способ вывода</h2>
                   </div>
-                  <div className="relative">
-                    <div className="max-h-[280px] overflow-y-auto scrollbar-dropdown">
+                  <div className="max-h-[280px] overflow-y-auto scrollbar-dropdown">
                       <div className="grid grid-cols-2 gap-2">
-                        {BETATRANSFER_WITHDRAW_METHODS.map((m) => {
+                        {CARD_WITHDRAW_METHODS_UAH.map((m) => {
                           const isSelected = withdrawPaymentMethod === m.id;
                           const isInstant = m.speed === 'Мгновенно';
                           return (
@@ -975,8 +968,6 @@ export function WalletTab() {
                           );
                         })}
                       </div>
-                    </div>
-                    <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-[#030E28] via-[#030E28]/60 to-transparent pointer-events-none rounded-b-xl" />
                   </div>
                 </div>
 
@@ -989,7 +980,7 @@ export function WalletTab() {
                   <div className="space-y-5">
                     <div>
                       {(() => {
-                        const selected = BETATRANSFER_WITHDRAW_METHODS.find((m) => m.id === withdrawPaymentMethod);
+                        const selected = CARD_WITHDRAW_METHODS_UAH.find((m) => m.id === withdrawPaymentMethod);
                         const minA = selected?.minAmount ?? MIN_AMOUNT_UAH;
                         const maxA = selected?.maxAmount ?? MAX_AMOUNT_UAH;
                         return (

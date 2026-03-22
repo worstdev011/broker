@@ -51,7 +51,7 @@ describe('Wallet Flow Integration', () => {
       const balanceBefore = JSON.parse(balanceBeforeRes.body);
       expect(Number(balanceBefore.balance)).toBe(0);
 
-      // Deposit (BetaTransfer): без ключей — 503; с ключами — 201 + paymentUrl, баланс до вебхука не меняется
+      // Deposit (BetaTransfer): без ключей - 503; с ключами - 201 + paymentUrl, баланс до вебхука не меняется
       const depositRes = await app!.inject({
         method: 'POST',
         url: '/api/wallet/deposit',

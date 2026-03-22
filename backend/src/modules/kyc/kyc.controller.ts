@@ -31,7 +31,7 @@ export class KycController {
   /**
    * POST /api/kyc/init
    *
-   * 1. Creates a Sumsub applicant (idempotent — ignores 409 duplicate).
+   * 1. Creates a Sumsub applicant (idempotent - ignores 409 duplicate).
    * 2. Issues a WebSDK access token for the applicant.
    * 3. Returns { token, applicantId } to the client.
    */
@@ -85,7 +85,7 @@ export class KycController {
     ] as Buffer | undefined;
 
     if (!rawBody) {
-      kycLog.warn('Webhook received without rawBody — signature cannot be verified');
+      kycLog.warn('Webhook received without rawBody - signature cannot be verified');
       return reply.status(400).send({ error: 'MISSING_RAW_BODY' });
     }
 
@@ -108,7 +108,7 @@ export class KycController {
 
         if (answer === 'GREEN') {
           kycStatus = 'verified';
-          kycLog.info({ applicantId, externalUserId }, 'KYC APPROVED — applicant passed verification');
+          kycLog.info({ applicantId, externalUserId }, 'KYC APPROVED - applicant passed verification');
         } else if (answer === 'RED') {
           kycStatus = 'rejected';
           kycLog.warn(
@@ -118,7 +118,7 @@ export class KycController {
               rejectLabels: reviewResult?.rejectLabels,
               clientComment: reviewResult?.clientComment,
             },
-            'KYC REJECTED — applicant failed verification',
+            'KYC REJECTED - applicant failed verification',
           );
         } else {
           kycLog.info({ applicantId, externalUserId, answer }, 'KYC review completed with unknown answer');

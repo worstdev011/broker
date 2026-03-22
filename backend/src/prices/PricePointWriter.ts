@@ -4,7 +4,7 @@ import { logger } from '../shared/logger.js';
 /**
  * PricePointWriter stores each tick as a single row in the database.
  * The renderer draws horizontal extensions between ticks on-the-fly,
- * so no bridge points are needed — one tick = one DB row.
+ * so no bridge points are needed - one tick = one DB row.
  */
 export class PricePointWriter {
   private lastTimestamp = new Map<string, number>();
@@ -23,7 +23,7 @@ export class PricePointWriter {
     const prisma = getPrismaClient();
     if (!('pricePoint' in prisma)) {
       if (!this.modelWarned) {
-        logger.warn('PricePoint model not available — run "npx prisma generate"');
+        logger.warn('PricePoint model not available - run "npx prisma generate"');
         this.modelWarned = true;
       }
       return;
@@ -52,7 +52,7 @@ export class PricePointWriter {
         (errorMessage.includes('table') && errorMessage.includes('price_points'))
       ) {
         if (!this.tableWarned) {
-          logger.debug('Table price_points does not exist yet — migration needed');
+          logger.debug('Table price_points does not exist yet - migration needed');
           this.tableWarned = true;
         }
         return;

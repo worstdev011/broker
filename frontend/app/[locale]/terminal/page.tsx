@@ -1348,7 +1348,7 @@ export function TerminalPageContent({ defaultAccount = 'real' }: TerminalPagePro
                 onInstrumentChange={handleInstrumentChange}
               />
 
-              {/* Zoom — только десктоп; на телефоне pinch/жесты */}
+              {/* Zoom - только десктоп; на телефоне pinch/жесты */}
               <div
                 className="absolute left-1/2 -translate-x-1/2 hidden md:flex items-center gap-2 z-10 pointer-events-auto"
                 style={{ bottom: zoomBottomOffsetPx }}
@@ -1397,7 +1397,7 @@ export function TerminalPageContent({ defaultAccount = 'real' }: TerminalPagePro
                 </button>
               )}
 
-              {/* Настройки графика — только телефон, слева снизу поверх канваса (как стиль верхней панели) */}
+              {/* Настройки графика - только телефон, слева снизу поверх канваса (как стиль верхней панели) */}
               <button
                 type="button"
                 onClick={() => setShowChartSettingsModal(true)}
@@ -1533,7 +1533,7 @@ export function TerminalPageContent({ defaultAccount = 'real' }: TerminalPagePro
               {/* Amount Input - прямой ввод + кнопка калькулятора */}
               <div className="w-full flex items-center">
                 <span className="text-white/50 shrink-0 text-sm leading-none pl-3">{getCurrencyIcon(displayCurrency)}</span>
-                {/* Мобилка: не input — иначе фокус открывает системную клавиатуру; сумма только через калькулятор */}
+                {/* Мобилка: не input - иначе фокус открывает системную клавиатуру; сумма только через калькулятор */}
                 <button
                   type="button"
                   onClick={() => setShowAmountModal(true)}

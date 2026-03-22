@@ -2,7 +2,7 @@ import type { TradeClosePayload } from '@/lib/hooks/useWebSocket';
 
 /**
  * Чистый P&L закрытой сделки в валюте счёта.
- * В payload `payout` — множитель прибыли инструмента (например 0.75 при 75%), не сумма выплаты.
+ * В payload `payout` - множитель прибыли инструмента (например 0.75 при 75%), не сумма выплаты.
  */
 export function netPnlFromTradeClose(
   payload: Pick<TradeClosePayload, 'result' | 'amount' | 'payout'>,

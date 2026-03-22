@@ -85,7 +85,7 @@
     "google_error_token_failed": "Could not exchange Google authorization code",
     "google_error_no_id_token": "Google did not return an id_token",
     "google_error_bad_token": "Could not parse Google id_token",
-    "google_error_no_email": "This Google account has no email — sign-in is not possible",
+    "google_error_no_email": "This Google account has no email - sign-in is not possible",
     "google_error_not_configured": "Google sign-in is not configured on the server",
     "google_error_login_failed": "Google sign-in failed",
     "google_error_generic": "Google sign-in error"

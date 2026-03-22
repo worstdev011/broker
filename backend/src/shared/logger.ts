@@ -26,7 +26,7 @@ type LogFn = (msgOrObj: string | object, ...args: unknown[]) => void;
  * Wraps a pino log method to support both Pino-native and convenience patterns:
  *   logger.info('message')
  *   logger.info({ key: 'val' }, 'message')
- *   logger.error('message', new Error('...'))  — auto-wraps Error into { err }
+ *   logger.error('message', new Error('...'))  - auto-wraps Error into { err }
  */
 function makeLogFn(base: PinoLogger, level: 'info' | 'warn' | 'error' | 'debug'): LogFn {
   const fn = base[level].bind(base);

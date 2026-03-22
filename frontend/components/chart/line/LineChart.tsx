@@ -66,7 +66,7 @@ const INERTIA_FRICTION = 0.92;
 const INERTIA_MIN = 0.02;
 const EMA_A = 0.35;
 
-/** Высоты нижних панелей индикаторов — как в useRenderLoop для свечного графика */
+/** Высоты нижних панелей индикаторов - как в useRenderLoop для свечного графика */
 function indicatorStripHeights(cfg: IndicatorConfig[]) {
   const on = (t: IndicatorConfig['type']) => cfg.some((c) => c.type === t && c.enabled);
   return {

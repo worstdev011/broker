@@ -1,5 +1,5 @@
 /**
- * Candle store — per instrument (instrumentId):
+ * Candle store - per instrument (instrumentId):
  * - active candle in Redis (candle:active:${instrumentId})
  * - closed candles in PostgreSQL (symbol column stores instrumentId)
  */
@@ -14,7 +14,7 @@ function activeKey(instrumentId: string): string {
 }
 
 export class CandleStore {
-  /** TTL for active candle keys — auto-expire stale data after server crashes. */
+  /** TTL for active candle keys - auto-expire stale data after server crashes. */
   private static readonly ACTIVE_CANDLE_TTL_SECONDS = 120;
 
   private static readonly CACHE_LIMIT = 120;

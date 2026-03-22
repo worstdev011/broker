@@ -10,7 +10,7 @@ export interface UpdateProfileData {
   nickname?: string | null;
   phone?: string | null;
   country?: string | null;
-  currency?: string | null; // 🔥 Валюта — устанавливается один раз, не меняется
+  currency?: string | null; // 🔥 Валюта - устанавливается один раз, не меняется
   dateOfBirth?: Date | null; // 🔥 FLOW U1.1: Date объект, не string
   avatarUrl?: string | null;
 }

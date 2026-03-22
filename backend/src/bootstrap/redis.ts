@@ -36,7 +36,7 @@ export async function connectRedis(): Promise<KeyValueStore> {
 
   const url = env.REDIS_URL || 'redis://127.0.0.1:6379';
   if (!env.REDIS_URL) {
-    logger.warn('REDIS_URL not set — connecting to local Redis at 127.0.0.1:6379');
+    logger.warn('REDIS_URL not set - connecting to local Redis at 127.0.0.1:6379');
   }
 
   redis = new Redis(url, { lazyConnect: true });

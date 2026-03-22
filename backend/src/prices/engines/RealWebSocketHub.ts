@@ -166,7 +166,7 @@ export class RealWebSocketHub {
       return;
     }
 
-    // code === '2' is ping — ignore
+    // code === '2' is ping - ignore
   }
 
   private handleInit(payload: string): void {

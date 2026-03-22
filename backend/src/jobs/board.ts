@@ -8,7 +8,7 @@ import { logger } from '../shared/logger.js';
 export async function registerBullBoard(app: FastifyInstance): Promise<void> {
   const queues = getQueues();
   if (queues.length === 0) {
-    logger.info('Bull Board skipped — no queues');
+    logger.info('Bull Board skipped - no queues');
     return;
   }
 

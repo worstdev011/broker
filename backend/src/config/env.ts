@@ -127,7 +127,7 @@ function validateEnv(): EnvConfig {
 
   if (!sumsubAppToken || !sumsubSecretKey || !webhookSecretKey) {
     console.warn(
-      '[env] Sumsub KYC vars (SUMSUB_APP_TOKEN, SUMSUB_SECRET_KEY, WEBHOOK_SECRET_KEY) are not set — KYC endpoints will fail at runtime.',
+      '[env] Sumsub KYC vars (SUMSUB_APP_TOKEN, SUMSUB_SECRET_KEY, WEBHOOK_SECRET_KEY) are not set - KYC endpoints will fail at runtime.',
     );
   }
 

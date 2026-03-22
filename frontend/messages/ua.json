@@ -85,7 +85,7 @@
     "google_error_token_failed": "Не вдалося обміняти код Google на токен",
     "google_error_no_id_token": "Google не повернув id_token",
     "google_error_bad_token": "Не вдалося розібрати токен Google",
-    "google_error_no_email": "У акаунта Google немає email — вхід неможливий",
+    "google_error_no_email": "У акаунта Google немає email - вхід неможливий",
     "google_error_not_configured": "Вхід через Google не налаштовано на сервері",
     "google_error_login_failed": "Не вдалося увійти через Google",
     "google_error_generic": "Помилка входу через Google"

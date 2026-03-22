@@ -35,7 +35,7 @@ export function setupGracefulShutdown(app: FastifyInstance): void {
   process.on('SIGINT', () => shutdown('SIGINT'));
 
   process.on('uncaughtException', (error) => {
-    logger.error({ err: error }, 'Uncaught exception — exiting');
+    logger.error({ err: error }, 'Uncaught exception - exiting');
     process.exit(1);
   });
 
