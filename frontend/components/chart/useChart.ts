@@ -26,6 +26,7 @@ import { useDrawingInteractions } from './internal/drawings/useDrawingInteractio
 import { useDrawingEdit } from './internal/drawings/useDrawingEdit';
 import { useCandleAnimator } from './internal/useCandleAnimator';
 import { useWebSocket, type TradeClosePayload } from '@/lib/hooks/useWebSocket';
+import { netPnlFromTradeClose } from '@/lib/tradeClosePnl';
 import { DEFAULT_INSTRUMENT_ID } from '@/lib/instruments';
 import { dismissToastByKey, showTradeOpenToast, showTradeCloseToast } from '@/stores/toast.store';
 import { parseTimeframeToMs } from './internal/utils/timeframe';
@@ -708,14 +709,12 @@ export function useChart({ canvasRef, timeframe = '5s', instrument, payoutPercen
 
       const entryPrice = parseFloat(data.entryPrice);
       const amount = parseFloat(data.amount);
-      const payout = parseFloat(data.payout);
       const openedAt = new Date(data.openedAt).getTime();
       const expiresAt = new Date(data.expiresAt).getTime();
 
       if (
         Number.isFinite(entryPrice) &&
         Number.isFinite(amount) &&
-        Number.isFinite(payout) &&
         Number.isFinite(openedAt) &&
         Number.isFinite(expiresAt)
       ) {
@@ -727,7 +726,7 @@ export function useChart({ canvasRef, timeframe = '5s', instrument, payoutPercen
           liveCandle,
           timeframeMs,
         );
-        const pnl = payout - amount;
+        const pnl = netPnlFromTradeClose(data);
         const now = Date.now();
 
         recentClosedTradesRef.current = [

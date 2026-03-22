@@ -2,10 +2,15 @@
 
 import { forwardRef, useRef, useEffect, useImperativeHandle, useCallback } from 'react';
 import { useWebSocket, type TradeClosePayload } from '@/lib/hooks/useWebSocket';
+import { netPnlFromTradeClose } from '@/lib/tradeClosePnl';
 import { dismissToastByKey, showTradeOpenToast, showTradeCloseToast } from '@/stores/toast.store';
 import { api } from '@/lib/api/api';
 import { logger } from '@/lib/logger';
 import type { IndicatorConfig } from '../internal/indicators/indicator.types';
+import { useIndicators } from '../internal/indicators/useIndicators';
+import { renderIndicators } from '../internal/indicators/renderIndicators';
+import type { Viewport } from '../internal/viewport.types';
+import { pointsToIndicatorCandles } from './pointsToIndicatorCandles';
 import type { OverlayRegistryParams } from '../useChart';
 import type { Drawing } from '../internal/drawings/drawing.types';
 import { clampToDataBounds } from '../internal/interactions/math';
@@ -49,6 +54,8 @@ const GLOW_R = 20;
 const MIN_ZOOM_MS_DESKTOP = 100_000;
 /** Узкий экран: можно сильнее приблизить (меньший минимальный диапазон по времени). */
 const MIN_ZOOM_MS_NARROW = 48_000;
+/** Узкий экран: pinch-zoom сильнее реагирует на разведение/сведение пальцев. */
+const PINCH_ZOOM_GAIN_MOBILE = 1.42;
 const MAX_ZOOM_MS = 400_000;
 const TIME_H = 25;
 const TIME_BG = '#05122a';
@@ -58,6 +65,24 @@ const PRICE_W = 60;
 const INERTIA_FRICTION = 0.92;
 const INERTIA_MIN = 0.02;
 const EMA_A = 0.35;
+
+/** Высоты нижних панелей индикаторов — как в useRenderLoop для свечного графика */
+function indicatorStripHeights(cfg: IndicatorConfig[]) {
+  const on = (t: IndicatorConfig['type']) => cfg.some((c) => c.type === t && c.enabled);
+  return {
+    rsi: on('RSI') ? 120 : 0,
+    stoch: on('Stochastic') ? 120 : 0,
+    momentum: on('Momentum') ? 90 : 0,
+    awesome: on('AwesomeOscillator') ? 90 : 0,
+    macd: on('MACD') ? 100 : 0,
+    atr: on('ATR') ? 80 : 0,
+    adx: on('ADX') ? 80 : 0,
+  };
+}
+
+function sumIndicatorStrip(h: ReturnType<typeof indicatorStripHeights>) {
+  return h.rsi + h.stoch + h.momentum + h.awesome + h.macd + h.atr + h.adx;
+}
 
 // ─── Data structures ────────────────────────────────────────────────
 
@@ -486,11 +511,12 @@ function drawChart(
     if (!t.result || !t.closedAt) continue;
     const openX = Math.max(0, Math.min(tToX(t.openedAt), w));
     const ey = Math.round(Math.max(5, Math.min(toY(t.entryPrice, mn, mx, ch), ch - 5))) + 0.5;
-    const isWin = t.result === 'WIN' || (t.pnl ?? 0) > 0;
-    const isLoss = t.result === 'LOSS' || (t.pnl ?? 0) < 0;
+    const isWin = t.result === 'WIN';
+    const isLoss = t.result === 'LOSS';
     const bg = isWin ? '#45b833' : isLoss ? '#ff3d1f' : '#4b5563';
-    const sign = (t.pnl ?? 0) > 0 ? '+$' : (t.pnl ?? 0) < 0 ? '-$' : '$';
-    const amtTxt = `${sign}${Math.abs(t.pnl ?? 0).toFixed(0)}`;
+    const pnl = t.pnl ?? 0;
+    const sign = pnl > 0 ? '+$' : pnl < 0 ? '-$' : '$';
+    const amtTxt = `${sign}${Math.abs(pnl).toFixed(2)}`;
     ctx.save();
     const BH = 28, BR = BH / 2, IS = 16, IP = 6, TPR = 10;
     ctx.font = 'bold 14px system-ui,-apple-system,"Segoe UI",sans-serif';
@@ -576,18 +602,30 @@ export interface LineChartRef {
 // ═══════════════════════════════════════════════════════════════════════
 
 export const LineChart = forwardRef<LineChartRef, LineChartProps>(
-  ({ className, style, instrument, payoutPercent: payoutPctProp, activeInstrumentRef, onReady }, ref) => {
+  ({ className, style, instrument, payoutPercent: payoutPctProp, activeInstrumentRef, indicatorConfigs = [], onReady }, ref) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
+    const indicatorConfigsRef = useRef(indicatorConfigs);
+    indicatorConfigsRef.current = indicatorConfigs;
 
     const storeRef = useRef(mkStore());
     const animRef = useRef(mkAnim());
     const vpRef = useRef(mkVp());
+    const pinchZoomGainRef = useRef(1);
     const trailRef = useRef<Point[]>([]);
+
+    const { getIndicatorSeries } = useIndicators({
+      getCandles: () => pointsToIndicatorCandles(storeRef.current.all(), vpRef.current.wall(performance.now())),
+      indicatorConfigs,
+    });
+    const getIndicatorSeriesRef = useRef(getIndicatorSeries);
+    getIndicatorSeriesRef.current = getIndicatorSeries;
 
     useEffect(() => {
       const mq = window.matchMedia('(max-width: 767px)');
       const apply = () => {
-        vpRef.current.setZoomLimits(mq.matches ? MIN_ZOOM_MS_NARROW : MIN_ZOOM_MS_DESKTOP);
+        const narrow = mq.matches;
+        vpRef.current.setZoomLimits(narrow ? MIN_ZOOM_MS_NARROW : MIN_ZOOM_MS_DESKTOP);
+        pinchZoomGainRef.current = narrow ? PINCH_ZOOM_GAIN_MOBILE : 1;
       };
       apply();
       mq.addEventListener('change', apply);
@@ -642,7 +680,12 @@ export const LineChart = forwardRef<LineChartRef, LineChartProps>(
       onTradeOpen: (data) => showTradeOpenToast(data),
       onTradeClose: (data) => {
         const t = tradesRef.current.find(tr => tr.id === data.id);
-        if (t) { t.result = data.result; t.closedAt = Date.now(); t.pnl = data.payout != null ? parseFloat(data.payout) : 0; setTimeout(() => { tradesRef.current = tradesRef.current.filter(tr => tr.id !== data.id); }, 5000); }
+        if (t) {
+          t.result = data.result;
+          t.closedAt = Date.now();
+          t.pnl = netPnlFromTradeClose(data);
+          setTimeout(() => { tradesRef.current = tradesRef.current.filter(tr => tr.id !== data.id); }, 5000);
+        }
         dismissToastByKey(data.id);
         showTradeCloseToast(data);
       },
@@ -746,7 +789,12 @@ export const LineChart = forwardRef<LineChartRef, LineChartProps>(
       followLatest() { panActive.current = false; panVel.current = 0; vpRef.current.follow(); cancelFollow(); },
       handleTradeClose(data) {
         const t = tradesRef.current.find(tr => tr.id === data.id);
-        if (t) { t.result = data.result; t.closedAt = Date.now(); t.pnl = data.payout != null ? parseFloat(data.payout) : 0; setTimeout(() => { tradesRef.current = tradesRef.current.filter(tr => tr.id !== data.id); }, 5000); }
+        if (t) {
+          t.result = data.result;
+          t.closedAt = Date.now();
+          t.pnl = netPnlFromTradeClose(data);
+          setTimeout(() => { tradesRef.current = tradesRef.current.filter(tr => tr.id !== data.id); }, 5000);
+        }
       },
     }));
 
@@ -869,18 +917,48 @@ export const LineChart = forwardRef<LineChartRef, LineChartProps>(
         setYv(yMn.current, r.min, now); setYv(yMx.current, r.max, now);
         tickYv(yMn.current, now); tickYv(yMx.current, now);
 
+        const strip = indicatorStripHeights(indicatorConfigsRef.current);
+        const bottomInd = sumIndicatorStrip(strip);
+        const layoutMainH = Math.max(TIME_H + 80, ch - bottomInd);
+
         ctx.clearRect(0, 0, cw, ch);
         ctx.fillStyle = BG; ctx.fillRect(0, 0, cw, ch);
 
-        watermark(ctx, cw, ch, instrument);
+        watermark(ctx, cw, layoutMainH, instrument);
 
         if (combined.length > 0 || live) {
-          grid(ctx, cw, ch, vp.ts, vp.te, yMn.current.cur, yMx.current.cur);
-          drawChart(ctx, combined, live, vp.ts, vp.te, cw, ch, yMn.current.cur, yMx.current.cur, now, tradesRef.current, payoutRef.current, expirationDraw);
+          grid(ctx, cw, layoutMainH, vp.ts, vp.te, yMn.current.cur, yMx.current.cur);
+          drawChart(ctx, combined, live, vp.ts, vp.te, cw, layoutMainH, yMn.current.cur, yMx.current.cur, now, tradesRef.current, payoutRef.current, expirationDraw);
+        }
+
+        const indSeries = getIndicatorSeriesRef.current();
+        if (indSeries.length > 0 && bottomInd > 0) {
+          const viewport: Viewport = {
+            timeStart: vp.ts,
+            timeEnd: vp.te,
+            priceMin: yMn.current.cur,
+            priceMax: yMx.current.cur,
+            yMode: 'auto',
+          };
+          renderIndicators({
+            ctx,
+            indicators: indSeries,
+            indicatorConfigs: indicatorConfigsRef.current,
+            viewport,
+            width: cw,
+            height: layoutMainH,
+            rsiHeight: strip.rsi,
+            stochHeight: strip.stoch,
+            momentumHeight: strip.momentum,
+            awesomeOscillatorHeight: strip.awesome,
+            macdHeight: strip.macd,
+            atrHeight: strip.atr,
+            adxHeight: strip.adx,
+          });
         }
 
         const m = mouseRef.current;
-        if (m) crosshair(ctx, m.x, m.y, cw, ch, vp.ts, vp.te, yMn.current.cur, yMx.current.cur);
+        if (m) crosshair(ctx, m.x, m.y, cw, layoutMainH, vp.ts, vp.te, yMn.current.cur, yMx.current.cur);
 
         raf = requestAnimationFrame(frame);
       }
@@ -931,7 +1009,11 @@ export const LineChart = forwardRef<LineChartRef, LineChartProps>(
           const now = performance.now(); if (lastTime) { const dt = now - lastTime; if (dt > 0) { emaV = EMA_A * (dx / dt) + (1 - EMA_A) * emaV; panVel.current = emaV; } } lastTime = now;
           touchStart = { x: t.clientX, y: t.clientY };
         } else if (touchMode === 'pinch' && e.touches.length === 2) {
-          const nd = dist(e.touches[0], e.touches[1]); const f = nd / pinchDist;
+          if (pinchDist < 4) return;
+          const nd = dist(e.touches[0], e.touches[1]);
+          const raw = nd / pinchDist;
+          const g = pinchZoomGainRef.current;
+          const f = g === 1 ? raw : 1 + (raw - 1) * g;
           const rect = cvs.getBoundingClientRect(); const cx = ((e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left) / rect.width;
           vpRef.current.zoomAt(f, Math.max(0, Math.min(1, cx))); pinchDist = nd;
         }

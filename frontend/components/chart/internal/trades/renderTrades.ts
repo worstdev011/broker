@@ -225,12 +225,12 @@ export function renderTrades({
       const dotX = Math.max(0, Math.min(openX, width));
       const dotY = Math.round(Math.max(5, Math.min(entryY, height - 5))) + 0.5;
 
-      const isWin = t.result === 'WIN' || t.pnl > 0;
-      const isLoss = t.result === 'LOSS' || t.pnl < 0;
+      const isWin = t.result === 'WIN';
+      const isLoss = t.result === 'LOSS';
       const bgColor = isWin ? '#45b833' : isLoss ? '#ff3d1f' : '#4b5563';
 
       const sign = t.pnl > 0 ? '+$' : t.pnl < 0 ? '-$' : '$';
-      const amountText = `${sign}${Math.abs(t.pnl).toFixed(0)}`;
+      const amountText = `${sign}${Math.abs(t.pnl).toFixed(2)}`;
 
       ctx.save();
 
