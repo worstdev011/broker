@@ -28,6 +28,8 @@ export class BetaTransferService {
       paymentSystem: 'Card',
       orderId: params.orderId,
       payerId: params.payerId,
+      // Request full webhook callbacks (success + fail/cancel).
+      fullCallback: '1',
       redirect: 'true',
     };
 
