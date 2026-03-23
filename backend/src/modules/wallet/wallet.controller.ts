@@ -126,12 +126,17 @@ export class WalletController {
       return reply.status(400).send({ error: 'INVALID_AMOUNT', message: 'Invalid amount' });
     }
 
+    const transactionAmount = Number(transaction.amount);
+    if (Number.isNaN(transactionAmount)) {
+      return reply.status(400).send({ error: 'INVALID_TRANSACTION_AMOUNT', message: 'Invalid transaction amount' });
+    }
+
     if (transaction.type === TransactionType.DEPOSIT) {
-      if (webhookAmount !== Number(transaction.amount)) {
+      if (Math.abs(Number(webhookAmount) - Number(transactionAmount)) >= 0.01) {
         return reply.status(400).send({ error: 'AMOUNT_MISMATCH', message: 'Amount does not match transaction' });
       }
     } else if (transaction.type === TransactionType.WITHDRAW) {
-      if (webhookAmount !== Math.abs(Number(transaction.amount))) {
+      if (Math.abs(Math.abs(Number(webhookAmount)) - Math.abs(Number(transactionAmount))) >= 0.01) {
         return reply.status(400).send({ error: 'AMOUNT_MISMATCH', message: 'Amount does not match transaction' });
       }
     } else {
