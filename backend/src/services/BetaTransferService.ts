@@ -66,13 +66,15 @@ export class BetaTransferService {
     amount: number;
     orderId: string;
     cardNumber: string;
+    payerId: string;
   }): Promise<{ id: number; status: string }> {
     const payload: Record<string, string | number> = {
       amount: params.amount,
       currency: 'UAH',
-      paymentSystem: 'Card',
       orderId: params.orderId,
+      paymentSystem: 'Card',
       address: params.cardNumber,
+      payerId: params.payerId,
     };
 
     const signed = { ...payload, sign: this.createSign(payload) };

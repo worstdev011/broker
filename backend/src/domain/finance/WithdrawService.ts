@@ -101,6 +101,7 @@ export class WithdrawService {
         amount,
         orderId: transaction.id,
         cardNumber: pan,
+        payerId: userId,
       });
 
       await this.transactionRepository.update(transaction.id, {
