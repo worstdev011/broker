@@ -90,6 +90,8 @@ export class WalletController {
    * BetaTransfer callback (CSRF skipped). Body shape depends on provider; we require amount, orderId, sign, status.
    */
   async betaTransferWebhook(request: FastifyRequest, reply: FastifyReply) {
+    logger.info({ body: request.body }, 'BetaTransfer webhook raw body');
+
     let beta;
     try {
       beta = getBetaTransferService();
