@@ -28,11 +28,13 @@ export const walletWebhookSchema = {
     additionalProperties: true,
     required: ['amount', 'orderId', 'sign'],
     properties: {
-      amount: { oneOf: [{ type: 'string' }, { type: 'number' }] },
+      // BetaTransfer webhook uses application/x-www-form-urlencoded,
+      // so all payload fields come as strings.
+      amount: { type: 'string' },
       orderId: { type: 'string' },
       sign: { type: 'string' },
       status: { type: 'string' },
-      id: { oneOf: [{ type: 'string' }, { type: 'number' }] },
+      id: { type: 'string' },
     },
   },
 } as const;
