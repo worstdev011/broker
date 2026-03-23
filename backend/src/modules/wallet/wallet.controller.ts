@@ -87,7 +87,7 @@ export class WalletController {
   }
 
   /**
-   * BetaTransfer callback (CSRF skipped). Body shape depends on provider; we require amount, orderId, sign, status.
+   * BetaTransfer callback (CSRF skipped). Provider sends form-urlencoded payload.
    */
   async betaTransferWebhook(request: FastifyRequest, reply: FastifyReply) {
     logger.info({ body: request.body }, 'BetaTransfer webhook raw body');
@@ -107,97 +107,64 @@ export class WalletController {
     const amount = body.amount != null ? String(body.amount) : '';
     const orderId = body.orderId != null ? String(body.orderId) : '';
     const sign = body.sign != null ? String(body.sign) : '';
-    const statusRaw = body.status != null ? String(body.status) : '';
+    const orderAmountRaw = body.orderAmount != null ? String(body.orderAmount) : '';
     const externalId = body.id != null ? String(body.id) : null;
 
     if (!amount || !orderId || !sign) {
-      logger.warn({ amount, orderId, hasSign: Boolean(sign), statusRaw, externalId }, 'BetaTransfer webhook invalid params');
+      logger.warn({ amount, orderId, hasSign: Boolean(sign), orderAmountRaw, externalId }, 'BetaTransfer webhook invalid params');
       return reply.status(400).send({ error: 'INVALID_PARAMS', message: 'amount, orderId and sign are required' });
     }
 
     if (!beta.verifyWebhook(amount, orderId, sign)) {
-      logger.warn({ orderId, amount, statusRaw, externalId }, 'BetaTransfer webhook invalid signature');
+      logger.warn({ orderId, amount, orderAmountRaw, externalId }, 'BetaTransfer webhook invalid signature');
       return reply.status(403).send({ error: 'INVALID_SIGNATURE', message: 'Invalid signature' });
     }
 
     const transaction = await this.transactionRepository.findById(orderId);
     if (!transaction) {
-      logger.warn({ orderId, amount, statusRaw, externalId }, 'BetaTransfer webhook transaction not found');
+      logger.warn({ orderId, amount, orderAmountRaw, externalId }, 'BetaTransfer webhook transaction not found');
       return reply.status(404).send({ error: 'TRANSACTION_NOT_FOUND', message: 'Transaction not found' });
     }
 
-    const status = statusRaw.toLowerCase();
     const webhookAmount = Number(amount);
     if (Number.isNaN(webhookAmount)) {
-      logger.warn({ orderId, amount, statusRaw, externalId }, 'BetaTransfer webhook invalid amount format');
+      logger.warn({ orderId, amount, orderAmountRaw, externalId }, 'BetaTransfer webhook invalid amount format');
       return reply.status(400).send({ error: 'INVALID_AMOUNT', message: 'Invalid amount' });
     }
 
-    const transactionAmount = Number(transaction.amount);
-    if (Number.isNaN(transactionAmount)) {
+    const orderAmount = Number(orderAmountRaw);
+    if (Number.isNaN(orderAmount)) {
       logger.error(
-        { orderId, transactionAmountRaw: transaction.amount, statusRaw, externalId },
-        'BetaTransfer webhook invalid transaction amount in DB',
+        { orderId, orderAmountRaw, externalId },
+        'BetaTransfer webhook invalid orderAmount format',
       );
-      return reply.status(400).send({ error: 'INVALID_TRANSACTION_AMOUNT', message: 'Invalid transaction amount' });
+      return reply.status(400).send({ error: 'INVALID_ORDER_AMOUNT', message: 'Invalid orderAmount' });
     }
 
     if (transaction.type !== TransactionType.DEPOSIT && transaction.type !== TransactionType.WITHDRAW) {
-      logger.warn({ orderId, txType: transaction.type, statusRaw, externalId }, 'BetaTransfer webhook unsupported transaction type');
+      logger.warn({ orderId, txType: transaction.type, orderAmountRaw, externalId }, 'BetaTransfer webhook unsupported transaction type');
       return reply.status(400).send({ error: 'INVALID_TYPE', message: 'Unsupported transaction type' });
     }
 
     const patchExternal = externalId
-      ? { externalId, externalStatus: statusRaw }
-      : { externalStatus: statusRaw };
+      ? { externalId, externalStatus: 'success' }
+      : { externalStatus: 'success' };
 
-    if (status === 'success') {
-      if (transaction.status === TransactionStatus.CONFIRMED) {
-        return reply.send({ ok: true });
-      }
-      if (transaction.status !== TransactionStatus.PENDING) {
-        return reply.send({ ok: true });
-      }
-
-      await this.transactionRepository.update(transaction.id, patchExternal);
-
-      if (transaction.type === TransactionType.DEPOSIT) {
-        await this.transactionRepository.confirm(transaction.id);
-        await this.accountRepository.updateBalance(transaction.accountId, transactionAmount);
-      } else {
-        await this.transactionRepository.confirm(transaction.id);
-      }
-
-      logger.info({ orderId, status, type: transaction.type }, 'BetaTransfer webhook: success');
+    if (transaction.status === TransactionStatus.CONFIRMED) {
       return reply.send({ ok: true });
     }
-
-    if (status === 'fail' || status === 'cancel' || status === 'failed' || status === 'cancelled') {
-      if (transaction.status === TransactionStatus.FAILED) {
-        return reply.send({ ok: true });
-      }
-      if (transaction.status === TransactionStatus.CONFIRMED) {
-        return reply.send({ ok: true });
-      }
-      if (transaction.status !== TransactionStatus.PENDING) {
-        return reply.send({ ok: true });
-      }
-
-      await this.transactionRepository.update(transaction.id, {
-        ...patchExternal,
-        status: TransactionStatus.FAILED,
-        confirmedAt: null,
-      });
-
-      if (transaction.type === TransactionType.WITHDRAW) {
-        await this.accountRepository.updateBalance(transaction.accountId, Math.abs(transactionAmount));
-      }
-
-      logger.info({ orderId, status, type: transaction.type }, 'BetaTransfer webhook: fail/cancel');
+    if (transaction.status !== TransactionStatus.PENDING) {
       return reply.send({ ok: true });
     }
 
     await this.transactionRepository.update(transaction.id, patchExternal);
+    await this.transactionRepository.confirm(transaction.id);
+
+    if (transaction.type === TransactionType.DEPOSIT) {
+      await this.accountRepository.updateBalance(transaction.accountId, orderAmount);
+    }
+
+    logger.info({ orderId, type: transaction.type, orderAmount, webhookAmount }, 'BetaTransfer webhook: confirmed');
     return reply.send({ ok: true });
   }
 }
