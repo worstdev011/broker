@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { WalletController } from './wallet.controller.js';
 import { requireAuth } from '../auth/auth.middleware.js';
 import { depositSchema, withdrawSchema, getBalanceSchema, walletWebhookSchema } from './wallet.schema.js';
@@ -33,11 +33,28 @@ export async function registerWalletRoutes(app: FastifyInstance) {
     (request, reply) => walletController.withdraw(request, reply),
   );
 
-  app.post(
-    '/api/wallet/webhook',
-    { schema: walletWebhookSchema },
-    (request, reply) => walletController.betaTransferWebhook(request, reply),
-  );
+  // Register webhook in a scoped sub-plugin to attach parser only for this route.
+  await app.register(async (webhookScope: FastifyInstance) => {
+    webhookScope.addContentTypeParser(
+      'application/x-www-form-urlencoded',
+      { parseAs: 'buffer' },
+      (req: FastifyRequest, body: Buffer, done) => {
+        (req.raw as unknown as Record<string, unknown>)['rawBody'] = body;
+        try {
+          const parsed = Object.fromEntries(new URLSearchParams(body.toString('utf8')).entries());
+          done(null, parsed);
+        } catch (err) {
+          done(err as Error, undefined);
+        }
+      },
+    );
+
+    webhookScope.post(
+      '/api/wallet/webhook',
+      { schema: walletWebhookSchema },
+      (request, reply) => walletController.betaTransferWebhook(request, reply),
+    );
+  });
 
   app.get('/api/wallet/balance', {
     schema: getBalanceSchema,
