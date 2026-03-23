@@ -140,23 +140,7 @@ export class WalletController {
       return reply.status(400).send({ error: 'INVALID_TRANSACTION_AMOUNT', message: 'Invalid transaction amount' });
     }
 
-    if (transaction.type === TransactionType.DEPOSIT) {
-      if (Math.abs(Number(webhookAmount) - Number(transactionAmount)) >= 0.01) {
-        logger.warn(
-          { orderId, webhookAmount, transactionAmount, statusRaw, externalId, type: transaction.type },
-          'BetaTransfer webhook amount mismatch',
-        );
-        return reply.status(400).send({ error: 'AMOUNT_MISMATCH', message: 'Amount does not match transaction' });
-      }
-    } else if (transaction.type === TransactionType.WITHDRAW) {
-      if (Math.abs(Math.abs(Number(webhookAmount)) - Math.abs(Number(transactionAmount))) >= 0.01) {
-        logger.warn(
-          { orderId, webhookAmount, transactionAmount, statusRaw, externalId, type: transaction.type },
-          'BetaTransfer webhook amount mismatch',
-        );
-        return reply.status(400).send({ error: 'AMOUNT_MISMATCH', message: 'Amount does not match transaction' });
-      }
-    } else {
+    if (transaction.type !== TransactionType.DEPOSIT && transaction.type !== TransactionType.WITHDRAW) {
       logger.warn({ orderId, txType: transaction.type, statusRaw, externalId }, 'BetaTransfer webhook unsupported transaction type');
       return reply.status(400).send({ error: 'INVALID_TYPE', message: 'Unsupported transaction type' });
     }
@@ -177,7 +161,7 @@ export class WalletController {
 
       if (transaction.type === TransactionType.DEPOSIT) {
         await this.transactionRepository.confirm(transaction.id);
-        await this.accountRepository.updateBalance(transaction.accountId, webhookAmount);
+        await this.accountRepository.updateBalance(transaction.accountId, transactionAmount);
       } else {
         await this.transactionRepository.confirm(transaction.id);
       }
@@ -204,7 +188,7 @@ export class WalletController {
       });
 
       if (transaction.type === TransactionType.WITHDRAW) {
-        await this.accountRepository.updateBalance(transaction.accountId, webhookAmount);
+        await this.accountRepository.updateBalance(transaction.accountId, Math.abs(transactionAmount));
       }
 
       logger.info({ orderId, status, type: transaction.type }, 'BetaTransfer webhook: fail/cancel');
