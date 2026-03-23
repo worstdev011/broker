@@ -95,6 +95,7 @@ export class WalletController {
       beta = getBetaTransferService();
     } catch (e) {
       if (e instanceof AppError && e.code === 'PAYMENT_NOT_CONFIGURED') {
+        logger.error({ code: e.code }, 'BetaTransfer webhook rejected: payment provider not configured');
         return reply.status(503).send({ error: e.code, message: e.message });
       }
       throw e;
@@ -108,38 +109,55 @@ export class WalletController {
     const externalId = body.id != null ? String(body.id) : null;
 
     if (!amount || !orderId || !sign) {
+      logger.warn({ amount, orderId, hasSign: Boolean(sign), statusRaw, externalId }, 'BetaTransfer webhook invalid params');
       return reply.status(400).send({ error: 'INVALID_PARAMS', message: 'amount, orderId and sign are required' });
     }
 
     if (!beta.verifyWebhook(amount, orderId, sign)) {
+      logger.warn({ orderId, amount, statusRaw, externalId }, 'BetaTransfer webhook invalid signature');
       return reply.status(403).send({ error: 'INVALID_SIGNATURE', message: 'Invalid signature' });
     }
 
     const transaction = await this.transactionRepository.findById(orderId);
     if (!transaction) {
+      logger.warn({ orderId, amount, statusRaw, externalId }, 'BetaTransfer webhook transaction not found');
       return reply.status(404).send({ error: 'TRANSACTION_NOT_FOUND', message: 'Transaction not found' });
     }
 
     const status = statusRaw.toLowerCase();
     const webhookAmount = Number(amount);
     if (Number.isNaN(webhookAmount)) {
+      logger.warn({ orderId, amount, statusRaw, externalId }, 'BetaTransfer webhook invalid amount format');
       return reply.status(400).send({ error: 'INVALID_AMOUNT', message: 'Invalid amount' });
     }
 
     const transactionAmount = Number(transaction.amount);
     if (Number.isNaN(transactionAmount)) {
+      logger.error(
+        { orderId, transactionAmountRaw: transaction.amount, statusRaw, externalId },
+        'BetaTransfer webhook invalid transaction amount in DB',
+      );
       return reply.status(400).send({ error: 'INVALID_TRANSACTION_AMOUNT', message: 'Invalid transaction amount' });
     }
 
     if (transaction.type === TransactionType.DEPOSIT) {
       if (Math.abs(Number(webhookAmount) - Number(transactionAmount)) >= 0.01) {
+        logger.warn(
+          { orderId, webhookAmount, transactionAmount, statusRaw, externalId, type: transaction.type },
+          'BetaTransfer webhook amount mismatch',
+        );
         return reply.status(400).send({ error: 'AMOUNT_MISMATCH', message: 'Amount does not match transaction' });
       }
     } else if (transaction.type === TransactionType.WITHDRAW) {
       if (Math.abs(Math.abs(Number(webhookAmount)) - Math.abs(Number(transactionAmount))) >= 0.01) {
+        logger.warn(
+          { orderId, webhookAmount, transactionAmount, statusRaw, externalId, type: transaction.type },
+          'BetaTransfer webhook amount mismatch',
+        );
         return reply.status(400).send({ error: 'AMOUNT_MISMATCH', message: 'Amount does not match transaction' });
       }
     } else {
+      logger.warn({ orderId, txType: transaction.type, statusRaw, externalId }, 'BetaTransfer webhook unsupported transaction type');
       return reply.status(400).send({ error: 'INVALID_TYPE', message: 'Unsupported transaction type' });
     }
 
