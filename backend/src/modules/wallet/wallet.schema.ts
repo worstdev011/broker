@@ -36,6 +36,8 @@ export const walletWebhookSchema = {
       commission: { type: 'string' },
       orderId: { type: 'string' },
       sign: { type: 'string' },
+      // Provider may send status for full callbacks, but in some payloads it can be absent.
+      status: { type: 'string' },
       id: { type: 'string' },
     },
   },

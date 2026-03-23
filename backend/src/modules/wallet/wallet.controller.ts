@@ -90,7 +90,13 @@ export class WalletController {
    * BetaTransfer callback (CSRF skipped). Provider sends form-urlencoded payload.
    */
   async betaTransferWebhook(request: FastifyRequest, reply: FastifyReply) {
-    logger.info({ body: request.body }, 'BetaTransfer webhook raw body');
+    const body = request.body as Record<string, unknown>;
+    const rawBodyForLog = {
+      ...body,
+      // Do not leak provider signature in logs.
+      sign: typeof body.sign === 'string' ? '***' : body.sign,
+    };
+    logger.info({ body: rawBodyForLog }, 'BetaTransfer webhook raw body');
 
     let beta;
     try {
@@ -103,11 +109,12 @@ export class WalletController {
       throw e;
     }
 
-    const body = request.body as Record<string, unknown>;
     const amount = body.amount != null ? String(body.amount) : '';
     const orderId = body.orderId != null ? String(body.orderId) : '';
     const sign = body.sign != null ? String(body.sign) : '';
     const orderAmountRaw = body.orderAmount != null ? String(body.orderAmount) : '';
+    const paidAmountRaw = body.paidAmount != null ? String(body.paidAmount) : '';
+    const statusRaw = body.status != null ? String(body.status) : '';
     const externalId = body.id != null ? String(body.id) : null;
 
     if (!amount || !orderId || !sign) {
@@ -146,25 +153,102 @@ export class WalletController {
       return reply.status(400).send({ error: 'INVALID_TYPE', message: 'Unsupported transaction type' });
     }
 
-    const patchExternal = externalId
-      ? { externalId, externalStatus: 'success' }
-      : { externalStatus: 'success' };
-
-    if (transaction.status === TransactionStatus.CONFIRMED) {
+    // Idempotency: if already processed, do nothing.
+    if (transaction.status === TransactionStatus.CONFIRMED || transaction.status === TransactionStatus.FAILED) {
       return reply.send({ ok: true });
     }
+
     if (transaction.status !== TransactionStatus.PENDING) {
       return reply.send({ ok: true });
     }
 
-    await this.transactionRepository.update(transaction.id, patchExternal);
-    await this.transactionRepository.confirm(transaction.id);
+    const status = statusRaw.trim().toLowerCase();
+    const externalStatusPatch = externalId
+      ? { externalId, externalStatus: status }
+      : { externalStatus: status };
 
-    if (transaction.type === TransactionType.DEPOSIT) {
-      await this.accountRepository.updateBalance(transaction.accountId, orderAmount);
+    const safePaidAmount = () => {
+      const v = Number(paidAmountRaw);
+      if (Number.isNaN(v)) return null;
+      return v;
+    };
+
+    // If status is missing/unknown: do nothing (provider can omit it on some callbacks).
+    if (!status) {
+      return reply.send({ ok: true });
     }
 
-    logger.info({ orderId, type: transaction.type, orderAmount, webhookAmount }, 'BetaTransfer webhook: confirmed');
+    if (transaction.type === TransactionType.DEPOSIT) {
+      if (status === 'success') {
+        await this.transactionRepository.update(transaction.id, externalStatusPatch);
+        await this.transactionRepository.confirm(transaction.id);
+        await this.accountRepository.updateBalance(transaction.accountId, orderAmount);
+        logger.info({ orderId, type: transaction.type, status, orderAmount, webhookAmount }, 'BetaTransfer webhook: deposit confirmed');
+        return reply.send({ ok: true });
+      }
+
+      if (status === 'partial_payment') {
+        const paidAmount = safePaidAmount();
+        if (paidAmount == null) {
+          return reply.status(400).send({ error: 'INVALID_PAID_AMOUNT', message: 'Invalid paidAmount' });
+        }
+        await this.transactionRepository.update(transaction.id, externalStatusPatch);
+        await this.transactionRepository.confirm(transaction.id);
+        await this.accountRepository.updateBalance(transaction.accountId, paidAmount);
+        logger.info({ orderId, type: transaction.type, status, paidAmount, orderAmount, webhookAmount }, 'BetaTransfer webhook: deposit partial confirmed');
+        return reply.send({ ok: true });
+      }
+
+      const failedDepositStatuses = new Set(['cancel', 'not_paid', 'not_paid_timeout', 'error', 'blocked', 'fail', 'failed', 'cancelled']);
+      if (failedDepositStatuses.has(status)) {
+        await this.transactionRepository.update(transaction.id, {
+          ...externalStatusPatch,
+          status: TransactionStatus.FAILED,
+          confirmedAt: null,
+        });
+        logger.info({ orderId, type: transaction.type, status }, 'BetaTransfer webhook: deposit failed');
+        return reply.send({ ok: true });
+      }
+
+      // Unknown status for deposit: idempotent no-op.
+      return reply.send({ ok: true });
+    }
+
+    // WITHDRAW
+    if (transaction.type === TransactionType.WITHDRAW) {
+      if (status === 'success') {
+        await this.transactionRepository.update(transaction.id, externalStatusPatch);
+        await this.transactionRepository.confirm(transaction.id);
+        logger.info({ orderId, type: transaction.type, status }, 'BetaTransfer webhook: withdraw confirmed');
+        return reply.send({ ok: true });
+      }
+
+      if (status === 'partial_withdraw') {
+        const paidAmount = safePaidAmount();
+        if (paidAmount == null) {
+          return reply.status(400).send({ error: 'INVALID_PAID_AMOUNT', message: 'Invalid paidAmount' });
+        }
+        await this.transactionRepository.update(transaction.id, externalStatusPatch);
+        await this.transactionRepository.confirm(transaction.id);
+        const refund = orderAmount - paidAmount;
+        if (refund !== 0) {
+          await this.accountRepository.updateBalance(transaction.accountId, refund);
+        }
+        logger.info({ orderId, type: transaction.type, status, refund }, 'BetaTransfer webhook: withdraw partial confirmed');
+        return reply.send({ ok: true });
+      }
+
+      // Any non-success withdraw status => FAILED + refund orderAmount back to balance.
+      await this.transactionRepository.update(transaction.id, {
+        ...externalStatusPatch,
+        status: TransactionStatus.FAILED,
+        confirmedAt: null,
+      });
+      await this.accountRepository.updateBalance(transaction.accountId, orderAmount);
+      logger.info({ orderId, type: transaction.type, status, orderAmount }, 'BetaTransfer webhook: withdraw failed (refund)');
+      return reply.send({ ok: true });
+    }
+
     return reply.send({ ok: true });
   }
 }
