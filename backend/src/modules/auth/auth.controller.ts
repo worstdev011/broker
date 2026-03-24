@@ -12,16 +12,32 @@ import { logger } from '../../shared/logger.js';
 const OAUTH_STATE_PREFIX = 'oauth_state:';
 const OAUTH_STATE_TTL_SEC = 600;
 
-function frontendLocaleBase(): string {
-  let origin = env.FRONTEND_URL.replace(/\/$/, '');
+function localeBaseFromOrigin(originRaw: string): string {
+  let origin = originRaw.replace(/\/$/, '');
   const loc = env.FRONTEND_DEFAULT_LOCALE.replace(/^\/+|\/+$/g, '');
   if (!loc) return origin;
-  // FRONTEND_URL must be origin only (e.g. http://localhost:3000); if it already
-  // ends with /{locale}, do not append again (avoids /ru/ru → 404).
+  // Origin must not already end with /{locale} (avoids /ru/ru → 404).
   while (origin.endsWith(`/${loc}`)) {
     origin = origin.slice(0, -(loc.length + 1));
   }
   return `${origin}/${loc}`;
+}
+
+function frontendLocaleBase(): string {
+  return localeBaseFromOrigin(env.FRONTEND_URL);
+}
+
+/** Where to send the user after Google OAuth. Uses GOOGLE_REDIRECT_URI's origin when set so prod works even if FRONTEND_URL is still the dev default (e.g. NODE_ENV=development + localhost). */
+function googleOAuthLocaleBase(): string {
+  const redirect = env.GOOGLE_REDIRECT_URI?.trim();
+  if (redirect) {
+    try {
+      return localeBaseFromOrigin(new URL(redirect).origin);
+    } catch {
+      /* invalid GOOGLE_REDIRECT_URI */
+    }
+  }
+  return frontendLocaleBase();
 }
 
 function decodeGoogleIdTokenPayload(idToken: string): Record<string, unknown> {
@@ -136,7 +152,7 @@ export class AuthController {
 
   async googleOAuthCallback(request: FastifyRequest, reply: FastifyReply) {
     const q = request.query as Record<string, string | undefined>;
-    const base = frontendLocaleBase();
+    const base = googleOAuthLocaleBase();
 
     if (q.error) {
       return reply.code(302).redirect(`${base}?error=google_denied`);
