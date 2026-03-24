@@ -1,9 +1,16 @@
+import {
+  DEPOSIT_MIN_AMOUNT,
+  DEPOSIT_MAX_AMOUNT,
+  WITHDRAW_MIN_AMOUNT,
+  WITHDRAW_MAX_AMOUNT,
+} from '../../config/constants.js';
+
 export const depositSchema = {
   body: {
     type: 'object',
     required: ['amount'],
     properties: {
-      amount: { type: 'number', minimum: 300, maximum: 29999 },
+      amount: { type: 'number', minimum: DEPOSIT_MIN_AMOUNT, maximum: DEPOSIT_MAX_AMOUNT },
     },
   },
 } as const;
@@ -13,7 +20,7 @@ export const withdrawSchema = {
     type: 'object',
     required: ['amount', 'cardNumber'],
     properties: {
-      amount: { type: 'number', minimum: 300, maximum: 29999 },
+      amount: { type: 'number', minimum: WITHDRAW_MIN_AMOUNT, maximum: WITHDRAW_MAX_AMOUNT },
       cardNumber: { type: 'string', minLength: 16, maxLength: 23 },
       twoFactorCode: { type: 'string', pattern: '^\\d{6}$' },
     },

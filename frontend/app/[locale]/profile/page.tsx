@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { Link, useRouter } from '@/components/navigation';
 import ReactCountryFlag from 'react-country-flag';
 import { UploadSimple, Trash, GlobeHemisphereWest, Plus, Copy, Check } from '@phosphor-icons/react';
-import { ChartLineUp, ChatCircleDots, UserCircle, Wallet } from '@phosphor-icons/react';
+import { ChartLineUp, ChatCircleDots, SignOut, UserCircle, Wallet } from '@phosphor-icons/react';
 import { AuthGuard } from '@/components/auth/AuthGuard';
 import { AppHeader } from '@/components/AppHeader';
 import { WalletTab } from '@/components/profile/WalletTab';
@@ -338,16 +338,21 @@ function PersonalProfileTab({ onProfileUpdate }: { onProfileUpdate?: (p: UserPro
       setDeleteError('Укажите причину удаления');
       return;
     }
-    if (!deletePassword || deletePassword.length < 8) {
+    const needsPassword = profile?.hasPassword !== false;
+    if (needsPassword && (!deletePassword || deletePassword.length < 8)) {
       setDeleteError('Введите пароль (минимум 8 символов)');
       return;
     }
     setDeleting(true);
     setDeleteError(null);
     try {
+      const body: { reason: string; password?: string } = { reason: deleteReason };
+      if (needsPassword) {
+        body.password = deletePassword;
+      }
       await api('/api/user/profile', {
         method: 'DELETE',
-        body: JSON.stringify({ password: deletePassword, reason: deleteReason }),
+        body: JSON.stringify(body),
       });
       await logout();
       router.push('/');
@@ -549,13 +554,6 @@ function PersonalProfileTab({ onProfileUpdate }: { onProfileUpdate?: (p: UserPro
                         <span className="text-xs text-white/50 truncate">
                           {COUNTRIES.find((c) => c.code === country)?.name || '-'}
                         </span>
-                      </div>
-                    </div>
-                    {/* Level badge */}
-                    <div className="shrink-0">
-                      <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-gradient-to-r from-[#022766]/80 to-[#051228]/80 border border-[#154594]/50">
-                        <img src="/images/level.png" alt="" className="w-3 h-3 object-contain" />
-                        <span className="text-[10px] font-medium text-[#84B2FF]">Ур. 1</span>
                       </div>
                     </div>
                   </div>
@@ -996,15 +994,26 @@ function PersonalProfileTab({ onProfileUpdate }: { onProfileUpdate?: (p: UserPro
               ))}
             </div>
 
-            <p className="text-xs sm:text-sm font-medium text-white/80 mb-1.5 sm:mb-2">Введите пароль для подтверждения</p>
-            {deleteError && <p className="mb-1.5 sm:mb-2 text-xs sm:text-sm text-red-400">{deleteError}</p>}
-            <input
-              type="password"
-              value={deletePassword}
-              onChange={(e) => setDeletePassword(e.target.value)}
-              placeholder="Пароль"
-              className="w-full px-3 py-2 sm:px-4 sm:py-3 rounded-lg sm:rounded-xl bg-white/5 border border-white/10 text-sm text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-red-500/50 mb-3 sm:mb-4"
-            />
+            {profile?.hasPassword !== false ? (
+              <>
+                <p className="text-xs sm:text-sm font-medium text-white/80 mb-1.5 sm:mb-2">Введите пароль для подтверждения</p>
+                {deleteError && <p className="mb-1.5 sm:mb-2 text-xs sm:text-sm text-red-400">{deleteError}</p>}
+                <input
+                  type="password"
+                  value={deletePassword}
+                  onChange={(e) => setDeletePassword(e.target.value)}
+                  placeholder="Пароль"
+                  className="w-full px-3 py-2 sm:px-4 sm:py-3 rounded-lg sm:rounded-xl bg-white/5 border border-white/10 text-sm text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-red-500/50 mb-3 sm:mb-4"
+                />
+              </>
+            ) : (
+              <>
+                {deleteError && <p className="mb-1.5 sm:mb-2 text-xs sm:text-sm text-red-400">{deleteError}</p>}
+                <p className="text-xs sm:text-sm text-white/55 mb-3 sm:mb-4">
+                  Вход через Google — пароль не задан. Удаление подтверждается текущей сессией (вы уже авторизованы).
+                </p>
+              </>
+            )}
             <div className="flex gap-2 sm:gap-3">
               <button
                 type="button"
@@ -1287,18 +1296,25 @@ function ProfileSidebar() {
 }
 
 function ProfileBottomNav() {
+  const router = useRouter();
   const searchParams = useSearchParams();
+  const { logout } = useAuth();
   const activeTab = searchParams.get('tab') || 'profile';
 
+  const handleLogout = async () => {
+    await logout();
+    router.push('/');
+  };
+
   return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-30 flex items-end justify-around px-1 pt-1 pb-[max(0.5rem,env(safe-area-inset-bottom))] border-t border-white/10 bg-gradient-to-t from-[#04101f] via-[#05122a] to-[#071430]">
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-30 grid grid-cols-5 gap-0 px-0.5 pt-1 pb-[max(0.5rem,env(safe-area-inset-bottom))] border-t border-white/10 bg-gradient-to-t from-[#04101f] via-[#05122a] to-[#071430]">
       {SIDEBAR_ITEMS.map(({ id, shortLabel, href }) => {
         const isActive = activeTab === id;
         return (
           <Link
             key={id}
             href={href}
-            className={`relative flex flex-col items-center gap-1 px-3 py-2 rounded-xl min-w-[64px] transition-all duration-200 ${
+            className={`relative flex flex-col items-center gap-1 px-1 py-2 rounded-xl min-w-0 transition-all duration-200 ${
               isActive ? 'text-[#7b8fff]' : 'text-white/45 hover:text-white/70'
             }`}
           >
@@ -1311,10 +1327,21 @@ function ProfileBottomNav() {
               {id === 'trade' && <ChartLineUp className="w-5 h-5" weight="fill" />}
               {id === 'support' && <ChatCircleDots className="w-5 h-5" weight="fill" />}
             </div>
-            <span className="text-[10px] font-semibold leading-tight tracking-wide">{shortLabel}</span>
+            <span className="text-[10px] font-semibold leading-tight tracking-wide text-center">{shortLabel}</span>
           </Link>
         );
       })}
+      <button
+        type="button"
+        onClick={handleLogout}
+        className="relative flex flex-col items-center gap-1 px-1 py-2 rounded-xl min-w-0 text-white/45 hover:text-[#ff6b76] transition-all duration-200"
+        aria-label="Выйти из аккаунта"
+      >
+        <div className="w-9 h-9 flex items-center justify-center rounded-xl bg-transparent">
+          <SignOut className="w-5 h-5" weight="bold" />
+        </div>
+        <span className="text-[10px] font-semibold leading-tight tracking-wide text-center">Выйти</span>
+      </button>
     </nav>
   );
 }

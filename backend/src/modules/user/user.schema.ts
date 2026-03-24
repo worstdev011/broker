@@ -33,9 +33,19 @@ export const uploadAvatarSchema = {
 export const deleteProfileSchema = {
   body: {
     type: 'object',
-    required: ['password'],
     properties: {
-      password: { type: 'string', minLength: 8 },
+      password: { type: 'string', minLength: 6, maxLength: 128 },
+      reason: { type: 'string', maxLength: 500 },
+    },
+  },
+} as const;
+
+export const setPasswordSchema = {
+  body: {
+    type: 'object',
+    required: ['newPassword'],
+    properties: {
+      newPassword: { type: 'string', minLength: 6, maxLength: 128 },
     },
   },
 } as const;
@@ -45,8 +55,8 @@ export const changePasswordSchema = {
     type: 'object',
     required: ['currentPassword', 'newPassword'],
     properties: {
-      currentPassword: { type: 'string', minLength: 8 },
-      newPassword: { type: 'string', minLength: 8 },
+      currentPassword: { type: 'string', minLength: 6 },
+      newPassword: { type: 'string', minLength: 6 },
     },
   },
 } as const;

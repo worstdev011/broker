@@ -69,6 +69,39 @@ export function SecuritySection({ profile, onProfileUpdate }: SecuritySectionPro
     }
   };
 
+  const handleSetInitialPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordError(null);
+    setPasswordSuccess(false);
+    if (newPassword !== confirmPassword) {
+      setPasswordError('Пароли не совпадают');
+      return;
+    }
+    if (newPassword.length < 8) {
+      setPasswordError('Пароль должен быть не менее 8 символов');
+      return;
+    }
+    setPasswordSaving(true);
+    try {
+      await api('/api/user/set-password', {
+        method: 'POST',
+        body: JSON.stringify({ newPassword }),
+      });
+      setPasswordSuccess(true);
+      setNewPassword('');
+      setConfirmPassword('');
+      const updated = { ...profile, hasPassword: true as const };
+      onProfileUpdate?.(updated as UserProfile);
+      document.dispatchEvent(new CustomEvent('profile-updated', { detail: updated }));
+      setTimeout(() => setPasswordSuccess(false), 3000);
+    } catch (err: unknown) {
+      const er = err as { message?: string; response?: { data?: { message?: string } } };
+      setPasswordError(er.response?.data?.message || er.message || 'Не удалось установить пароль');
+    } finally {
+      setPasswordSaving(false);
+    }
+  };
+
   const handleEnable2FA = async () => {
     setTwoFAError(null);
     setEnable2FALoading(true);
@@ -157,8 +190,51 @@ export function SecuritySection({ profile, onProfileUpdate }: SecuritySectionPro
         <h2 className="text-base sm:text-lg font-semibold text-white mb-1">Смена пароля</h2>
         {profile?.hasPassword === false ? (
           <>
-            <p className="text-sm text-white/50 mb-2">Вход выполняется через Google.</p>
-            <p className="text-sm text-white/40">Смена пароля для этого аккаунта недоступна.</p>
+            <p className="text-sm text-white/50 mb-4">
+              Вход через Google. Можно задать пароль для входа по email и для операций, где нужен пароль.
+            </p>
+            <form onSubmit={handleSetInitialPassword} className="w-full">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 max-w-2xl">
+                <div>
+                  <label className={labelClass}>Новый пароль</label>
+                  <input
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="Минимум 8 символов"
+                    className={inputClass}
+                    minLength={8}
+                    maxLength={128}
+                    autoComplete="new-password"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Подтвердите пароль</label>
+                  <input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className={inputClass}
+                    maxLength={128}
+                    autoComplete="new-password"
+                    required
+                  />
+                </div>
+              </div>
+              <div className="mt-4 sm:mt-6 flex flex-col sm:flex-row flex-wrap items-start sm:items-center gap-3 sm:gap-4">
+                <button
+                  type="submit"
+                  disabled={passwordSaving}
+                  className="w-full sm:w-auto px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg sm:rounded-xl bg-[#3347ff] hover:bg-[#3347ff]/90 text-white text-xs sm:text-sm font-medium uppercase tracking-wider transition-colors disabled:opacity-50"
+                >
+                  {passwordSaving ? 'Сохранение...' : 'Установить пароль'}
+                </button>
+                {passwordError && <p className="text-sm text-red-400">{passwordError}</p>}
+                {passwordSuccess && <p className="text-sm text-emerald-400">Пароль установлен — теперь доступна смена пароля и отключение 2FA по паролю</p>}
+              </div>
+            </form>
           </>
         ) : (
           <>

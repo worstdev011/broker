@@ -1,9 +1,20 @@
-import { getCsrfToken } from './csrf';
+import { getCsrfToken, setCsrfToken, clearCsrfToken } from './csrf';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? '';
 const REQUEST_TIMEOUT_MS = 15_000;
 
 const MUTATING_METHODS = ['POST', 'PUT', 'PATCH', 'DELETE'];
+
+export class ApiError extends Error {
+  constructor(
+    public status: number,
+    public data: unknown,
+    message?: string,
+  ) {
+    super(message || `API Error: ${status}`);
+    this.name = 'ApiError';
+  }
+}
 
 export async function api<T>(url: string, options: RequestInit = {}): Promise<T> {
   const fullUrl = url.startsWith('http') ? url : `${API_BASE_URL}${url}`;
@@ -51,19 +62,13 @@ export async function api<T>(url: string, options: RequestInit = {}): Promise<T>
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      let errorMessage = `API error ${response.status}`;
       let errorData: unknown = null;
       try {
         errorData = await response.json();
-        errorMessage = (errorData as { error?: string; message?: string })?.error
-          ?? (errorData as { error?: string; message?: string })?.message
-          ?? errorMessage;
       } catch {
-        errorMessage = response.statusText || errorMessage;
+        errorData = { error: response.statusText };
       }
-      const error = new Error(errorMessage) as Error & { response?: { status: number; statusText: string; data: unknown } };
-      error.response = { status: response.status, statusText: response.statusText, data: errorData };
-      throw error;
+      throw new ApiError(response.status, errorData);
     }
 
     const contentType = response.headers.get('content-type');
@@ -73,14 +78,63 @@ export async function api<T>(url: string, options: RequestInit = {}): Promise<T>
     return {} as T;
   } catch (err) {
     clearTimeout(timeoutId);
+    if (err instanceof ApiError) throw err;
     if (err instanceof Error && err.name === 'AbortError') {
       if (isExternalAbort) {
         throw new DOMException('The operation was aborted.', 'AbortError');
       }
-      const timeoutErr = new Error('Server not responding. Check that backend is running.') as Error & { response?: { status: number; statusText: string; data: unknown } };
-      timeoutErr.response = { status: 408, statusText: 'Request Timeout', data: { message: 'Request timeout' } };
-      throw timeoutErr;
+      throw new ApiError(408, { error: 'Request timeout' }, 'Request timeout - server not responding');
     }
-    throw err;
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new ApiError(0, { error: msg }, msg || 'Network error');
   }
 }
+
+export const kycApi = {
+  init: (userId: string) =>
+    api<{ token: string; applicantId: string | null }>('/api/kyc/init', {
+      method: 'POST',
+      body: JSON.stringify({ userId }),
+    }),
+};
+
+export const authApi = {
+  register: async (email: string, password: string) => {
+    const res = await api<{ user: { id: string; email: string }; csrfToken?: string }>('/api/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+    if (res.csrfToken) setCsrfToken(res.csrfToken);
+    return res;
+  },
+
+  login: async (email: string, password: string) => {
+    const res = await api<{ user?: { id: string; email: string }; requires2FA?: boolean; tempToken?: string; csrfToken?: string }>('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+    if (res.csrfToken) setCsrfToken(res.csrfToken);
+    return res;
+  },
+
+  verify2FA: async (tempToken: string, code: string) => {
+    const res = await api<{ user: { id: string; email: string }; csrfToken?: string }>('/api/auth/2fa', {
+      method: 'POST',
+      body: JSON.stringify({ tempToken, code }),
+    });
+    if (res.csrfToken) setCsrfToken(res.csrfToken);
+    return res;
+  },
+
+  logout: async () => {
+    const res = await api<{ message: string }>('/api/auth/logout', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+    clearCsrfToken();
+    return res;
+  },
+
+  me: () =>
+    api<{ user: { id: string; email: string; hasPassword?: boolean } }>('/api/auth/me'),
+};

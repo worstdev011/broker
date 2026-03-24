@@ -76,10 +76,17 @@ export const changePasswordSchema = z.object({
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
 
 export const deleteProfileSchema = z.object({
-  password: passwordSchema,
+  password: z.string().min(8).max(128).optional(),
+  reason: z.string().max(500).optional(),
 });
 
 export type DeleteProfileInput = z.infer<typeof deleteProfileSchema>;
+
+export const setPasswordSchema = z.object({
+  newPassword: passwordStrongSchema,
+});
+
+export type SetPasswordInput = z.infer<typeof setPasswordSchema>;
 
 export const verify2FASetupSchema = z.object({
   code: z.string().length(6, '2FA code must be 6 digits').regex(/^\d{6}$/, '2FA code must contain only digits'),

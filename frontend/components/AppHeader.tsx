@@ -13,60 +13,7 @@ import { useAccountStore } from '@/stores/account.store';
 import { useAccountSwitch } from '@/lib/hooks/useAccountSwitch';
 import { formatCurrencySymbol } from '@/lib/formatCurrency';
 import type { AccountSnapshot } from '@/types/account';
-
-type NotificationType = 'system' | 'trade' | 'deposit' | 'promo';
-
-interface Notification {
-  id: string;
-  type: NotificationType;
-  title: string;
-  message: string;
-  time: string;
-  read: boolean;
-}
-
-const HARDCODED_NOTIFICATIONS: Notification[] = [
-  {
-    id: '1',
-    type: 'promo',
-    title: 'Добро пожаловать!',
-    message: 'Рады видеть вас на платформе Comfortrade. Начните с демо-счёта - без риска.',
-    time: 'только что',
-    read: false,
-  },
-  {
-    id: '2',
-    type: 'deposit',
-    title: 'Пополнение счёта',
-    message: 'Ваш реальный счёт успешно пополнен. Средства доступны для торговли.',
-    time: '2 ч назад',
-    read: false,
-  },
-  {
-    id: '3',
-    type: 'trade',
-    title: 'Сделка закрыта',
-    message: 'EUR/USD · CALL · Выигрыш +340 UAH. Отличный результат!',
-    time: '5 ч назад',
-    read: false,
-  },
-  {
-    id: '4',
-    type: 'system',
-    title: 'Обновление платформы',
-    message: 'Добавлены новые активы и улучшена производительность графика.',
-    time: 'вчера',
-    read: true,
-  },
-  {
-    id: '5',
-    type: 'promo',
-    title: 'Бонус 20% на депозит',
-    message: 'Только до конца недели - пополните счёт и получите бонус 20%.',
-    time: '2 дня назад',
-    read: true,
-  },
-];
+import { getAvatarUrl } from '@/lib/avatarUrl';
 
 export function AppHeader() {
   const router = useRouter();
@@ -207,7 +154,7 @@ export function AppHeader() {
               aria-haspopup="menu"
             >
               {avatarUrl ? (
-                <img src={avatarUrl?.startsWith('/') ? avatarUrl : `${process.env.NEXT_PUBLIC_API_URL || ''}${avatarUrl}`} alt="" className="w-full h-full object-cover rounded-full" aria-hidden />
+                <img src={getAvatarUrl(avatarUrl) ?? undefined} alt="" className="w-full h-full object-cover rounded-full" aria-hidden />
               ) : (
                 <div className="w-full h-full rounded-full bg-gradient-to-br from-[#3347ff] via-[#3d52ff] to-[#1f2a45] flex items-center justify-center text-sm font-bold text-white">
                   {isGuest ? (

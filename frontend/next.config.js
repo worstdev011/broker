@@ -7,8 +7,8 @@ const backendUrl = process.env.API_BACKEND_URL || process.env.NEXT_PUBLIC_API_UR
 
 const nextConfig = {
   reactStrictMode: true,
-  typescript: { ignoreBuildErrors: true },
-  eslint: { ignoreDuringBuilds: true },
+  typescript: { ignoreBuildErrors: false },
+  eslint: { ignoreDuringBuilds: false },
   async headers() {
     return [
       {

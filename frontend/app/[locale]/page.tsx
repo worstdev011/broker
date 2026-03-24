@@ -417,7 +417,7 @@ function HomeContent() {
                     </div>
                     <div className="flex flex-col leading-none">
                       <span className="text-white/90 text-[11px] font-semibold">DOVI.COM.UA</span>
-                      <span className="text-white/50 text-[9px] font-medium mt-0.5">190 отзывов</span>
+                      <span className="text-white/50 text-[9px] font-medium mt-0.5">{t('hero_dovi_reviews_count')}</span>
                     </div>
                   </div>
                 </a>

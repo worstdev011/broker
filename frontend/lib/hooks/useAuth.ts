@@ -5,7 +5,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { authApi, ApiError } from '../api/client';
+import { authApi, ApiError } from '../api/api';
 import { parseValidationError } from '../api/validationError';
 import { VERIFICATION_STORAGE_KEY } from './useVerification';
 

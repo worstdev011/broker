@@ -80,25 +80,42 @@ export class UserService {
     return toAuthUserPublic(updatedUser);
   }
 
-  async deleteProfile(userId: string, password: string): Promise<void> {
+  /**
+   * Deletes the account. Password accounts must supply the correct password.
+   * OAuth-only accounts (no password hash) can delete while authenticated — session proves identity.
+   */
+  async deleteProfile(userId: string, password?: string): Promise<void> {
     const user = await this.userRepository.findById(userId);
     if (!user) {
       throw new UserNotFoundError(userId);
     }
 
-    if (!user.password) {
-      throw new NoPasswordAccountError(
-        'Account uses Google sign-in; profile deletion with password is not available',
-      );
-    }
-
-    const isValid = await verifyPassword(password, user.password);
-    if (!isValid) {
-      throw new InvalidPasswordError();
+    if (user.password) {
+      if (!password || password.length < 8) {
+        throw new InvalidPasswordError('Password is required to delete this account');
+      }
+      const isValid = await verifyPassword(password, user.password);
+      if (!isValid) {
+        throw new InvalidPasswordError();
+      }
     }
 
     await this.sessionRepository.deleteAllByUserId(userId);
     await this.userRepository.deleteById(userId);
+  }
+
+  /** First-time password for OAuth-only accounts (enables email/password login and password-gated actions). */
+  async setInitialPassword(userId: string, newPassword: string): Promise<void> {
+    const user = await this.userRepository.findById(userId);
+    if (!user) {
+      throw new UserNotFoundError(userId);
+    }
+    if (user.password) {
+      throw new PasswordPolicyError('Password is already set. Use change password to update it.');
+    }
+    const newPasswordHash = await hashPassword(newPassword);
+    await this.userRepository.updatePassword(userId, newPasswordHash);
+    logger.info(`Initial password set for user: ${userId}`);
   }
 
   async changePassword({

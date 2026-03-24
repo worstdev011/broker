@@ -7,6 +7,7 @@ import type {
   UpdateProfileInput,
   ChangePasswordInput,
   DeleteProfileInput,
+  SetPasswordInput,
   Verify2FASetupInput,
   Disable2FAInput,
 } from './user.validation.js';
@@ -76,7 +77,7 @@ export class UserController {
     const userId = request.userId!;
     const { password } = request.body;
 
-    await this.userService.deleteProfile(userId, password);
+    await this.userService.deleteProfile(userId, password ?? undefined);
     clearSessionCookie(reply);
 
     return reply.send({ message: 'User profile deleted successfully' });
@@ -92,6 +93,18 @@ export class UserController {
     await this.userService.changePassword({ userId, currentPassword, newPassword });
 
     return reply.send({ message: 'Password changed successfully' });
+  }
+
+  async setPassword(
+    request: FastifyRequest<{ Body: SetPasswordInput }>,
+    reply: FastifyReply,
+  ) {
+    const userId = request.userId!;
+    const { newPassword } = request.body;
+
+    await this.userService.setInitialPassword(userId, newPassword);
+
+    return reply.send({ message: 'Password set successfully' });
   }
 
   async getSessions(request: FastifyRequest, reply: FastifyReply) {

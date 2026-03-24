@@ -5,11 +5,19 @@ import staticPlugin from '@fastify/static';
 import { getUserService, getFileStorage, getAccountRepository } from '../../shared/serviceFactory.js';
 import { UserController } from './user.controller.js';
 import { requireAuth } from '../auth/auth.middleware.js';
-import { getProfileSchema, updateProfileSchema, uploadAvatarSchema, deleteProfileSchema, changePasswordSchema } from './user.schema.js';
+import {
+  getProfileSchema,
+  updateProfileSchema,
+  uploadAvatarSchema,
+  deleteProfileSchema,
+  changePasswordSchema,
+  setPasswordSchema,
+} from './user.schema.js';
 import {
   updateProfileSchema as updateProfileZodSchema,
   changePasswordSchema as changePasswordZodSchema,
   deleteProfileSchema as deleteProfileZodSchema,
+  setPasswordSchema as setPasswordZodSchema,
   verify2FASetupSchema,
   disable2FASchema,
 } from './user.validation.js';
@@ -17,6 +25,7 @@ import type {
   UpdateProfileInput,
   ChangePasswordInput,
   DeleteProfileInput,
+  SetPasswordInput,
   Verify2FASetupInput,
   Disable2FAInput,
 } from './user.validation.js';
@@ -106,6 +115,11 @@ export async function registerUserRoutes(app: FastifyInstance) {
     schema: changePasswordSchema,
     preHandler: [requireAuth, validateBody(changePasswordZodSchema)],
   }, (request, reply) => userController.changePassword(request, reply));
+
+  app.post<{ Body: SetPasswordInput }>('/api/user/set-password', {
+    schema: setPasswordSchema,
+    preHandler: [requireAuth, validateBody(setPasswordZodSchema)],
+  }, (request, reply) => userController.setPassword(request, reply));
 
   app.get('/api/user/sessions', {
     preHandler: [requireAuth],
