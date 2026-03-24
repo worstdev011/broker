@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import { useState, useEffect } from 'react';
 import { Link, useRouter, usePathname } from '@/components/navigation';
-import { Wallet, UserCircle, Repeat, MessageCircle, ArrowLeft, ChevronRight, TrendingUp, PlusCircle } from 'lucide-react';
+import { Wallet, UserCircle, ArrowsClockwise, ChatCircleText, ArrowLeft, CaretRight, PlusCircle } from '@phosphor-icons/react';
 import { NotificationsBell } from '@/components/NotificationsBell';
 import { useTranslations } from 'next-intl';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -249,10 +249,10 @@ export function AppHeader() {
                   </div>
                   <div className="px-2 pb-1 space-y-1">
                     <button type="button" role="menuitem" onClick={() => { setShowProfileModal(false); setShowAccountModal(true); loadAllBalances(); }} className="group w-full h-[38px] px-3 rounded-lg flex items-center gap-2.5 text-left md:hover:bg-white/[0.06] transition-colors duration-150">
-                      <Repeat className="w-4 h-4 text-white/50 group-hover:text-white transition-colors duration-150" aria-hidden />
+                      <ArrowsClockwise className="w-4 h-4 text-white/50 group-hover:text-white transition-colors duration-150" aria-hidden />
                       <span className="text-[13px] text-white/80 group-hover:text-white transition-colors duration-150">{t('switch_account')}</span>
                       <span className="ml-auto text-[11px] text-white/50 group-hover:text-white/80 transition-colors duration-150">{accountTypeShort}</span>
-                      <ChevronRight className="w-4 h-4 text-white/50 group-hover:text-white transition-colors duration-150" />
+                      <CaretRight className="w-4 h-4 text-white/50 group-hover:text-white transition-colors duration-150" />
                     </button>
                     <Link href="/profile" onClick={() => setShowProfileModal(false)} className="group h-[38px] px-3 rounded-lg flex items-center gap-2.5 md:hover:bg-white/[0.06] transition-colors duration-150">
                       <UserCircle className="w-4 h-4 text-white/50 group-hover:text-white transition-colors duration-150" />
@@ -263,7 +263,7 @@ export function AppHeader() {
                       <span className="text-[13px] text-white/80 group-hover:text-white transition-colors duration-150">{t('wallet')}</span>
                     </Link>
                     <Link href="/profile?tab=support" onClick={() => setShowProfileModal(false)} className="group h-[38px] px-3 rounded-lg flex items-center gap-2.5 md:hover:bg-white/[0.06] transition-colors duration-150">
-                      <MessageCircle className="w-4 h-4 text-white/50 group-hover:text-white transition-colors duration-150" />
+                      <ChatCircleText className="w-4 h-4 text-white/50 group-hover:text-white transition-colors duration-150" />
                       <span className="text-[13px] text-white/80 group-hover:text-white transition-colors duration-150">{t('support')}</span>
                     </Link>
                   </div>

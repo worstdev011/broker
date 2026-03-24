@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, Minus } from 'lucide-react';
+import { Plus, Minus } from '@phosphor-icons/react';
 
 const MIN_SECONDS = 5;
 const MAX_SECONDS = 300;
@@ -29,11 +29,9 @@ const PRESETS = [
 export function TimeSelectionModal({
   currentSeconds,
   onSelect,
-  onClose,
 }: {
   currentSeconds: number;
   onSelect: (seconds: number) => void;
-  onClose: () => void;
 }) {
   const init = secondsToTime(currentSeconds);
   const [h, setH] = useState(init.hours);
@@ -69,10 +67,10 @@ export function TimeSelectionModal({
   const totalNow = timeToSeconds(h, m, s);
 
   const btnStep =
-    'w-full h-9 rounded-lg flex items-center justify-center transition-colors duration-100 bg-white/[0.07] hover:bg-white/[0.13] text-white active:scale-95';
+    'w-full h-8 rounded-lg flex items-center justify-center transition-colors duration-100 bg-white/[0.07] hover:bg-white/[0.13] text-white active:scale-95';
 
   const btnPresetBase =
-    'h-9 rounded-lg text-xs font-semibold transition-all duration-100 active:scale-95 flex items-center justify-center';
+    'h-8 rounded-lg text-xs font-medium transition-all duration-100 active:scale-95 flex items-center justify-center';
 
   const ColUnit = ({
     value,
@@ -83,15 +81,15 @@ export function TimeSelectionModal({
     onUp: () => void;
     onDown: () => void;
   }) => (
-    <div className="flex flex-col items-center gap-1 w-[42px]">
+    <div className="flex flex-col items-center gap-1 w-[38px]">
       <button type="button" onClick={onUp} className={btnStep}>
-        <Plus className="w-3.5 h-3.5" strokeWidth={2} />
+        <Plus className="w-[18px] h-[18px]" weight="fill" />
       </button>
-      <div className="text-2xl font-bold text-white tabular-nums leading-none py-0.5 select-none">
+      <div className="text-xl font-semibold text-white tabular-nums leading-none py-0.5 select-none">
         {String(value).padStart(2, '0')}
       </div>
       <button type="button" onClick={onDown} className={btnStep}>
-        <Minus className="w-3.5 h-3.5" strokeWidth={2} />
+        <Minus className="w-[18px] h-[18px]" weight="fill" />
       </button>
     </div>
   );
@@ -99,23 +97,23 @@ export function TimeSelectionModal({
   return (
     <div className="flex flex-col w-full">
       {/* ── Дисплей и шаги - как блок суммы в AmountCalculatorModal ── */}
-      <div className="px-3 pt-3 pb-2">
+      <div className="px-2.5 pt-2.5 pb-1.5">
         <div className="flex items-center justify-center gap-0.5">
           <ColUnit value={h} onUp={() => adjust('h', 1)} onDown={() => adjust('h', -1)} />
-          <span className="text-white/35 text-xl font-bold pb-6 select-none">:</span>
+          <span className="text-white/35 text-xl font-medium pb-6 select-none">:</span>
           <ColUnit value={m} onUp={() => adjust('m', 1)} onDown={() => adjust('m', -1)} />
-          <span className="text-white/35 text-xl font-bold pb-6 select-none">:</span>
+          <span className="text-white/35 text-xl font-medium pb-6 select-none">:</span>
           <ColUnit value={s} onUp={() => adjust('s', 5)} onDown={() => adjust('s', -5)} />
         </div>
-        <div className="text-[11px] text-white/35 text-center mt-1">от 5 сек до 5 мин</div>
+        <div className="text-[11px] text-white/35 text-center mt-0.5">от 5 сек до 5 мин</div>
       </div>
 
       {/* ── Пресеты - как секция «Калькулятор» ── */}
       <div className="border-t border-white/[0.07]">
-        <div className="w-full px-3 py-1.5 flex items-center">
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-white/40">Интервалы</span>
+        <div className="w-full px-2.5 py-1 flex items-center">
+          <span className="text-[11px] font-medium uppercase tracking-wider text-white/40">Интервалы</span>
         </div>
-        <div className="px-2 pb-2 grid grid-cols-3 gap-1">
+        <div className="px-2 pb-1.5 grid grid-cols-3 gap-1">
           {PRESETS.map((p) => {
             const active = totalNow === p.seconds;
             return (
@@ -136,15 +134,6 @@ export function TimeSelectionModal({
         </div>
       </div>
 
-      <div className="px-2 pb-2">
-        <button
-          type="button"
-          onClick={onClose}
-          className="w-full py-2 rounded-lg bg-[#3347ff] hover:bg-[#2a3de0] text-white text-sm font-semibold transition-colors"
-        >
-          Готово
-        </button>
-      </div>
     </div>
   );
 }

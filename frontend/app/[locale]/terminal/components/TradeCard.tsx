@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowUp, ArrowDown, ChevronDown } from 'lucide-react';
+import { ArrowUp, ArrowDown, CaretDown } from '@phosphor-icons/react';
 import ReactCountryFlag from 'react-country-flag';
 import { useEffect, useRef } from 'react';
 import { getInstrumentOrDefault } from '@/lib/instruments';
@@ -209,7 +209,7 @@ export function TradeCard({ trade, currentTime, isExpanded, onToggle, currency =
           ) : (
             <ArrowDown className="w-4 h-4 text-red-400" />
           )}
-          <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+          <CaretDown className={`w-4 h-4 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
         </div>
       </div>
 

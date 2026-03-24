@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { HelpCircle, ChevronDown, Calendar } from 'lucide-react';
+import { Question, CaretDown, Calendar } from '@phosphor-icons/react';
 import {
   XAxis,
   YAxis,
@@ -152,7 +152,7 @@ function StatLabel({ label, hint }: { label: string; hint: string }) {
     <div className="flex items-center gap-1.5 mb-2">
       <span className="text-xs font-medium text-white/50 uppercase tracking-wider">{label}</span>
       <span className="group/tip relative inline-flex cursor-help">
-        <HelpCircle className="w-3.5 h-3.5 text-white/40 hover:text-white/60 transition-colors" strokeWidth={2} />
+        <Question className="w-3.5 h-3.5 text-white/40 hover:text-white/60 transition-colors" weight="bold" />
         <span className="absolute left-0 bottom-full mb-1.5 px-2.5 py-1.5 bg-[#0f1a2e] border border-white/10 rounded-lg text-xs text-white/80 max-w-[200px] opacity-0 invisible group-hover/tip:opacity-100 group-hover/tip:visible transition-all z-20 shadow-xl pointer-events-none">
           {hint}
         </span>
@@ -352,7 +352,7 @@ export function TradeProfileTab() {
                       }`}
                     >
                       {i.label}
-                      {interval === i.id && !isCustom && <ChevronDown className="w-3.5 h-3.5" />}
+                      {interval === i.id && !isCustom && <CaretDown className="w-3.5 h-3.5" />}
                     </button>
                   ))}
                   <button

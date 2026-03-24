@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { FileCheck, Clock, CheckCircle2, FileText, XCircle, ChevronDown, Search } from 'lucide-react';
+import { FilePlus, ClockCountdown, CheckCircle, FileText, XCircle, CaretDown, MagnifyingGlass } from '@phosphor-icons/react';
 import { SumsubKyc } from '@/components/kyc/SumsubKyc';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { VERIFICATION_STORAGE_KEY } from '@/lib/hooks/useVerification';
@@ -169,7 +169,7 @@ export function VerificationSection() {
               disabled={isLoading || !user}
               className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 sm:px-8 py-3 rounded-xl bg-[#3347ff] hover:bg-[#3347ff]/90 text-white text-xs sm:text-sm font-medium uppercase tracking-wider transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <FileCheck className="w-4 h-4" />
+              <FilePlus className="w-4 h-4" />
               Начать верификацию
             </button>
           </div>
@@ -203,7 +203,7 @@ export function VerificationSection() {
               ) : (
                 <span className="text-white/40">Выберите страну...</span>
               )}
-              <ChevronDown
+              <CaretDown
                 className={`w-4 h-4 shrink-0 text-white/50 transition-transform duration-200 ${dropdownOpen ? 'rotate-180' : ''}`}
               />
             </button>
@@ -219,7 +219,7 @@ export function VerificationSection() {
                   {/* Search */}
                   <div className="p-2 border-b border-white/[0.06]">
                     <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5">
-                      <Search className="w-3.5 h-3.5 text-white/40 shrink-0" />
+                      <MagnifyingGlass className="w-3.5 h-3.5 text-white/40 shrink-0" />
                       <input
                         autoFocus
                         type="text"
@@ -274,7 +274,7 @@ export function VerificationSection() {
               disabled={!selectedCountry}
               className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-[#3347ff] hover:bg-[#3347ff]/90 text-white text-xs font-medium uppercase tracking-wider transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              <FileCheck className="w-4 h-4" />
+              <FilePlus className="w-4 h-4" />
               Продолжить
             </button>
           </div>
@@ -305,7 +305,7 @@ export function VerificationSection() {
       {status === 'pending' && (
         <div className="py-6 text-center">
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-amber-500/20 mb-4">
-            <Clock className="w-7 h-7 text-amber-400" />
+            <ClockCountdown className="w-7 h-7 text-amber-400" />
           </div>
           <h3 className="text-base sm:text-lg font-semibold text-white mb-2">
             Документы отправлены на проверку
@@ -325,7 +325,7 @@ export function VerificationSection() {
       {status === 'verified' && (
         <div className="py-6 text-center">
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-emerald-500/20 mb-4">
-            <CheckCircle2 className="w-7 h-7 text-emerald-400" />
+            <CheckCircle className="w-7 h-7 text-emerald-400" weight="fill" />
           </div>
           <h3 className="text-base sm:text-lg font-semibold text-white mb-2">
             Аккаунт успешно верифицирован
@@ -356,7 +356,7 @@ export function VerificationSection() {
             onClick={() => setStatus('country-select')}
             className="flex items-center gap-2 mx-auto px-6 py-2.5 rounded-xl bg-[#3347ff] hover:bg-[#3347ff]/90 text-white text-xs sm:text-sm font-medium uppercase tracking-wider transition-colors"
           >
-            <FileCheck className="w-4 h-4" />
+            <FilePlus className="w-4 h-4" />
             Попробовать снова
           </button>
 

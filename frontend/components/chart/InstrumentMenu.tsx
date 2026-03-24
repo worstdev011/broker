@@ -7,7 +7,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useClickOutside } from '@/lib/hooks/useClickOutside';
 import { useLocalStorageSet } from '@/lib/hooks/useLocalStorageSet';
-import { ChevronDown, ChevronUp, Search, Star } from 'lucide-react';
+import { CaretDown, CaretUp, MagnifyingGlass, Star } from '@phosphor-icons/react';
 import { INSTRUMENTS, getInstrumentOrDefault } from '@/lib/instruments';
 import { api } from '@/lib/api/api';
 import { logger } from '@/lib/logger';
@@ -253,9 +253,9 @@ export function InstrumentMenu({ instrument, onInstrumentChange }: InstrumentMen
           })()}
         </div>
         <span>{displayLabel}</span>
-        <ChevronDown
+        <CaretDown
           className={`w-4 h-4 transition-transform shrink-0 ${isOpen ? 'rotate-180' : ''}`}
-          strokeWidth={2.5}
+          weight="bold"
         />
       </button>
 
@@ -316,7 +316,7 @@ export function InstrumentMenu({ instrument, onInstrumentChange }: InstrumentMen
           {/* Поле поиска */}
           <div className="border-b border-white/10 px-4 py-3">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
                 ref={searchInputRef}
                 type="text"
@@ -345,11 +345,11 @@ export function InstrumentMenu({ instrument, onInstrumentChange }: InstrumentMen
             >
               <span className="text-gray-300 font-semibold text-sm">Выплата</span>
               {sortOrder === 'desc' ? (
-                <ChevronDown className="w-3.5 h-3.5 text-gray-300" />
+                <CaretDown className="w-3.5 h-3.5 text-gray-300" weight="bold" />
               ) : sortOrder === 'asc' ? (
-                <ChevronUp className="w-3.5 h-3.5 text-gray-300" />
+                <CaretUp className="w-3.5 h-3.5 text-gray-300" weight="bold" />
               ) : (
-                <ChevronDown className="w-3.5 h-3.5 text-gray-300 opacity-50" />
+                <CaretDown className="w-3.5 h-3.5 text-gray-300 opacity-50" weight="bold" />
               )}
             </button>
           </div>

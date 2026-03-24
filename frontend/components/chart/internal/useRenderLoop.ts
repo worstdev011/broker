@@ -16,7 +16,7 @@ import { renderHoverHighlight, type HoverAction } from './render/renderHoverHigh
 import { renderMarketClosedOverlay, type MarketStatus, type MarketCountdown } from './render/renderMarketOverlay';
 import { renderMarketAlternatives } from './render/renderMarketAlternatives';
 import { renderGrid } from './render/renderGrid';
-import { renderAxes } from './render/renderAxes';
+import { renderAxes, renderTimeAxisOverlay } from './render/renderAxes';
 import { LABEL_FONT } from './chartTheme';
 import { renderInstrumentWatermark } from './render/ui/renderInstrumentWatermark';
 import { getMarketCountdown } from './utils/marketCountdown';
@@ -742,6 +742,10 @@ export function useRenderLoop({
           candleWidth,
         });
       }
+
+      // Time axis overlay: перерисовываем полосу временных меток поверх индикаторов и рисований,
+      // чтобы они никогда не перекрывали метки времени внизу графика.
+      renderTimeAxisOverlay({ ctx, viewport, width, height: mainHeight });
 
       // Crosshair time label
       if (crosshair?.isActive) {

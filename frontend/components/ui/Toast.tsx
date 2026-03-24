@@ -5,13 +5,13 @@
  * Неблокирующие уведомления в углу экрана
  */
 
-import { X, AlertCircle, CheckCircle, Info, AlertTriangle, TrendingDown, TrendingUp } from 'lucide-react';
+import { X, WarningCircle, CheckCircle, Info, Warning, TrendDown, TrendUp } from '@phosphor-icons/react';
 import { useToastStore, type ToastType } from '@/stores/toast.store';
 
-const typeConfig: Record<ToastType, { icon: typeof AlertCircle; leftBorder: string }> = {
-  error: { icon: AlertCircle, leftBorder: 'border-l-red-400' },
-  success: { icon: CheckCircle, leftBorder: 'border-l-emerald-400' },
-  warning: { icon: AlertTriangle, leftBorder: 'border-l-amber-400' },
+const typeConfig: Record<ToastType, { icon: typeof WarningCircle; leftBorder: string }> = {
+  error: { icon: WarningCircle, leftBorder: 'border-l-[#ff3d1f]' },
+  success: { icon: CheckCircle, leftBorder: 'border-l-[#45b833]' },
+  warning: { icon: Warning, leftBorder: 'border-l-amber-400' },
   info: { icon: Info, leftBorder: 'border-l-blue-400' },
   'trade-open': { icon: CheckCircle, leftBorder: 'border-l-slate-400' },
 };
@@ -56,19 +56,20 @@ function ToastItem({
 
   if (isTradeOpen && toast.tradeOpen) {
     const { instrument, direction, amount } = toast.tradeOpen;
-    const DirIcon = direction === 'CALL' ? TrendingUp : TrendingDown;
+    const DirIcon = direction === 'CALL' ? TrendUp : TrendDown;
     const amountStr = amount ? `$${amount}` : '';
     const isCall = direction === 'CALL';
-    const leftBorder = isCall ? 'border-l-emerald-400' : 'border-l-red-400';
+    const leftBorder = isCall ? 'border-l-[#45b833]' : 'border-l-[#ff3d1f]';
+    const accentColor = isCall ? '#45b833' : '#ff3d1f';
 
     return (
       <div
-        className={`pointer-events-auto rounded-r-md border-l-4 pl-3 pr-2.5 py-3 shadow-lg bg-[#0d1626]/90 backdrop-blur-md ${leftBorder} animate-in slide-in-from-bottom-2 fade-in duration-200`}
+        className={`pointer-events-auto rounded-xl border-l-4 pl-3 pr-2.5 py-3 shadow-lg bg-[#0d1626]/90 backdrop-blur-md ${leftBorder} animate-in slide-in-from-bottom-2 fade-in duration-200`}
         role="alert"
       >
         <div className="flex items-center justify-between gap-2 mb-2">
           <span className="flex items-center gap-1.5 text-xs font-medium text-white/60 uppercase tracking-wide">
-            <CheckCircle className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
+            <CheckCircle className="h-3.5 w-3.5 shrink-0" style={{ color: accentColor }} />
             Сделка открыта
           </span>
           <button
@@ -86,7 +87,7 @@ function ToastItem({
           </p>
           <span className="text-sm text-white/95 flex items-center gap-1">
             {amountStr}
-            <DirIcon className={`h-4 w-4 shrink-0 ${isCall ? 'text-emerald-400' : 'text-red-400'}`} aria-hidden />
+            <DirIcon className="h-4 w-4 shrink-0" style={{ color: accentColor }} aria-hidden />
           </span>
         </div>
       </div>
@@ -95,7 +96,7 @@ function ToastItem({
 
   return (
     <div
-      className={`pointer-events-auto flex items-center gap-2.5 min-h-[48px] rounded-r-md border-l-4 pl-3 pr-2.5 py-3 shadow-lg bg-[#0d1626]/90 backdrop-blur-md ${config.leftBorder} animate-in slide-in-from-bottom-2 fade-in duration-200`}
+      className={`pointer-events-auto flex items-center gap-2.5 min-h-[48px] rounded-xl border-l-4 pl-3 pr-2.5 py-3 shadow-lg bg-[#0d1626]/90 backdrop-blur-md ${config.leftBorder} animate-in slide-in-from-bottom-2 fade-in duration-200`}
       role="alert"
     >
       <Icon className="h-4 w-4 shrink-0 text-white/90" />

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
-import { BarChart2, X } from 'lucide-react';
+import { ChartBar, X } from '@phosphor-icons/react';
 import { api } from '@/lib/api/api';
 import { logger } from '@/lib/logger';
 import { useAccountStore } from '@/stores/account.store';
@@ -159,7 +159,7 @@ export function TradesHistoryModal({ onClose, refreshTrigger }: { onClose: () =>
             className="md:hidden absolute top-0 right-0 w-10 h-10 flex items-center justify-center rounded-lg text-gray-400 active:bg-white/10 -mt-0.5 -mr-1"
             aria-label="Закрыть"
           >
-            <X className="w-5 h-5" strokeWidth={2} />
+            <X className="w-5 h-5" weight="bold" />
           </button>
         </div>
       </div>
@@ -211,7 +211,7 @@ export function TradesHistoryModal({ onClose, refreshTrigger }: { onClose: () =>
           href="/profile?tab=trade"
           className="flex items-center justify-center gap-2 w-full h-9 rounded-lg bg-gradient-to-r from-[#3347ff] to-[#1e2fcc] text-white text-sm font-semibold transition-all md:hover:from-[#3347ff]/90 md:hover:to-[#1e2fcc]/90 shadow-md shadow-[#3347ff]/20"
         >
-          <BarChart2 className="w-4 h-4 shrink-0" />
+          <ChartBar className="w-4 h-4 shrink-0" weight="fill" />
           Показать статистику
         </Link>
       </div>

@@ -5,7 +5,31 @@ import { Link } from '@/components/navigation';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useRouter, usePathname, useParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { TrendingUp, Wallet, UserCircle, PlusCircle, Plus, Minus, History, Newspaper, Repeat, MessageCircle, ChevronsRight, Clock, Copy, Check, Calculator } from 'lucide-react';
+import {
+  ArrowsClockwise,
+  ArrowsInSimple,
+  ArrowsOutSimple,
+  CaretDoubleRight,
+  ChartLineUp,
+  ChatCircleText,
+  ChatTeardropText,
+  Check,
+  Clock,
+  ClockCounterClockwise,
+  Copy,
+  Gear,
+  ChatCircleDots,
+  Minus,
+  Newspaper,
+  Plus,
+  PlusCircle,
+  SignOut,
+  SpeakerHigh,
+  SpeakerSlash,
+  User,
+  UserCircle,
+  Wallet,
+} from '@phosphor-icons/react';
 import { useTerminalSnapshot } from '@/lib/hooks/useTerminalSnapshot';
 import { AuthGuard } from '@/components/auth/AuthGuard';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -180,12 +204,26 @@ export function TerminalPageContent({ defaultAccount = 'real' }: TerminalPagePro
   const [followMode, setFollowMode] = useState<boolean>(true);
   const candleChartRef = useRef<CandleChartRef | null>(null);
   const lineChartRef = useRef<LineChartRef | null>(null);
+
+  // Page-level store of active trades so they survive chart type switches.
+  // Each entry is the raw DTO that can be passed to addTradeOverlayFromDTO.
+  const activeTradesRef = useRef<Array<{
+    id: string;
+    direction: 'CALL' | 'PUT';
+    entryPrice: string;
+    openedAt: string;
+    expiresAt: string;
+    amount?: string | number;
+  }>>([]);
   const [showReturnToLatest, setShowReturnToLatest] = useState<boolean>(false);
   useEffect(() => {
     const terminalSnapshot = data;
     if (!terminalSnapshot?.openTrades?.length || terminalSnapshot.instrument !== instrument) return;
+    const now = Date.now();
     const openTrades = terminalSnapshot.openTrades;
     for (const t of openTrades) {
+      const expiresAtMs = new Date(t.expiresAt).getTime();
+      if (expiresAtMs <= now) continue;
       const dto = {
         id: t.id,
         direction: t.direction,
@@ -194,6 +232,10 @@ export function TerminalPageContent({ defaultAccount = 'real' }: TerminalPagePro
         expiresAt: new Date(t.expiresAt).toISOString(),
         amount: t.amount,
       };
+      activeTradesRef.current = [
+        ...activeTradesRef.current.filter((x) => x.id !== dto.id),
+        dto,
+      ];
       candleChartRef.current?.addTradeOverlayFromDTO(dto);
       lineChartRef.current?.addTradeOverlayFromDTO(dto);
     }
@@ -202,6 +244,8 @@ export function TerminalPageContent({ defaultAccount = 'real' }: TerminalPagePro
   const [showTradesHistory, setShowTradesHistory] = useState<boolean>(false);
   const [tradeOpenedTrigger, setTradeOpenedTrigger] = useState<number>(0);
   const [showNews, setShowNews] = useState<boolean>(false);
+  const [tipIndex] = useState<number>(() => Math.floor(Math.random() * 7));
+  const [tipDismissed, setTipDismissed] = useState<boolean>(false);
   const [editingIndicatorId, setEditingIndicatorId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -761,6 +805,10 @@ export function TerminalPageContent({ defaultAccount = 'real' }: TerminalPagePro
 
       candleChartRef.current?.addTradeOverlayFromDTO(res.trade);
       lineChartRef.current?.addTradeOverlayFromDTO(res.trade);
+      activeTradesRef.current = [
+        ...activeTradesRef.current.filter((x) => x.id !== res.trade.id),
+        res.trade,
+      ];
       setTradeOpenedTrigger((v) => v + 1);
     } catch (e: unknown) {
       const err = e as Error & { response?: { data?: { error?: string; message?: string } } };
@@ -883,14 +931,10 @@ export function TerminalPageContent({ defaultAccount = 'real' }: TerminalPagePro
               {showProfileModal && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setShowProfileModal(false)} />
-                  <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 w-[340px] bg-[#0d1e3a] border border-white/[0.08] rounded-2xl shadow-[0_16px_48px_rgba(0,0,0,0.6)] z-50 overflow-hidden">
+                  <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 w-[340px] bg-[#0d1e3a] border border-white/[0.08] rounded-xl shadow-2xl z-50 overflow-hidden">
 
-                    {/* ── Hero header с градиентом ── */}
-                    <div className="relative px-5 pt-5 pb-4 bg-gradient-to-br from-[#1a2d5a] via-[#0f1e40] to-[#0d1e3a]">
-                      {/* Декоративные круги */}
-                      <div className="absolute top-0 right-0 w-32 h-32 rounded-full bg-[#3347ff]/10 blur-2xl pointer-events-none" />
-                      <div className="absolute bottom-0 left-0 w-20 h-20 rounded-full bg-[#3347ff]/5 blur-xl pointer-events-none" />
-
+                    {/* ── Header ── */}
+                    <div className="relative px-5 pt-5 pb-4 bg-[#0d1e3a] border-b border-white/[0.08]">
                       <div className="relative flex items-center gap-3.5">
                         {/* Аватар */}
                         <div className="relative shrink-0">
@@ -960,17 +1004,17 @@ export function TerminalPageContent({ defaultAccount = 'real' }: TerminalPagePro
                       </div>
 
                       {/* Баланс */}
-                      <div className="relative mt-4 rounded-xl bg-white/[0.05] border border-white/[0.07] px-4 py-3 flex items-center justify-between">
+                      <div className="relative mt-4 rounded-xl bg-white/[0.04] border border-white/[0.08] px-4 py-3 flex items-center justify-between">
                         <div>
                           <div className="text-[10px] text-white/40 uppercase tracking-wider font-medium mb-0.5">Баланс</div>
-                          <div className={`text-xl font-bold transition-colors duration-500 ${balanceAnimation === 'increase' ? 'text-green-400' : balanceAnimation === 'decrease' ? 'text-red-400' : 'text-white'}`}>
+                          <div className={`text-lg font-bold transition-colors duration-500 ${balanceAnimation === 'increase' ? 'text-green-400' : balanceAnimation === 'decrease' ? 'text-red-400' : 'text-white'}`}>
                             {hideBalance ? '••••••' : snapshot ? `${displayedBalance} ${formatCurrencySymbol(snapshot.currency)}` : '...'}
                           </div>
                         </div>
                         <Link
                           href="/profile?tab=wallet"
                           onClick={() => setShowProfileModal(false)}
-                          className="shrink-0 h-8 inline-flex items-center gap-1.5 px-3 rounded-lg bg-gradient-to-r from-[#3347ff] to-[#1e2fcc] text-white text-xs font-semibold md:hover:opacity-90 transition-opacity shadow-md shadow-[#3347ff]/20"
+                          className="shrink-0 h-8 inline-flex items-center gap-1.5 px-3 rounded-lg bg-[#3347ff] hover:bg-[#2a3de0] text-white text-xs font-semibold transition-colors shadow-md shadow-[#3347ff]/20"
                         >
                           <PlusCircle className="w-3.5 h-3.5" />
                           Пополнить
@@ -982,15 +1026,15 @@ export function TerminalPageContent({ defaultAccount = 'real' }: TerminalPagePro
                         <button
                           type="button"
                           onClick={() => { setShowProfileModal(false); setShowAccountModal(true); }}
-                          className="flex flex-col items-center gap-1 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.06] md:hover:bg-white/[0.08] transition-colors"
+                          className="flex flex-col items-center gap-1 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] md:hover:bg-white/[0.08] transition-colors"
                         >
-                          <Repeat className="w-4 h-4 text-[#7b8fff]" />
+                          <ArrowsClockwise className="w-4 h-4 text-[#7b8fff]" />
                           <span className="text-[10px] text-white/50 font-medium">Сменить счёт</span>
                         </button>
                         <button
                           type="button"
                           onClick={() => setHideBalance((v) => !v)}
-                          className="flex flex-col items-center gap-1 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.06] md:hover:bg-white/[0.08] transition-colors"
+                          className="flex flex-col items-center gap-1 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] md:hover:bg-white/[0.08] transition-colors"
                         >
                           <svg className="w-4 h-4 text-[#7b8fff]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             {hideBalance
@@ -1005,35 +1049,41 @@ export function TerminalPageContent({ defaultAccount = 'real' }: TerminalPagePro
 
 
                     {/* ── Навигация ── */}
-                    <div className="px-3 py-2 space-y-0.5">
+                    <div className="px-3 py-2 space-y-1 border-t border-white/[0.08]">
                       <Link href="/profile" onClick={() => setShowProfileModal(false)} className="group h-10 px-3 rounded-xl flex items-center gap-3 md:hover:bg-white/[0.06] transition-colors duration-150">
                         <div className="w-7 h-7 rounded-lg bg-white/[0.06] flex items-center justify-center shrink-0 group-hover:bg-[#3347ff]/20 transition-colors">
-                          <UserCircle className="w-3.5 h-3.5 text-white/50 group-hover:text-[#7b8fff] transition-colors" />
+                          <User className="w-3.5 h-3.5 text-white/60 group-hover:text-[#7b8fff] transition-colors" weight="fill" />
                         </div>
                         <span className="text-[13px] text-white/70 group-hover:text-white transition-colors flex-1">Профиль</span>
-                        <svg className="w-3.5 h-3.5 text-white/30 group-hover:text-white/60 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                        <svg className="w-3.5 h-3.5 text-white/35 group-hover:text-white/60 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
                       </Link>
                       <Link href="/profile?tab=wallet" onClick={() => setShowProfileModal(false)} className="group h-10 px-3 rounded-xl flex items-center gap-3 md:hover:bg-white/[0.06] transition-colors duration-150">
                         <div className="w-7 h-7 rounded-lg bg-white/[0.06] flex items-center justify-center shrink-0 group-hover:bg-[#3347ff]/20 transition-colors">
-                          <Wallet className="w-3.5 h-3.5 text-white/50 group-hover:text-[#7b8fff] transition-colors" />
+                          <Wallet className="w-3.5 h-3.5 text-white/60 group-hover:text-[#7b8fff] transition-colors" weight="fill" />
                         </div>
                         <span className="text-[13px] text-white/70 group-hover:text-white transition-colors flex-1">Кошелёк</span>
-                        <svg className="w-3.5 h-3.5 text-white/30 group-hover:text-white/60 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                        <svg className="w-3.5 h-3.5 text-white/35 group-hover:text-white/60 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
                       </Link>
-                      <Link href="/profile?tab=support" onClick={() => setShowProfileModal(false)} className="group h-10 px-3 rounded-xl flex items-center gap-3 md:hover:bg-white/[0.06] transition-colors duration-150">
+                      <a
+                        href={process.env.NEXT_PUBLIC_SUPPORT_CHANNEL_URL || FALLBACK_SUPPORT_CHANNEL_URL}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={() => setShowProfileModal(false)}
+                        className="group h-10 px-3 rounded-xl flex items-center gap-3 md:hover:bg-white/[0.06] transition-colors duration-150"
+                      >
                         <div className="w-7 h-7 rounded-lg bg-white/[0.06] flex items-center justify-center shrink-0 group-hover:bg-[#3347ff]/20 transition-colors">
-                          <MessageCircle className="w-3.5 h-3.5 text-white/50 group-hover:text-[#7b8fff] transition-colors" />
+                          <ChatTeardropText className="w-3.5 h-3.5 text-white/60 group-hover:text-[#7b8fff] transition-colors" weight="fill" />
                         </div>
                         <span className="text-[13px] text-white/70 group-hover:text-white transition-colors flex-1">Поддержка</span>
-                        <svg className="w-3.5 h-3.5 text-white/30 group-hover:text-white/60 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-                      </Link>
+                        <svg className="w-3.5 h-3.5 text-white/35 group-hover:text-white/60 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                      </a>
                     </div>
 
                     {/* ── Футер ── */}
-                    <div className="px-3 pb-2 pt-1 border-t border-white/[0.05]">
-                      <button onClick={() => { setShowProfileModal(false); handleLogout(); }} className="group w-full h-10 px-3 rounded-xl flex items-center gap-3 text-[#ff4655] md:hover:bg-[rgba(255,69,85,0.08)] transition-colors duration-150">
-                        <div className="w-7 h-7 rounded-lg bg-[rgba(255,69,85,0.08)] flex items-center justify-center shrink-0">
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+                    <div className="px-3 pb-2 pt-1 border-t border-white/[0.08]">
+                      <button onClick={() => { setShowProfileModal(false); handleLogout(); }} className="group w-full h-10 px-3 rounded-xl flex items-center gap-3 text-[#ff6b76] md:hover:bg-[rgba(255,69,85,0.12)] transition-colors duration-150">
+                        <div className="w-7 h-7 rounded-lg bg-[rgba(255,69,85,0.14)] flex items-center justify-center shrink-0">
+                          <SignOut className="w-3.5 h-3.5" weight="bold" />
                         </div>
                         <span className="text-[13px] font-medium">Выйти</span>
                       </button>
@@ -1060,33 +1110,33 @@ export function TerminalPageContent({ defaultAccount = 'real' }: TerminalPagePro
                 {showAccountModal && (
                   <>
                     <div className="fixed inset-0 z-[140]" onClick={() => setShowAccountModal(false)} />
-                    <div className="absolute top-full right-0 left-auto mt-2 w-72 bg-[#091C56] border border-white/5 rounded-lg shadow-xl z-[150] md:left-1/2 md:right-auto md:-translate-x-1/2" data-account-modal>
+                    <div className="absolute top-full right-0 left-auto mt-2 w-72 bg-[#0d1e3a] border border-white/[0.08] rounded-xl shadow-2xl z-[150] md:left-1/2 md:right-auto md:-translate-x-1/2" data-account-modal>
                       <div className="p-3 space-y-2.5">
-                        <div className={`flex items-start gap-2.5 p-2.5 rounded-lg cursor-pointer transition-colors ${accountType === 'real' ? 'bg-white/10' : 'md:hover:bg-white/5'}`} onClick={async () => { await handleAccountSwitch('real'); setShowAccountModal(false); }}>
-                          <div className="mt-0.5">{accountType === 'real' ? <div className="w-4 h-4 rounded-full bg-[#3347ff] flex items-center justify-center"><div className="w-1.5 h-1.5 rounded-full bg-[#061230]" /></div> : <div className="w-4 h-4 rounded-full border-2 border-[#3347ff]" />}</div>
+                        <div className={`flex items-start gap-2.5 p-2.5 rounded-lg cursor-pointer transition-colors ${accountType === 'real' ? 'bg-white/[0.12]' : 'md:hover:bg-white/[0.08]'}`} onClick={async () => { await handleAccountSwitch('real'); setShowAccountModal(false); }}>
+                          <div className="mt-0.5">{accountType === 'real' ? <div className="w-4 h-4 rounded-full bg-[#3347ff] flex items-center justify-center"><div className="w-1.5 h-1.5 rounded-full bg-[#0d1e3a]" /></div> : <div className="w-4 h-4 rounded-full border-2 border-[#4e60ff]" />}</div>
                           <div className="flex-1 min-w-0 flex items-center justify-between gap-2">
                             <div>
                               <div className="text-white font-medium mb-0.5 text-sm">Реальный счёт</div>
-                              <div className="text-white/60 text-xs">{hideBalance ? '••••••' : (modalBalances.real ? `${modalBalances.real.balance} ${formatCurrencySymbol(modalBalances.real.currency)}` : (snapshot?.type === 'REAL' ? `${getCurrentBalance().balance} ${formatCurrencySymbol(getCurrentBalance().currency)}` : '...'))}</div>
+                              <div className="text-white/55 text-xs">{hideBalance ? '••••••' : (modalBalances.real ? `${modalBalances.real.balance} ${formatCurrencySymbol(modalBalances.real.currency)}` : (snapshot?.type === 'REAL' ? `${getCurrentBalance().balance} ${formatCurrencySymbol(getCurrentBalance().currency)}` : '...'))}</div>
                             </div>
-                            <Link href="/profile?tab=wallet" onClick={(e) => e.stopPropagation()} className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-gradient-to-r from-[#3347ff] to-[#1e2fcc] text-white text-xs font-semibold md:hover:from-[#3347ff]/90 md:hover:to-[#1e2fcc]/90 transition-all shadow-md shadow-[#3347ff]/20">
+                            <Link href="/profile?tab=wallet" onClick={(e) => e.stopPropagation()} className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[#3347ff] hover:bg-[#2a3de0] text-white text-xs font-semibold transition-colors shadow-md shadow-[#3347ff]/20">
                               <PlusCircle className="w-3.5 h-3.5" />
                               <span>Пополнить</span>
                             </Link>
                           </div>
                         </div>
-                        <div className={`flex items-start gap-2.5 p-2.5 rounded-lg cursor-pointer transition-colors ${accountType === 'demo' ? 'bg-white/10' : 'md:hover:bg-white/5'}`} onClick={async () => { await handleAccountSwitch('demo'); setShowAccountModal(false); }}>
-                          <div className="mt-0.5">{accountType === 'demo' ? <div className="w-4 h-4 rounded-full bg-[#3347ff] flex items-center justify-center"><div className="w-1.5 h-1.5 rounded-full bg-[#061230]" /></div> : <div className="w-4 h-4 rounded-full border-2 border-[#3347ff]" />}</div>
+                        <div className={`flex items-start gap-2.5 p-2.5 rounded-lg cursor-pointer transition-colors ${accountType === 'demo' ? 'bg-white/[0.12]' : 'md:hover:bg-white/[0.08]'}`} onClick={async () => { await handleAccountSwitch('demo'); setShowAccountModal(false); }}>
+                          <div className="mt-0.5">{accountType === 'demo' ? <div className="w-4 h-4 rounded-full bg-[#3347ff] flex items-center justify-center"><div className="w-1.5 h-1.5 rounded-full bg-[#0d1e3a]" /></div> : <div className="w-4 h-4 rounded-full border-2 border-[#4e60ff]" />}</div>
                           <div className="flex-1">
                             <div className="text-white font-medium mb-0.5 text-sm">Демо-счёт</div>
-                            <div className="text-white/60 text-xs">{hideBalance ? '••••••' : (modalBalances.demo ? `${modalBalances.demo.balance} ${formatCurrencySymbol(modalBalances.demo.currency)}` : (snapshot?.type === 'DEMO' ? `${getCurrentBalance().balance} ${formatCurrencySymbol(getCurrentBalance().currency)}` : '...'))}</div>
+                            <div className="text-white/55 text-xs">{hideBalance ? '••••••' : (modalBalances.demo ? `${modalBalances.demo.balance} ${formatCurrencySymbol(modalBalances.demo.currency)}` : (snapshot?.type === 'DEMO' ? `${getCurrentBalance().balance} ${formatCurrencySymbol(getCurrentBalance().currency)}` : '...'))}</div>
                           </div>
                         </div>
                       </div>
-                      <div className="border-t border-white/10 p-3">
-                        <div className="flex items-center gap-2.5 cursor-pointer md:hover:opacity-80 transition-opacity" onClick={() => setHideBalance(!hideBalance)}>
-                          <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">{hideBalance ? <><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></> : <><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></>}</svg>
-                          <span className="text-white text-xs">Скрыть баланс</span>
+                      <div className="border-t border-white/[0.08] p-3">
+                        <div className="flex items-center gap-2.5 cursor-pointer text-white/70 md:hover:text-white transition-colors" onClick={() => setHideBalance(!hideBalance)}>
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">{hideBalance ? <><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></> : <><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></>}</svg>
+                          <span className="text-xs">Скрыть баланс</span>
                         </div>
                       </div>
                     </div>
@@ -1117,7 +1167,7 @@ export function TerminalPageContent({ defaultAccount = 'real' }: TerminalPagePro
                   : 'text-gray-400 md:hover:text-white md:hover:bg-white/5'
               }`}
             >
-              <History className="w-5 h-5 stroke-[3]" />
+              <ClockCounterClockwise size={25} weight="fill" className="shrink-0" />
               <span className="text-[11px] font-bold leading-tight text-center">История</span>
             </button>
             
@@ -1130,7 +1180,7 @@ export function TerminalPageContent({ defaultAccount = 'real' }: TerminalPagePro
                   : 'text-gray-400 md:hover:text-white md:hover:bg-white/5'
               }`}
             >
-              <Newspaper className="w-5 h-5 stroke-[3]" />
+              <Newspaper size={25} weight="fill" className="shrink-0" />
               <span className="text-[11px] font-bold leading-tight text-center">Новости</span>
             </button>
 
@@ -1143,7 +1193,7 @@ export function TerminalPageContent({ defaultAccount = 'real' }: TerminalPagePro
                   : 'text-gray-400 md:hover:text-white md:hover:bg-white/5'
               }`}
             >
-              <TrendingUp className="w-5 h-5 stroke-[3]" />
+              <ChartLineUp size={25} weight="fill" className="shrink-0" />
               <span className="text-[11px] font-bold leading-tight text-center">Торговля</span>
             </Link>
 
@@ -1156,7 +1206,7 @@ export function TerminalPageContent({ defaultAccount = 'real' }: TerminalPagePro
                   : 'text-gray-400 md:hover:text-white md:hover:bg-white/5'
               }`}
             >
-              <Wallet className="w-5 h-5 stroke-[3]" />
+              <Wallet size={25} weight="fill" className="shrink-0" />
               <span className="text-[11px] font-bold leading-tight text-center">Кошелек</span>
             </Link>
 
@@ -1169,7 +1219,7 @@ export function TerminalPageContent({ defaultAccount = 'real' }: TerminalPagePro
                   : 'text-gray-400 md:hover:text-white md:hover:bg-white/5'
               }`}
             >
-              <UserCircle className="w-5 h-5 stroke-[3]" />
+              <UserCircle size={25} weight="fill" className="shrink-0" />
               <span className="text-[11px] font-bold leading-tight text-center">Профиль</span>
             </Link>
 
@@ -1181,8 +1231,8 @@ export function TerminalPageContent({ defaultAccount = 'real' }: TerminalPagePro
             rel="noopener noreferrer"
             className="flex flex-col items-center justify-center gap-1 w-[72px] h-12 px-1.5 rounded-lg bg-white/10 transition-colors text-gray-400 md:hover:text-white md:hover:bg-white/15 mt-1 mx-auto"
           >
-            <Image src="/images/support.png" alt="Поддержка" width={20} height={20} className="w-5 h-5 object-contain" />
-            <span className="text-[11px] font-bold leading-tight text-center">Поддержка</span>
+            <ChatCircleDots className="w-[22px] h-[22px]" weight="fill" />
+            <span className="text-[10px] font-bold leading-tight text-center">Поддержка</span>
           </a>
         </aside>
 
@@ -1339,11 +1389,27 @@ export function TerminalPageContent({ defaultAccount = 'real' }: TerminalPagePro
                 }}
                 onCandleChartRef={(ref) => {
                   candleChartRef.current = ref;
-                  if (ref) ref.setExpirationSeconds(Number.parseInt(time || '60', 10));
+                  if (ref) {
+                    ref.setExpirationSeconds(Number.parseInt(time || '60', 10));
+                    const now = Date.now();
+                    for (const trade of activeTradesRef.current) {
+                      if (new Date(trade.expiresAt).getTime() > now) {
+                        ref.addTradeOverlayFromDTO(trade);
+                      }
+                    }
+                  }
                 }}
                 onLineChartRef={(ref) => {
                   lineChartRef.current = ref;
-                  if (ref) ref.setExpirationSeconds(Number.parseInt(time || '60', 10));
+                  if (ref) {
+                    ref.setExpirationSeconds(Number.parseInt(time || '60', 10));
+                    const now = Date.now();
+                    for (const trade of activeTradesRef.current) {
+                      if (new Date(trade.expiresAt).getTime() > now) {
+                        ref.addTradeOverlayFromDTO(trade);
+                      }
+                    }
+                  }
                 }}
                 onInstrumentChange={handleInstrumentChange}
               />
@@ -1393,7 +1459,7 @@ export function TerminalPageContent({ defaultAccount = 'real' }: TerminalPagePro
                   className="absolute right-3 top-1/2 -translate-y-1/2 z-10 pointer-events-auto w-9 h-9 flex items-center justify-center rounded-lg bg-[#1e2a40] text-white hover:bg-[#263248] transition-colors duration-250 ease-in-out animate-in fade-in slide-in-from-right-2 duration-200"
                   aria-label="Return to latest"
                 >
-                  <ChevronsRight className="w-4 h-4" />
+                  <CaretDoubleRight className="w-4 h-4" />
                 </button>
               )}
 
@@ -1405,7 +1471,7 @@ export function TerminalPageContent({ defaultAccount = 'real' }: TerminalPagePro
                 title="Настройки графика"
                 aria-label="Настройки графика"
               >
-                <Image src="/images/settings.png" alt="" width={20} height={20} className="w-4 h-4 object-contain opacity-90" />
+                <Gear className="w-[18px] h-[18px] opacity-90" weight="fill" />
               </button>
             </div>
             
@@ -1467,40 +1533,10 @@ export function TerminalPageContent({ defaultAccount = 'real' }: TerminalPagePro
                 className="w-full px-3 py-3 text-white text-left text-sm font-medium cursor-pointer md:hover:bg-white/5 transition-colors flex items-center gap-1.5"
                 onClick={() => setShowTimeModal(true)}
               >
-                <Clock className="w-3.5 h-3.5 text-white/50 shrink-0" />
+                <Clock className="w-[18px] h-[18px] text-white/50 shrink-0" weight="bold" />
                 <span>{formatTimeDisplay(Number.parseInt(time || '60', 10))}</span>
               </div>
             </div>
-              {/* Minus / Plus - только десктоп; на мобилке меняют время через модалку */}
-              <div className="hidden md:flex items-center gap-1.5 mt-1.5">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const current = Number.parseInt(time || '60', 10);
-                    const newValue = Math.max(5, current - 5);
-                    setTime(String(newValue));
-                    candleChartRef.current?.setExpirationSeconds(newValue);
-                    lineChartRef.current?.setExpirationSeconds(newValue);
-                  }}
-                  className="flex-1 h-7 flex items-center justify-center text-white rounded-md bg-gradient-to-b from-[#222c42] to-[#1e2a40] border border-white/[0.05] md:hover:from-[#252f46] md:hover:to-[#1f2b42] transition-colors"
-                >
-                  <Minus className="w-3 h-3" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const current = Number.parseInt(time || '60', 10);
-                    const newValue = Math.min(300, current + 5);
-                    setTime(String(newValue));
-                    candleChartRef.current?.setExpirationSeconds(newValue);
-                    lineChartRef.current?.setExpirationSeconds(newValue);
-                  }}
-                  className="flex-1 h-7 flex items-center justify-center text-white rounded-md bg-gradient-to-b from-[#222c42] to-[#1e2a40] border border-white/[0.05] md:hover:from-[#252f46] md:hover:to-[#1f2b42] transition-colors"
-                >
-                  <Plus className="w-3 h-3" />
-                </button>
-              </div>
-
             {/* Time Selection Modal */}
             {showTimeModal && (
               <>
@@ -1519,7 +1555,6 @@ export function TerminalPageContent({ defaultAccount = 'real' }: TerminalPagePro
                       candleChartRef.current?.setExpirationSeconds(seconds);
                       lineChartRef.current?.setExpirationSeconds(seconds);
                     }}
-                    onClose={() => setShowTimeModal(false)}
                   />
                 </div>
               </>
@@ -1532,7 +1567,7 @@ export function TerminalPageContent({ defaultAccount = 'real' }: TerminalPagePro
             <div className="flex flex-col bg-white/10 rounded-lg overflow-hidden">
               {/* Amount Input - прямой ввод + кнопка калькулятора */}
               <div className="w-full flex items-center">
-                <span className="text-white/50 shrink-0 text-sm leading-none pl-3">{getCurrencyIcon(displayCurrency)}</span>
+                <span className="text-white/50 shrink-0 text-base font-semibold leading-none pl-3 tabular-nums">{getCurrencyIcon(displayCurrency)}</span>
                 {/* Мобилка: не input - иначе фокус открывает системную клавиатуру; сумма только через калькулятор */}
                 <button
                   type="button"
@@ -1578,45 +1613,8 @@ export function TerminalPageContent({ defaultAccount = 'real' }: TerminalPagePro
                   placeholder="100"
                   aria-label="Сумма сделки"
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowAmountModal(true)}
-                  className="px-2.5 py-2.5 text-white/40 md:hover:text-white/70 transition-colors shrink-0"
-                  aria-label="Открыть калькулятор"
-                  title="Открыть калькулятор"
-                >
-                  <Calculator className="w-4 h-4" />
-                </button>
               </div>
             </div>
-              {/* Minus / Plus - только десктоп; на мобилке сумма через поле / калькулятор */}
-              <div className="hidden md:flex items-center gap-1.5 mt-1.5">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const current = Number.parseFloat(amount || '100');
-                    const newValue = Math.max(1, current - 10);
-                    setAmount(String(newValue));
-                  }}
-                  className="flex-1 h-7 flex items-center justify-center text-white rounded-md bg-gradient-to-b from-[#222c42] to-[#1e2a40] border border-white/[0.05] md:hover:from-[#252f46] md:hover:to-[#1f2b42] transition-colors"
-                  aria-label="Уменьшить сумму на 10"
-                >
-                  <Minus className="w-3 h-3" aria-hidden />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const current = Number.parseFloat(amount || '100');
-                    const newValue = Math.min(50000, current + 10);
-                    setAmount(String(newValue));
-                  }}
-                  className="flex-1 h-7 flex items-center justify-center text-white rounded-md bg-gradient-to-b from-[#222c42] to-[#1e2a40] border border-white/[0.05] md:hover:from-[#252f46] md:hover:to-[#1f2b42] transition-colors"
-                  aria-label="Увеличить сумму на 10"
-                >
-                  <Plus className="w-3 h-3" aria-hidden />
-                </button>
-              </div>
-
             {/* Amount Calculator Modal */}
             {showAmountModal && (
               <>
@@ -1625,16 +1623,14 @@ export function TerminalPageContent({ defaultAccount = 'real' }: TerminalPagePro
                   onClick={() => setShowAmountModal(false)}
                 />
                 <div
-                  className="absolute bottom-full right-0 left-auto translate-x-0 mb-2 z-50 w-64 max-w-[calc(100vw-1rem)] bg-[#0d1e3a] rounded-xl shadow-2xl overflow-hidden border border-white/[0.08] md:bottom-auto md:left-auto md:max-w-none md:mb-0 md:right-full md:mr-2 md:top-0 md:translate-x-0 md:w-64"
+                  className="absolute bottom-full right-0 left-auto translate-x-0 mb-2 z-50 w-60 max-w-[calc(100vw-1rem)] bg-[#0d1e3a] rounded-xl shadow-2xl overflow-hidden border border-white/[0.08] md:bottom-auto md:left-auto md:max-w-none md:mb-0 md:right-full md:mr-2 md:top-0 md:translate-x-0 md:w-60"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <AmountCalculatorModal
                     currentAmount={Number.parseFloat(amount || '100')}
                     onSelect={(newAmount) => {
                       setAmount(String(newAmount));
-                      setShowAmountModal(false);
                     }}
-                    onClose={() => setShowAmountModal(false)}
                     payoutPercent={payoutPercent}
                     currency={displayCurrency}
                   />
@@ -1646,7 +1642,7 @@ export function TerminalPageContent({ defaultAccount = 'real' }: TerminalPagePro
 
           {/* Payout display - desktop */}
           <div className="hidden md:flex flex-row md:flex-col gap-2 md:gap-1.5 items-center justify-center py-2 md:py-3">
-            <div className="text-xl md:text-2xl font-bold text-green-400">
+            <div className="text-2xl md:text-3xl font-medium text-green-400">
               +{payoutPercent}%
             </div>
             <div className="text-sm md:text-base text-gray-400">
@@ -1678,7 +1674,7 @@ export function TerminalPageContent({ defaultAccount = 'real' }: TerminalPagePro
             </button>
 
             <div className="flex flex-col items-center justify-center gap-0.5 px-2 md:hidden shrink-0 min-w-[72px]">
-              <span className="text-base font-bold text-green-400">+{payoutPercent}%</span>
+              <span className="text-lg font-medium text-green-400">+{payoutPercent}%</span>
               <span className="text-xs text-gray-400">+{((Number.parseFloat(amount || '100') * payoutPercent) / 100).toFixed(2)} {displayCurrency}</span>
             </div>
 
@@ -1706,6 +1702,57 @@ export function TerminalPageContent({ defaultAccount = 'real' }: TerminalPagePro
 
           {/* Кнопки внизу сайдбара - скрыто на мобилке */}
           <div className="hidden md:flex mt-auto flex-col gap-3">
+
+          {/* Совет от трейдера */}
+          {!tipDismissed && (() => {
+            const tips = [
+              'Никогда не торгуйте на эмоциях - холодный расчёт важнее интуиции.',
+              'Следуйте тренду: торгуйте по направлению основного движения рынка.',
+              'Не вкладывайте в одну сделку более 5% от депозита - берегите капитал.',
+              'Анализируйте новости перед входом: важные события резко двигают рынок.',
+              'Ведите дневник сделок - это помогает найти и устранить ошибки.',
+              'Пропущенный вход лучше убыточной сделки. Не гонитесь за рынком.',
+              'Уровни поддержки и сопротивления - ваши главные ориентиры на графике.',
+            ];
+            const tip = tips[tipIndex % tips.length];
+            return (
+              <div className="group/tip">
+                <div className="relative rounded-xl overflow-hidden p-[1px]" style={{ background: 'linear-gradient(135deg, rgba(51,71,255,0.45) 0%, rgba(123,143,255,0.15) 50%, rgba(51,71,255,0.08) 100%)' }}>
+                  <div className="rounded-xl px-3 pt-2.5 pb-3" style={{ background: 'linear-gradient(160deg, #0d1e3a 0%, #081428 100%)' }}>
+                    {/* Крестик при наведении */}
+                    <button
+                      type="button"
+                      onClick={() => setTipDismissed(true)}
+                      className="absolute top-2 right-2 w-5 h-5 rounded-full bg-white/0 group-hover/tip:bg-white/10 text-white/0 group-hover/tip:text-white/40 hover:!text-white/80 hover:!bg-white/15 transition-all duration-200 flex items-center justify-center"
+                      aria-label="Закрыть совет"
+                    >
+                      <svg viewBox="0 0 10 10" className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round">
+                        <path d="M1 1l8 8M9 1l-8 8" />
+                      </svg>
+                    </button>
+
+                    {/* Аватар + имя */}
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="w-8 h-8 rounded-full shrink-0 overflow-hidden ring-2 ring-[#3347ff]/40 shadow-md shadow-[#3347ff]/20">
+                        <img src="/images/trady.png" alt="Trady AI" className="w-full h-full object-cover" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-1">
+                          <span className="text-[11px] font-semibold text-white/90 leading-tight">Trady</span>
+                          <span className="inline-flex items-center px-1 py-0 rounded text-[8px] font-bold tracking-wide" style={{ background: 'linear-gradient(90deg, #3347ff, #7b8fff)', color: '#fff' }}>AI</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Текст совета */}
+                    <p className="text-[12px] leading-[1.55] text-white/60 pl-0.5">
+                      &ldquo;{tip}&rdquo;
+                    </p>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
           <div className="flex items-center gap-1.5">
             <button
               type="button"
@@ -1713,17 +1760,7 @@ export function TerminalPageContent({ defaultAccount = 'real' }: TerminalPagePro
               className="flex-1 h-8 flex items-center justify-center rounded-lg bg-gradient-to-b from-[#24304d] to-[#1f2a45] text-gray-300 md:hover:text-white md:hover:opacity-90 transition-colors relative"
               title={soundEnabled ? 'Выключить звук' : 'Включить звук'}
             >
-              <span className="relative inline-block">
-                <Image src="/images/sound.png" alt="Звук" width={20} height={20} className="w-4 h-4 object-contain" />
-                {!soundEnabled && (
-                  <span
-                    className="absolute inset-0 flex items-center justify-center pointer-events-none"
-                    aria-hidden
-                  >
-                    <span className="w-[130%] h-0.5 bg-red-400/90 rotate-[-45deg] rounded-full" />
-                  </span>
-                )}
-              </span>
+              {soundEnabled ? <SpeakerHigh className="w-[18px] h-[18px]" weight="fill" /> : <SpeakerSlash className="w-[18px] h-[18px] text-red-400" weight="fill" />}
             </button>
             <button
               type="button"
@@ -1731,7 +1768,7 @@ export function TerminalPageContent({ defaultAccount = 'real' }: TerminalPagePro
               className="flex-1 h-8 flex items-center justify-center rounded-lg bg-gradient-to-b from-[#24304d] to-[#1f2a45] text-gray-300 md:hover:text-white md:hover:opacity-90 transition-colors"
               title={isFullscreen ? 'Выйти из полноэкранного режима' : 'Полноэкранный режим'}
             >
-              <Image src="/images/fullscreen.png" alt="Fullscreen" width={20} height={20} className="w-4 h-4 object-contain" />
+              {isFullscreen ? <ArrowsInSimple className="w-[18px] h-[18px]" weight="bold" /> : <ArrowsOutSimple className="w-[18px] h-[18px]" weight="bold" />}
             </button>
             <button
               type="button"
@@ -1739,9 +1776,10 @@ export function TerminalPageContent({ defaultAccount = 'real' }: TerminalPagePro
               className="flex-1 h-8 flex items-center justify-center rounded-lg bg-gradient-to-b from-[#24304d] to-[#1f2a45] text-gray-300 md:hover:text-white md:hover:opacity-90 transition-colors"
               title="Настройки графика"
             >
-              <Image src="/images/settings.png" alt="Настройки" width={20} height={20} className="w-4 h-4 object-contain" />
+              <Gear className="w-[18px] h-[18px]" weight="fill" />
             </button>
           </div>
+
           </div>
         </aside>
 
@@ -1753,7 +1791,7 @@ export function TerminalPageContent({ defaultAccount = 'real' }: TerminalPagePro
             showTradesHistory ? 'text-[#7b8fff]' : 'text-white/50 md:hover:text-white/80'
           }`}
         >
-          <History className="w-5 h-5 stroke-[3]" />
+          <ClockCounterClockwise className="w-5 h-5" weight="fill" />
           <span className="text-[9px] font-semibold leading-tight">История</span>
         </button>
         <div className="w-px h-6 bg-white/15 shrink-0" aria-hidden />
@@ -1791,15 +1829,19 @@ export function TerminalPageContent({ defaultAccount = 'real' }: TerminalPagePro
           rel="noopener noreferrer"
           className="flex flex-col items-center gap-1 px-2 py-2 rounded-lg min-w-[52px] text-white/50 md:hover:text-white/80 transition-colors"
         >
-          <Image src="/images/support.png" alt="Поддержка" width={20} height={20} className="w-5 h-5 object-contain" />
-          <span className="text-[9px] font-semibold leading-tight">Поддержка</span>
+          <ChatCircleDots className="w-[22px] h-[22px]" weight="fill" />
+          <span className="text-[8px] font-semibold leading-tight">Поддержка</span>
         </a>
         </nav>
       </div>
 
       {/* Chart Settings Modal */}
       {showChartSettingsModal && (
-        <ChartSettingsModal onClose={() => setShowChartSettingsModal(false)} />
+        <ChartSettingsModal
+          onClose={() => setShowChartSettingsModal(false)}
+          showTraderTip={!tipDismissed}
+          onToggleTraderTip={() => setTipDismissed((v) => !v)}
+        />
       )}
 
       {/* Indicator Settings Modal */}

@@ -219,6 +219,7 @@
   },
   "terminal": {
     "title": "Terminal",
+    "chart_loading": "Loading chart...",
     "errors": {
       "insufficient_balance": "Not enough balance for this trade. Lower the amount or add funds to your account.",
       "open_trade_failed": "Could not open the trade"

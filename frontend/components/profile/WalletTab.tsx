@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { Link, usePathname, useRouter } from '@/components/navigation';
-import { Tag, ExternalLink, History, ChevronRight, Shield, FileCheck, Calendar, Mail, CheckCircle2 } from 'lucide-react';
+import { Tag, ArrowSquareOut, ClockCounterClockwise, CaretRight, Shield, SealCheck, Calendar, EnvelopeSimple, CheckCircle } from '@phosphor-icons/react';
 import { api } from '@/lib/api/api';
 import { useIsVerified } from '@/lib/hooks/useVerification';
 import { toast } from '@/stores/toast.store';
@@ -516,7 +516,7 @@ export function WalletTab() {
             <div className="mb-5 sm:mb-6 flex flex-col sm:flex-row sm:items-center gap-3 p-4 rounded-xl bg-amber-500/10 border border-amber-500/25">
               <div className="flex items-center gap-3 flex-1 min-w-0">
                 <div className="shrink-0 w-9 h-9 rounded-lg bg-amber-500/20 flex items-center justify-center">
-                  <Mail className="w-4 h-4 text-amber-400" />
+                  <EnvelopeSimple className="w-4 h-4 text-amber-400" />
                 </div>
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-white">Подтвердите email</p>
@@ -540,7 +540,7 @@ export function WalletTab() {
           )}
           {emailVerified && (
             <div className="mb-5 sm:mb-6 flex items-center gap-3 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/25">
-              <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+              <CheckCircle className="w-5 h-5 text-emerald-400 shrink-0" weight="fill" />
               <p className="text-sm text-emerald-400 font-medium">Email подтверждён</p>
             </div>
           )}
@@ -685,7 +685,7 @@ export function WalletTab() {
                   disabled={!promoCode.trim()}
                   className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-white/10 hover:bg-white/15 text-white text-[10px] sm:text-xs font-medium uppercase tracking-wider transition-colors disabled:opacity-50 disabled:cursor-not-allowed border border-white/10 shrink-0"
                 >
-                  <Tag className="w-3.5 h-3.5" />
+                  <Tag className="w-3.5 h-3.5" weight="fill" />
                   ПРИМЕНИТЬ
                 </button>
               </div>
@@ -714,7 +714,7 @@ export function WalletTab() {
                 ) : (
                   <>
                     Перейти к оплате
-                    <ChevronRight className="w-4 h-4" />
+                    <CaretRight className="w-4 h-4" />
                   </>
                 )}
               </button>
@@ -731,7 +731,7 @@ export function WalletTab() {
                 className="text-xs font-medium uppercase tracking-wider text-[#7b8fff] hover:text-[#9ba8ff] transition-colors flex items-center gap-1"
               >
                 ВСЕ
-                <ExternalLink className="w-3.5 h-3.5" />
+                <ArrowSquareOut className="w-3.5 h-3.5" />
               </button>
             </div>
             <div className="rounded-xl border border-white/[0.06] overflow-hidden bg-white/[0.02]">
@@ -813,7 +813,7 @@ export function WalletTab() {
                     <div className="rounded-xl sm:rounded-2xl border border-white/[0.08] bg-[#030E28] p-6 sm:p-8 mb-5 sm:mb-8">
                       <div className="flex flex-col items-center text-center max-w-md mx-auto">
                         <div className="w-14 h-14 rounded-full bg-amber-500/20 flex items-center justify-center mb-4">
-                          <FileCheck className="w-7 h-7 text-amber-400" strokeWidth={2} />
+                          <SealCheck className="w-7 h-7 text-amber-400" />
                         </div>
                         <h2 className="text-lg font-semibold text-white mb-2">Требуется верификация</h2>
                         <p className="text-sm text-white/60 mb-6">
@@ -823,7 +823,7 @@ export function WalletTab() {
                           href="/profile?tab=profile#verification"
                           className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-[#3347ff] hover:bg-[#3347ff]/90 text-white text-sm font-medium uppercase tracking-wider transition-colors"
                         >
-                          <FileCheck className="w-4 h-4" />
+                          <SealCheck className="w-4 h-4" />
                           Пройти верификацию
                         </Link>
                       </div>
@@ -838,7 +838,7 @@ export function WalletTab() {
                           className="text-xs font-medium uppercase tracking-wider text-[#7b8fff] hover:text-[#9ba8ff] transition-colors flex items-center gap-1"
                         >
                           ВСЕ
-                          <ExternalLink className="w-3.5 h-3.5" />
+                          <ArrowSquareOut className="w-3.5 h-3.5" />
                         </button>
                       </div>
                       <div className="rounded-xl border border-white/[0.06] overflow-hidden bg-white/[0.02]">
@@ -1099,7 +1099,7 @@ export function WalletTab() {
                       className="text-xs font-medium uppercase tracking-wider text-[#7b8fff] hover:text-[#9ba8ff] transition-colors flex items-center gap-1"
                     >
                       ВСЕ
-                      <ExternalLink className="w-3.5 h-3.5" />
+                      <ArrowSquareOut className="w-3.5 h-3.5" />
                     </button>
                   </div>
                   <div className="rounded-xl border border-white/[0.06] overflow-hidden bg-white/[0.02]">
@@ -1220,7 +1220,7 @@ export function WalletTab() {
                 ) : filteredHistoryTransactions.length === 0 ? (
                   <div className="p-16 text-center">
                     <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-4">
-                      <History className="w-8 h-8 text-white/40" />
+                      <ClockCounterClockwise className="w-8 h-8 text-white/40" />
                     </div>
                     <p className="text-white">Нет транзакций</p>
                     <p className="text-sm text-white/50 mt-1">Пополнения и выводы появятся здесь</p>
@@ -1365,7 +1365,7 @@ export function WalletTab() {
                     ) : (
                       <>
                         Перейти к оплате
-                        <ChevronRight className="w-4 h-4" />
+                        <CaretRight className="w-4 h-4" />
                       </>
                     )}
                   </span>
@@ -1377,7 +1377,7 @@ export function WalletTab() {
               </div>
               <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 flex gap-3">
                 <div className="shrink-0 w-10 h-10 rounded-lg bg-white/10 flex items-center justify-center">
-                  <Shield className="w-5 h-5 text-white" strokeWidth={2} />
+                  <Shield className="w-5 h-5 text-white" />
                 </div>
                 <div>
                   <p className="font-medium text-white/90 text-sm">Безопасный платёж</p>
@@ -1462,7 +1462,7 @@ export function WalletTab() {
               </div>
               <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 flex gap-3">
                 <div className="shrink-0 w-10 h-10 rounded-lg bg-white/10 flex items-center justify-center">
-                  <Shield className="w-5 h-5 text-white" strokeWidth={2} />
+                  <Shield className="w-5 h-5 text-white" />
                 </div>
                 <div>
                   <p className="font-medium text-white/90 text-sm">Безопасный вывод</p>

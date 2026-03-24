@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { ArrowLeft, X } from 'lucide-react';
+import { ArrowLeft, X } from '@phosphor-icons/react';
 
 type NewsItem = typeof NEWS_ITEMS[number];
 
@@ -216,7 +216,7 @@ export function NewsModal({ onClose }: { onClose: () => void }) {
                 className="md:hidden shrink-0 -mr-1 w-10 h-10 flex items-center justify-center rounded-lg text-gray-400 active:bg-white/10"
                 aria-label="Закрыть"
               >
-                <X className="w-5 h-5" strokeWidth={2} />
+                <X className="w-5 h-5" weight="bold" />
               </button>
             </div>
           </div>
@@ -239,7 +239,7 @@ export function NewsModal({ onClose }: { onClose: () => void }) {
                   onClick={closeDetail}
                   className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 md:hover:text-white md:hover:bg-white/10 transition-colors shrink-0"
                 >
-                  <ArrowLeft className="w-4 h-4" />
+                  <ArrowLeft className="w-4 h-4" weight="bold" />
                 </button>
                 <span className="text-sm font-medium text-white truncate min-w-0">{selectedNews.category}</span>
                 <div className="ml-auto flex items-center gap-1 shrink-0">
@@ -250,7 +250,7 @@ export function NewsModal({ onClose }: { onClose: () => void }) {
                     className="md:hidden w-10 h-10 flex items-center justify-center rounded-lg text-gray-400 active:bg-white/10 -mr-1"
                     aria-label="Закрыть"
                   >
-                    <X className="w-5 h-5" strokeWidth={2} />
+                    <X className="w-5 h-5" weight="bold" />
                   </button>
                 </div>
               </div>

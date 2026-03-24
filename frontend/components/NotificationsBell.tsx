@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Bell } from 'lucide-react';
+import { Bell } from '@phosphor-icons/react';
 
 type NotificationType = 'system' | 'trade' | 'deposit' | 'promo';
 
@@ -92,11 +92,6 @@ export function NotificationsBell({ dropdownAlign = 'left', zIndex = 180 }: { dr
         aria-label="Уведомления"
       >
         <Bell className="w-4 h-4 sm:w-5 sm:h-5" aria-hidden />
-        {unreadCount > 0 && (
-          <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-[#ff4655] flex items-center justify-center text-[9px] font-bold text-white leading-none">
-            {unreadCount > 9 ? '9+' : unreadCount}
-          </span>
-        )}
       </button>
 
       {open && (
@@ -111,11 +106,6 @@ export function NotificationsBell({ dropdownAlign = 'left', zIndex = 180 }: { dr
               <div className="flex items-center gap-2">
                 <Bell className="w-4 h-4 text-white/40" />
                 <span className="text-sm font-semibold text-white">Уведомления</span>
-                {unreadCount > 0 && (
-                  <span className="inline-flex items-center justify-center h-4 min-w-[16px] px-1 rounded-full bg-[#3347ff]/30 text-[#7b8fff] text-[9px] font-bold">
-                    {unreadCount}
-                  </span>
-                )}
               </div>
               {unreadCount > 0 && (
                 <button
@@ -159,10 +149,6 @@ export function NotificationsBell({ dropdownAlign = 'left', zIndex = 180 }: { dr
               )}
             </div>
 
-            {/* Footer */}
-            <div className="border-t border-white/[0.07] px-4 py-2 shrink-0">
-              <span className="text-[11px] text-white/20">Уведомления из личного кабинета</span>
-            </div>
           </div>
         </>
       )}

@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useMemo } from 'react';
 import Image from 'next/image';
-import { Search, Check } from 'lucide-react';
+import { MagnifyingGlass, Check } from '@phosphor-icons/react';
 import { useTranslations, useLocale } from 'next-intl';
 import ReactCountryFlag from 'react-country-flag';
 import { api } from '@/lib/api/api';
@@ -274,7 +274,7 @@ function SearchableDropdown({
                   padding: '8px 12px',
                 }}
               >
-                <Search className="w-3.5 h-3.5 shrink-0" style={{ color: 'rgba(255,255,255,0.25)' }} />
+                <MagnifyingGlass className="w-3.5 h-3.5 shrink-0" style={{ color: 'rgba(255,255,255,0.25)' }} />
                 <input
                   ref={searchInputRef}
                   type="text"

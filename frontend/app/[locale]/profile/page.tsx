@@ -4,7 +4,8 @@ import React, { useState, useEffect, useRef, useCallback, Fragment } from 'react
 import { useSearchParams } from 'next/navigation';
 import { Link, useRouter } from '@/components/navigation';
 import ReactCountryFlag from 'react-country-flag';
-import { Upload, Trash2, Globe, Plus, Copy, Check } from 'lucide-react';
+import { UploadSimple, Trash, GlobeHemisphereWest, Plus, Copy, Check } from '@phosphor-icons/react';
+import { ChartLineUp, ChatCircleDots, UserCircle, Wallet } from '@phosphor-icons/react';
 import { AuthGuard } from '@/components/auth/AuthGuard';
 import { AppHeader } from '@/components/AppHeader';
 import { WalletTab } from '@/components/profile/WalletTab';
@@ -630,7 +631,7 @@ function PersonalProfileTab({ onProfileUpdate }: { onProfileUpdate?: (p: UserPro
                 disabled={uploading}
                 className="mt-5 mb-3 w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-medium uppercase tracking-wider transition-colors disabled:opacity-50"
               >
-                <Upload className="w-4 h-4" strokeWidth={2} />
+                <UploadSimple className="w-4 h-4" weight="bold" />
                 {uploading ? 'Загрузка...' : 'Загрузить'}
               </button>
               {profile?.avatarUrl && (
@@ -640,7 +641,7 @@ function PersonalProfileTab({ onProfileUpdate }: { onProfileUpdate?: (p: UserPro
                   disabled={uploading}
                   className="mt-2 w-full flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs font-medium uppercase tracking-wider transition-colors disabled:opacity-50"
                 >
-                  <Trash2 className="w-3.5 h-3.5" strokeWidth={2} />
+                  <Trash className="w-3.5 h-3.5" />
                   Удалить
                 </button>
               )}
@@ -710,7 +711,7 @@ function PersonalProfileTab({ onProfileUpdate }: { onProfileUpdate?: (p: UserPro
                     className="w-5 h-4 object-cover rounded-sm shrink-0"
                   />
                 ) : (
-                  <Globe className="w-5 h-4 shrink-0 text-white/50" />
+                  <GlobeHemisphereWest className="w-5 h-4 shrink-0 text-white/50" />
                 )}
                 <span className="text-left">{COUNTRIES.find((c) => c.code === country)?.name || 'Выберите страну'}</span>
               </div>
@@ -740,7 +741,7 @@ function PersonalProfileTab({ onProfileUpdate }: { onProfileUpdate?: (p: UserPro
                       {c.flag ? (
                         <img src={c.flag} alt="" className="w-5 h-4 object-cover rounded-sm shrink-0" />
                       ) : (
-                        <Globe className="w-5 h-4 shrink-0 text-white/50" />
+                        <GlobeHemisphereWest className="w-5 h-4 shrink-0 text-white/50" />
                       )}
                       {c.name}
                     </button>
@@ -1175,7 +1176,7 @@ function ProfileSidebar() {
                   className="shrink-0 flex items-center justify-center w-8 h-8 rounded-lg bg-[#3347ff]/30 hover:bg-[#3347ff]/50 text-[#84B2FF] hover:text-white transition-colors"
                   title="Пополнить"
                 >
-                  <Plus className="w-4 h-4" strokeWidth={2.5} />
+                  <Plus className="w-4 h-4" weight="bold" />
                 </Link>
               </div>
             </div>
@@ -1242,7 +1243,7 @@ function ProfileSidebar() {
           РАЗДЕЛЫ
         </p>
         <nav className="space-y-2">
-          {SIDEBAR_ITEMS.map(({ id, label, href, iconSrc }) => {
+          {SIDEBAR_ITEMS.map(({ id, label, href }) => {
             const isActive = activeTab === id;
             return (
               <Link
@@ -1258,7 +1259,10 @@ function ProfileSidebar() {
                   <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r-full bg-[#3347ff]" aria-hidden />
                 )}
                 <div className="w-9 h-9 flex items-center justify-center shrink-0">
-                  <img src={iconSrc} alt="" className="w-4 h-4 object-contain" />
+                  {id === 'profile' && <UserCircle className="w-5 h-5" weight="fill" />}
+                  {id === 'wallet' && <Wallet className="w-5 h-5" weight="fill" />}
+                  {id === 'trade' && <ChartLineUp className="w-5 h-5" weight="fill" />}
+                  {id === 'support' && <ChatCircleDots className="w-5 h-5" weight="fill" />}
                 </div>
                 <span>{label.toUpperCase()}</span>
               </Link>
@@ -1288,7 +1292,7 @@ function ProfileBottomNav() {
 
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 z-30 flex items-end justify-around px-1 pt-1 pb-[max(0.5rem,env(safe-area-inset-bottom))] border-t border-white/10 bg-gradient-to-t from-[#04101f] via-[#05122a] to-[#071430]">
-      {SIDEBAR_ITEMS.map(({ id, shortLabel, href, iconSrc }) => {
+      {SIDEBAR_ITEMS.map(({ id, shortLabel, href }) => {
         const isActive = activeTab === id;
         return (
           <Link
@@ -1302,7 +1306,10 @@ function ProfileBottomNav() {
               <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 rounded-full bg-[#3347ff]" aria-hidden />
             )}
             <div className={`w-9 h-9 flex items-center justify-center rounded-xl transition-colors ${isActive ? 'bg-[#3347ff]/20' : 'bg-transparent'}`}>
-              <img src={iconSrc} alt="" className="w-5 h-5 object-contain" />
+              {id === 'profile' && <UserCircle className="w-5 h-5" weight="fill" />}
+              {id === 'wallet' && <Wallet className="w-5 h-5" weight="fill" />}
+              {id === 'trade' && <ChartLineUp className="w-5 h-5" weight="fill" />}
+              {id === 'support' && <ChatCircleDots className="w-5 h-5" weight="fill" />}
             </div>
             <span className="text-[10px] font-semibold leading-tight tracking-wide">{shortLabel}</span>
           </Link>

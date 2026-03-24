@@ -86,3 +86,43 @@ export function renderAxes({
 
   ctx.restore();
 }
+
+/**
+ * Перерисовывает только нижнюю полосу временных меток поверх всего остального
+ * (индикаторов, рисований и т.д.), чтобы они всегда были видны.
+ */
+export function renderTimeAxisOverlay({
+  ctx,
+  viewport,
+  width,
+  height,
+}: Omit<RenderAxesParams, 'digits'>): void {
+  const timeRange = viewport.timeEnd - viewport.timeStart;
+  if (timeRange <= 0) return;
+
+  ctx.save();
+
+  ctx.fillStyle = TIME_AXIS_BG;
+  ctx.fillRect(0, height - TIME_AXIS_HEIGHT, width, TIME_AXIS_HEIGHT);
+
+  const timeStep = calculateTimeLabelStep(timeRange, width);
+  const startTime = Math.ceil(viewport.timeStart / timeStep) * timeStep;
+
+  ctx.fillStyle = LABEL_COLOR;
+  ctx.font = LABEL_FONT;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+
+  const MAX_AXIS_LABELS = 100;
+  let labelCount = 0;
+  for (let time = startTime; time <= viewport.timeEnd && labelCount < MAX_AXIS_LABELS; time += timeStep) {
+    if (timeStep <= 0) break;
+    labelCount++;
+    const x = timeToX(time, viewport, width);
+    if (x >= 0 && x <= width) {
+      ctx.fillText(formatTime(time), x, height - TIME_LABEL_PADDING);
+    }
+  }
+
+  ctx.restore();
+}

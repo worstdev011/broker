@@ -6,7 +6,7 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { Star, Pencil } from 'lucide-react';
+import { Star, PencilSimple } from '@phosphor-icons/react';
 import { useClickOutside } from '@/lib/hooks/useClickOutside';
 import { useLocalStorageSet } from '@/lib/hooks/useLocalStorageSet';
 
@@ -87,7 +87,7 @@ export function DrawingMenu({ drawingMode, onDrawingModeChange }: DrawingMenuPro
         title="Рисование"
         style={{ width: '44px', height: '36px', minWidth: '44px', maxWidth: '44px' }}
       >
-        <Pencil className="w-4 h-4" strokeWidth={2.5} />
+        <PencilSimple className="w-4 h-4" weight="bold" />
       </button>
 
       {isOpen && (

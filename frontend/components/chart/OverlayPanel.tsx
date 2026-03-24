@@ -6,7 +6,7 @@
 
 'use client';
 
-import { Eye, EyeOff, Trash2, Settings } from 'lucide-react';
+import { Eye, EyeSlash, Trash, Gear } from '@phosphor-icons/react';
 import type { Overlay, DrawingOverlay } from './internal/overlay/overlay.types';
 import { isDrawingOverlay } from './internal/overlay/overlay.types';
 
@@ -49,7 +49,7 @@ export function OverlayPanel({
 
   return (
     <div
-      className={`bg-[#061230]/95 backdrop-blur-sm border border-white/20 rounded-lg shadow-lg min-w-[180px] max-h-[150px] overflow-y-auto ${className}`}
+      className={`bg-[#0d1e3a]/95 backdrop-blur-sm rounded-lg min-w-[180px] max-h-[150px] overflow-y-auto ${className}`}
       role="list"
       aria-label="Активные объекты на графике"
     >
@@ -81,9 +81,9 @@ export function OverlayPanel({
                   aria-label={overlay.visible ? 'Скрыть' : 'Показать'}
                 >
                   {overlay.visible ? (
-                    <Eye className="w-3 h-3" />
+                    <Eye className="w-3.5 h-3.5" weight="bold" />
                   ) : (
-                    <EyeOff className="w-3 h-3" />
+                    <EyeSlash className="w-3.5 h-3.5" weight="bold" />
                   )}
                 </button>
                 {overlay.type === 'indicator' && onEditIndicator && (
@@ -94,7 +94,7 @@ export function OverlayPanel({
                     title="Настройки индикатора"
                     aria-label="Настройки индикатора"
                   >
-                    <Settings className="w-3 h-3" />
+                    <Gear className="w-3.5 h-3.5" weight="bold" />
                   </button>
                 )}
                 <button
@@ -104,7 +104,7 @@ export function OverlayPanel({
                   title="Удалить"
                   aria-label="Удалить"
                 >
-                  <Trash2 className="w-3 h-3" />
+                  <Trash className="w-3.5 h-3.5" weight="bold" />
                 </button>
               </div>
             </div>

@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronDown, Send } from 'lucide-react';
+import { CaretDown, PaperPlaneTilt } from '@phosphor-icons/react';
 
 const FAQ_CATEGORIES = [
   {
@@ -403,7 +403,7 @@ export function SupportTab() {
                     disabled={!formData.message.trim()}
                     className="flex items-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-2 sm:py-3 rounded-lg sm:rounded-xl btn-accent text-white text-[10px] sm:text-xs font-semibold uppercase tracking-wider transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <Send className="w-4 h-4" />
+                    <PaperPlaneTilt className="w-4 h-4" weight="fill" />
                     Отправить
                   </button>
                 </form>
@@ -460,7 +460,7 @@ export function SupportTab() {
                         className="w-full flex items-center justify-between gap-3 sm:gap-4 px-3 sm:px-4 py-2.5 sm:py-3 text-left"
                       >
                         <span className="font-medium text-white text-xs sm:text-[13px] uppercase tracking-wider">{question}</span>
-                        <ChevronDown
+                        <CaretDown
                           className={`w-5 h-5 shrink-0 text-white/40 transition-transform duration-200 ${
                             isOpen ? 'rotate-180' : ''
                           }`}

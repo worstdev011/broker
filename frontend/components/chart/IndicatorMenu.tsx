@@ -7,7 +7,7 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { Star, Activity } from 'lucide-react';
+import { Star, SlidersHorizontal } from '@phosphor-icons/react';
 import { useClickOutside } from '@/lib/hooks/useClickOutside';
 import { useLocalStorageSet } from '@/lib/hooks/useLocalStorageSet';
 import type { IndicatorConfig } from './internal/indicators/indicator.types';
@@ -111,7 +111,7 @@ export function IndicatorMenu({ indicatorConfigs, onConfigChange }: IndicatorMen
         title="Индикаторы"
         style={{ width: '44px', height: '36px', minWidth: '44px', maxWidth: '44px' }}
       >
-        <Activity className="w-4 h-4" strokeWidth={2.5} />
+        <SlidersHorizontal className="w-4 h-4" weight="bold" />
       </button>
 
       {/* Выпадающее меню */}

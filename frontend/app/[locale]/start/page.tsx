@@ -4,7 +4,7 @@ import Image from 'next/image'
 import { Link } from '@/components/navigation'
 import { useState, useEffect } from 'react'
 import { useTranslations } from 'next-intl'
-import { UserPlus, Wallet, TrendingUp, ChevronLeft, ChevronRight } from 'lucide-react'
+import { UserPlus, Wallet, TrendUp, CaretLeft, CaretRight } from '@phosphor-icons/react'
 import Footer from '@/components/Footer'
 import { SiteHeader } from '@/components/SiteHeader'
 
@@ -74,7 +74,7 @@ export default function StartPage() {
                 <div className="bg-white rounded-2xl shadow-md border border-gray-100 p-6">
                 <div className="flex gap-3 items-start mb-3">
                   <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-[#3347ff]/10 flex items-center justify-center">
-                    <UserPlus className="w-5 h-5 text-[#3347ff]" strokeWidth={2} aria-hidden />
+                    <UserPlus className="w-5 h-5 text-[#3347ff]" weight="bold" aria-hidden />
                   </div>
                   <h4 className="text-lg font-bold text-gray-900 pt-1">{t('step1_title')}</h4>
                 </div>
@@ -87,7 +87,7 @@ export default function StartPage() {
                 <div className="bg-white rounded-2xl shadow-md border border-gray-100 p-6">
                 <div className="flex gap-3 items-start mb-3">
                   <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-[#3347ff]/10 flex items-center justify-center">
-                    <Wallet className="w-5 h-5 text-[#3347ff]" strokeWidth={2} aria-hidden />
+                    <Wallet className="w-5 h-5 text-[#3347ff]" weight="bold" aria-hidden />
                   </div>
                   <h4 className="text-lg font-bold text-gray-900 pt-1">{t('step2_title')}</h4>
                 </div>
@@ -100,7 +100,7 @@ export default function StartPage() {
                 <div className="bg-white rounded-2xl shadow-md border border-gray-100 p-6">
                 <div className="flex gap-3 items-start mb-3">
                   <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-[#3347ff]/10 flex items-center justify-center">
-                    <TrendingUp className="w-5 h-5 text-[#3347ff]" strokeWidth={2} aria-hidden />
+                    <TrendUp className="w-5 h-5 text-[#3347ff]" weight="bold" aria-hidden />
                   </div>
                   <h4 className="text-lg font-bold text-gray-900 pt-1">{t('step3_title')}</h4>
                 </div>
@@ -217,10 +217,10 @@ export default function StartPage() {
               </p>
               <div className="flex gap-3">
                 <button type="button" onClick={() => setEducationSlide(0)} className={`w-12 h-12 rounded-full flex items-center justify-center transition-colors ${educationSlide === 0 ? 'bg-[#3347ff] text-white' : 'bg-[#e8e8f2] text-gray-900 hover:bg-[#e0e0ec]'}`} aria-label={t('nav_prev')}>
-                  <ChevronLeft className="w-6 h-6" strokeWidth={2} />
+                  <CaretLeft className="w-6 h-6" weight="bold" />
                 </button>
                 <button type="button" onClick={() => setEducationSlide(1)} className={`w-12 h-12 rounded-full flex items-center justify-center transition-colors ${educationSlide === 1 ? 'bg-[#3347ff] text-white' : 'bg-[#e8e8f2] text-gray-900 hover:bg-[#e0e0ec]'}`} aria-label={t('nav_next')}>
-                  <ChevronRight className="w-6 h-6" strokeWidth={2} />
+                  <CaretRight className="w-6 h-6" weight="bold" />
                 </button>
               </div>
             </div>
@@ -270,7 +270,7 @@ export default function StartPage() {
               </ul>
               <Link href="/education" className="inline-flex items-center gap-1.5 text-[#3347ff] font-semibold text-sm hover:text-[#2a3ae6] transition-colors">
                 {t('start_learning')}
-                <ChevronRight className="w-5 h-5" />
+                <CaretRight className="w-5 h-5" />
               </Link>
             </div>
                 </div>
@@ -316,7 +316,7 @@ export default function StartPage() {
               </ul>
               <Link href="/education" className="inline-flex items-center gap-1.5 text-[#3347ff] font-semibold text-sm hover:text-[#2a3ae6] transition-colors">
                 {t('study_strategies')}
-                <ChevronRight className="w-5 h-5" />
+                <CaretRight className="w-5 h-5" />
               </Link>
             </div>
                 </div>
