@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, forwardRef, useCallback } from 'react';
+import { useState, useRef, useEffect, forwardRef, useCallback, type MutableRefObject } from 'react';
 import { useTranslations } from 'next-intl';
 import { Clock, SlidersHorizontal } from '@phosphor-icons/react';
 import { formatCurrencySymbol, formatGroupedBalanceAmount, getCurrencyIcon } from '@/lib/formatCurrency';
@@ -58,12 +58,13 @@ export const MobileTradeBar = forwardRef<HTMLDivElement, MobileTradeBarProps>(fu
   const [buyPct, setBuyPct] = useState(50);
   const [sellPct, setSellPct] = useState(50);
 
-  const panelRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
   const setPanelRef = useCallback(
     (el: HTMLDivElement | null) => {
       panelRef.current = el;
       if (typeof forwardedRef === 'function') forwardedRef(el);
-      else if (forwardedRef) forwardedRef.current = el;
+      else if (forwardedRef)
+        (forwardedRef as MutableRefObject<HTMLDivElement | null>).current = el;
     },
     [forwardedRef],
   );
