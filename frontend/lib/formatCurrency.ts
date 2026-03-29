@@ -31,6 +31,17 @@ export function getCurrencyIcon(code: string): string {
   }
 }
 
+/** Whole amount with grouped thousands (e.g. 12,345.67) — for header / account UI. */
+const balanceGroupingFormatter = new Intl.NumberFormat('en-US', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+export function formatGroupedBalanceAmount(value: number): string {
+  if (!Number.isFinite(value)) return '0.00';
+  return balanceGroupingFormatter.format(value);
+}
+
 /**
  * Format a numeric balance with its currency symbol.
  * Example: formatBalance(1234.5, 'RUB') => '1234.50 ₽'
@@ -63,12 +74,12 @@ export function formatSignedTradeAmount(pnl: number, currency: string): string {
 
 /** Compact “+amount” for overlays (open trade: pass profit only, not stake+profit). */
 export function formatPayoutTotalLabel(total: number, currency: string): string {
-  const fixed = total.toFixed(2);
+  const grouped = formatGroupedBalanceAmount(total);
   const sym = getCurrencyIcon(currency);
   if (sym === currency && currency.length === 3) {
-    return `+${fixed} ${currency}`;
+    return `+${grouped} ${currency}`;
   }
-  return `+${sym}${fixed}`;
+  return `+${sym}${grouped}`;
 }
 
 export function formatPayoutMissingLabel(currency: string): string {

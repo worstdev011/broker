@@ -44,7 +44,7 @@ export function SentimentBar({ height = 600, width = 12, orientation = 'vertical
 
     ctx.save();
 
-    currentBuyRef.current += (targetBuyRef.current - currentBuyRef.current) * 0.05;
+    currentBuyRef.current += (targetBuyRef.current - currentBuyRef.current) * 0.07;
 
     const buyRatio = currentBuyRef.current;
 

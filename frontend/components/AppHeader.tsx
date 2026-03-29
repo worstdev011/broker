@@ -11,7 +11,7 @@ import { useDisplayName } from '@/lib/hooks/useDisplayName';
 import { api } from '@/lib/api/api';
 import { useAccountStore } from '@/stores/account.store';
 import { useAccountSwitch } from '@/lib/hooks/useAccountSwitch';
-import { formatCurrencySymbol } from '@/lib/formatCurrency';
+import { formatCurrencySymbol, formatGroupedBalanceAmount } from '@/lib/formatCurrency';
 import type { AccountSnapshot } from '@/types/account';
 import { getAvatarUrl } from '@/lib/avatarUrl';
 
@@ -83,10 +83,10 @@ export function AppHeader() {
 
   useEffect(() => {
     if (!snapshot) {
-      setDisplayedBalance('0.00');
+      setDisplayedBalance(formatGroupedBalanceAmount(0));
       return;
     }
-    setDisplayedBalance(Number(snapshot.balance).toFixed(2));
+    setDisplayedBalance(formatGroupedBalanceAmount(Number(snapshot.balance)));
   }, [snapshot?.balance, snapshot?.accountId]);
 
   useEffect(() => {
@@ -106,11 +106,11 @@ export function AppHeader() {
       const res = await api<{ accounts: Array<{ type: string; balance: string; currency: string; isActive: boolean }> }>('/api/accounts');
       const demo = res.accounts.find((a) => a.type === 'demo' && a.isActive) || res.accounts.find((a) => a.type === 'demo');
       if (demo) {
-        setModalBalances((p) => ({ ...p, demo: { balance: parseFloat(demo.balance).toFixed(2), currency: demo.currency } }));
+        setModalBalances((p) => ({ ...p, demo: { balance: formatGroupedBalanceAmount(parseFloat(demo.balance)), currency: demo.currency } }));
       }
       try {
         const real = await api<{ currency: string; balance: number }>('/api/wallet/balance');
-        setModalBalances((p) => ({ ...p, real: { balance: Number(real.balance).toFixed(2), currency: real.currency } }));
+        setModalBalances((p) => ({ ...p, real: { balance: formatGroupedBalanceAmount(Number(real.balance)), currency: real.currency } }));
       } catch {
         setModalBalances((p) => ({ ...p, real: null }));
       }
@@ -120,8 +120,8 @@ export function AppHeader() {
   };
 
   const getCurrentBalance = () => {
-    if (!snapshot) return { balance: '0.00', currency: 'UAH' };
-    return { balance: Number(snapshot.balance).toFixed(2), currency: snapshot.currency };
+    if (!snapshot) return { balance: formatGroupedBalanceAmount(0), currency: 'UAH' };
+    return { balance: formatGroupedBalanceAmount(Number(snapshot.balance)), currency: snapshot.currency };
   };
 
   const handleLogout = async () => {

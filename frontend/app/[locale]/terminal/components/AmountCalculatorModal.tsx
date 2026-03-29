@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { CaretUp, CaretDown } from '@phosphor-icons/react';
-import { formatCurrencySymbol } from '@/lib/formatCurrency';
+import { formatCurrencySymbol, formatGroupedBalanceAmount } from '@/lib/formatCurrency';
 
 export function AmountCalculatorModal({
   currentAmount,
@@ -76,7 +76,7 @@ export function AmountCalculatorModal({
   }, [display, onSelect]);
 
   const numValue = Number.parseFloat(display) || 0;
-  const profit = ((numValue * payoutPercent) / 100).toFixed(2);
+  const profit = formatGroupedBalanceAmount((numValue * payoutPercent) / 100);
   const currencyLabel = formatCurrencySymbol(currency);
 
   const btnBase = compact

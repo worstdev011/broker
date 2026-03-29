@@ -3,10 +3,12 @@
 import { useState, useRef, useEffect } from 'react';
 import { useTranslations } from 'next-intl';
 import { Clock, SlidersHorizontal } from '@phosphor-icons/react';
-import { formatCurrencySymbol, getCurrencyIcon } from '@/lib/formatCurrency';
+import { formatCurrencySymbol, formatGroupedBalanceAmount, getCurrencyIcon } from '@/lib/formatCurrency';
 import { SentimentBar } from '@/components/chart/SentimentBar';
 
 interface MobileTradeBarProps {
+  /** Доля покупателей 0..1 с графика; иначе полоса залипает на 50/50 */
+  sentimentBuyRatio?: number;
   time: string;
   amount: string;
   payoutPercent: number;
@@ -31,6 +33,7 @@ function formatTimeDisplay(seconds: number): string {
 }
 
 export function MobileTradeBar({
+  sentimentBuyRatio = 0.5,
   time,
   amount,
   payoutPercent,
@@ -46,10 +49,11 @@ export function MobileTradeBar({
   const t = useTranslations('terminal');
   const timeSeconds = Number.parseInt(time || '60', 10);
   const amountNum = parseFloat(amount || '100');
-  const profit = ((amountNum * payoutPercent) / 100).toFixed(2);
+  const profitNum = (amountNum * payoutPercent) / 100;
+  const payoutTotalNum = amountNum + profitNum;
 
-  const [buyPct, setBuyPct] = useState(67);
-  const [sellPct, setSellPct] = useState(33);
+  const [buyPct, setBuyPct] = useState(50);
+  const [sellPct, setSellPct] = useState(50);
 
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -87,6 +91,7 @@ export function MobileTradeBar({
             <SentimentBar
               orientation="horizontal"
               height={6}
+              externalBuyRatio={sentimentBuyRatio}
               onPercentagesChange={(buy, sell) => {
                 setBuyPct(buy);
                 setSellPct(sell);
@@ -104,7 +109,7 @@ export function MobileTradeBar({
         <div className="flex flex-col items-start gap-0.5 min-w-0">
           <span className="text-[9px] text-white/35 uppercase tracking-wide leading-none">{t('mobile_payout')}</span>
           <span className="text-sm font-bold text-white leading-none tabular-nums">
-            {(amountNum + amountNum * payoutPercent / 100).toFixed(2)}{' '}
+            {formatGroupedBalanceAmount(payoutTotalNum)}{' '}
             <span className="text-[11px] text-white/50">{formatCurrencySymbol(currency)}</span>
           </span>
         </div>
@@ -119,7 +124,7 @@ export function MobileTradeBar({
         <div className="flex flex-col items-end gap-0.5 min-w-0">
           <span className="text-[9px] text-white/35 uppercase tracking-wide leading-none">{t('mobile_profit')}</span>
           <span className="text-sm font-bold text-green-400 leading-none tabular-nums">
-            +{profit}{' '}
+            +{formatGroupedBalanceAmount(profitNum)}{' '}
             <span className="text-[11px] text-green-400/70">{formatCurrencySymbol(currency)}</span>
           </span>
         </div>
@@ -157,7 +162,7 @@ export function MobileTradeBar({
           <div className="flex flex-col items-start min-w-0 gap-0.5">
             <span className="text-[8px] text-white/30 uppercase tracking-wide leading-none">{t('amount_short')}</span>
             <span className="text-sm font-semibold text-white leading-none tabular-nums truncate">
-              {amount}
+              {formatGroupedBalanceAmount(amountNum)}
             </span>
           </div>
         </button>

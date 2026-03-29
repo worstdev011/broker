@@ -26,7 +26,7 @@ export function MobileBottomNav({ activeTab, onTabChange }: MobileBottomNavProps
   return (
     <div
       className="shrink-0 bg-[#05122a] border-t border-white/10 flex items-stretch"
-      style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+      style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 16px)' }}
     >
       {NAV_ITEMS.map(({ id, label, href, Icon }, index) => {
         const isActive = activeTab === id;

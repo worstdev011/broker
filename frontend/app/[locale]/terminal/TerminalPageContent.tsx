@@ -61,6 +61,7 @@ import { getAvatarUrl } from '@/lib/avatarUrl';
 import { useAccountSwitch } from '@/lib/hooks/useAccountSwitch';
 import {
   formatCurrencySymbol,
+  formatGroupedBalanceAmount,
   formatPayoutTotalLabel,
   formatTradeAmountLabel,
   getCurrencyIcon,
@@ -78,6 +79,7 @@ import {
 import { debounce } from 'es-toolkit';
 import { useAccountStore } from '@/stores/account.store';
 import { useTerminalPriceStore } from '@/stores/terminalPrice.store';
+import { useSentimentFromLivePrice } from '@/lib/hooks/useSentimentFromLivePrice';
 import { toast as showToast, showTradeOpenToast, showTradeCloseToast, dismissToastByKey } from '@/stores/toast.store';
 import type { AccountSnapshot } from '@/types/account';
 import { FALLBACK_SUPPORT_CHANNEL_URL } from '@/lib/constants';
@@ -545,6 +547,7 @@ export function TerminalPageContent({ defaultAccount = 'real' }: TerminalPagePro
   const [resetDemoLoading, setResetDemoLoading] = useState<boolean>(false);
   const [buyPercentage, setBuyPercentage] = useState<number>(50);
   const [sellPercentage, setSellPercentage] = useState<number>(50);
+  const sentimentBuyRatio = useSentimentFromLivePrice(instrument);
   const mainRef = useRef<HTMLElement | null>(null);
   const chartContainerRef = useRef<HTMLDivElement | null>(null);
 
@@ -575,13 +578,13 @@ export function TerminalPageContent({ defaultAccount = 'real' }: TerminalPagePro
   }, [time]);
 
   const [balanceAnimation, setBalanceAnimation] = useState<'increase' | 'decrease' | null>(null);
-  const [displayedBalance, setDisplayedBalance] = useState<string>('0.00');
+  const [displayedBalance, setDisplayedBalance] = useState<string>(() => formatGroupedBalanceAmount(0));
   const previousBalanceRef = useRef<number | null>(null);
 
   // Animate balance changes
   useEffect(() => {
     if (!snapshot) {
-      setDisplayedBalance('0.00');
+      setDisplayedBalance(formatGroupedBalanceAmount(0));
       previousBalanceRef.current = null;
       return;
     }
@@ -603,9 +606,9 @@ export function TerminalPageContent({ defaultAccount = 'real' }: TerminalPagePro
         const progress = Math.min(elapsed / duration, 1);
         const easeOutCubic = 1 - Math.pow(1 - progress, 3);
         const current = startBalance + (endBalance - startBalance) * easeOutCubic;
-        setDisplayedBalance(current.toFixed(2));
+        setDisplayedBalance(formatGroupedBalanceAmount(current));
         if (progress < 1) rafId = requestAnimationFrame(animate);
-        else setDisplayedBalance(endBalance.toFixed(2));
+        else setDisplayedBalance(formatGroupedBalanceAmount(endBalance));
       };
       rafId = requestAnimationFrame(animate);
       const timeoutId = setTimeout(() => setBalanceAnimation(null), 1000);
@@ -615,7 +618,7 @@ export function TerminalPageContent({ defaultAccount = 'real' }: TerminalPagePro
         clearTimeout(timeoutId);
       };
     } else {
-      setDisplayedBalance(currentBalance.toFixed(2));
+      setDisplayedBalance(formatGroupedBalanceAmount(currentBalance));
     }
     previousBalanceRef.current = currentBalance;
   }, [snapshot?.balance, snapshot?.accountId]);
@@ -665,8 +668,8 @@ export function TerminalPageContent({ defaultAccount = 'real' }: TerminalPagePro
     : null;
 
   const getCurrentBalance = () => {
-    if (!snapshot) return { balance: '0.00', currency: userCurrency ?? 'USD' };
-    return { balance: Number(snapshot.balance).toFixed(2), currency: snapshot.currency };
+    if (!snapshot) return { balance: formatGroupedBalanceAmount(0), currency: userCurrency ?? 'USD' };
+    return { balance: formatGroupedBalanceAmount(Number(snapshot.balance)), currency: snapshot.currency };
   };
 
   const [modalBalances, setModalBalances] = useState<{
@@ -681,14 +684,14 @@ export function TerminalPageContent({ defaultAccount = 'real' }: TerminalPagePro
       if (demoAccount) {
         setModalBalances((prev) => ({
           ...prev,
-          demo: { balance: parseFloat(demoAccount.balance).toFixed(2), currency: demoAccount.currency },
+          demo: { balance: formatGroupedBalanceAmount(parseFloat(demoAccount.balance)), currency: demoAccount.currency },
         }));
       }
       try {
         const realResponse = await api<{ currency: string; balance: number }>('/api/wallet/balance');
         setModalBalances((prev) => ({
           ...prev,
-          real: { balance: parseFloat(String(realResponse.balance)).toFixed(2), currency: realResponse.currency },
+          real: { balance: formatGroupedBalanceAmount(parseFloat(String(realResponse.balance))), currency: realResponse.currency },
         }));
       } catch {
         setModalBalances((prev) => ({ ...prev, real: null }));
@@ -1211,6 +1214,7 @@ export function TerminalPageContent({ defaultAccount = 'real' }: TerminalPagePro
 
               {/* ── Trade bar FLOATING over the chart (absolute bottom) ── */}
               <MobileTradeBar
+                sentimentBuyRatio={sentimentBuyRatio}
                 time={time}
                 amount={amount}
                 payoutPercent={payoutPercent}
@@ -1797,6 +1801,7 @@ export function TerminalPageContent({ defaultAccount = 'real' }: TerminalPagePro
                     orientation="vertical"
                     height={400}
                     width={12}
+                    externalBuyRatio={sentimentBuyRatio}
                     onPercentagesChange={(buy, sell) => {
                       setBuyPercentage(buy);
                       setSellPercentage(sell);
@@ -1866,7 +1871,7 @@ export function TerminalPageContent({ defaultAccount = 'real' }: TerminalPagePro
               <div className="flex flex-col items-start min-w-0 gap-0.5">
                 <span className="text-[8px] text-white/30 uppercase tracking-wide leading-none">{tTerminal('amount_short')}</span>
                 <span className="text-sm font-semibold text-white leading-none tabular-nums truncate">
-                  {amount || '100'}
+                  {formatGroupedBalanceAmount(Number.parseFloat(amount || '100'))}
                 </span>
               </div>
             </button>
