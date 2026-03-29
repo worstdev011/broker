@@ -1,47 +1,29 @@
-import type { FastifyInstance } from 'fastify';
-import { getTradeService, getAccountService } from '../../shared/serviceFactory.js';
-import { TradesController } from './trades.controller.js';
-import { openTradeSchema, getTradesSchema } from './trades.schema.js';
-import { requireAuth } from '../auth/auth.middleware.js';
+import type { FastifyInstance } from "fastify";
+import { tradesController } from "./trades.controller.js";
+import { requireAuth } from "../../middleware/auth.middleware.js";
 
-export async function registerTradesRoutes(app: FastifyInstance) {
-  const tradeService = getTradeService();
-  const accountService = getAccountService();
-  const tradesController = new TradesController(tradeService, accountService);
+export async function tradesRoutes(app: FastifyInstance): Promise<void> {
+  app.addHook("preHandler", requireAuth);
 
-  app.post<{
-    Body: {
-      accountId: string;
-      direction: 'CALL' | 'PUT';
-      amount: number;
-      expirationSeconds: number;
-      instrument: string;
-    };
-  }>('/api/trades/open', {
-    schema: openTradeSchema,
-    preHandler: requireAuth,
-  }, (request, reply) => tradesController.openTrade(request, reply));
+  app.post(
+    "/open",
+    {
+      config: {
+        rateLimit: {
+          max: 30,
+          timeWindow: "1 minute",
+          keyGenerator: (request) => request.userId ?? request.ip,
+        },
+      },
+    },
+    tradesController.handleOpen,
+  );
 
-  app.get<{
-    Querystring: { limit?: string; offset?: string; status?: 'open' | 'closed' };
-  }>('/api/trades', {
-    schema: getTradesSchema,
-    preHandler: requireAuth,
-  }, (request, reply) => tradesController.getTrades(request, reply));
+  app.get("/", tradesController.handleList);
 
-  app.get('/api/trades/statistics', {
-    preHandler: requireAuth,
-  }, (request, reply) => tradesController.getStatistics(request, reply));
+  app.get("/statistics", tradesController.handleStatistics);
 
-  app.get<{
-    Querystring: { startDate?: string; endDate?: string };
-  }>('/api/trades/balance-history', {
-    preHandler: requireAuth,
-  }, (request, reply) => tradesController.getBalanceHistory(request, reply));
+  app.get("/balance-history", tradesController.handleBalanceHistory);
 
-  app.get<{
-    Querystring: { startDate?: string; endDate?: string };
-  }>('/api/trades/analytics', {
-    preHandler: requireAuth,
-  }, (request, reply) => tradesController.getAnalytics(request, reply));
+  app.get("/analytics", tradesController.handleAnalytics);
 }

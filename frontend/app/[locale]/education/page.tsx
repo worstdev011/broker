@@ -15,9 +15,10 @@ export default function EducationPage() {
   const [panelMode, setPanelMode] = useState<'login' | 'register'>('register')
   const [selectedArticle, setSelectedArticle] = useState<number | null>(0)
 
-  const articles = [
+  const articlesRaw = [
     {
       id: 0,
+      section: 'main' as const,
       title: 'Трейдинг - основы',
       category: 'Для начинающих',
       image: '/images/main1.PNG',
@@ -98,6 +99,7 @@ export default function EducationPage() {
     },
     {
       id: 1,
+      section: 'main' as const,
       title: 'Патерни',
       category: 'Анализ',
       image: '/images/main2.PNG',
@@ -172,6 +174,7 @@ export default function EducationPage() {
     },
     {
       id: 2,
+      section: 'main' as const,
       title: 'Висхідний тренд, низхідний тренд і боковик',
       category: 'Анализ',
       image: '/images/main3.PNG',
@@ -217,6 +220,7 @@ export default function EducationPage() {
     },
     {
       id: 3,
+      section: 'main' as const,
       title: 'Рівні підтримки та опору',
       category: 'Анализ',
       image: '/images/main4.PNG',
@@ -275,6 +279,7 @@ export default function EducationPage() {
     },
     {
       id: 4,
+      section: 'main' as const,
       title: 'Мані-менеджмент та фікса',
       category: 'Риск-менеджмент',
       image: '/images/main5.PNG',
@@ -344,6 +349,7 @@ export default function EducationPage() {
     },
     {
       id: 5,
+      section: 'indicators' as const,
       title: 'Stochastic: як ловити розвороти ринку',
       category: 'Индикаторы',
       image: '/images/main6.PNG',
@@ -409,6 +415,7 @@ export default function EducationPage() {
     },
     {
       id: 6,
+      section: 'indicators' as const,
       title: 'MACD: сигнали, які реально працюють',
       category: 'Индикаторы',
       image: '/images/main7.PNG',
@@ -471,6 +478,7 @@ export default function EducationPage() {
     },
     {
       id: 7,
+      section: 'indicators' as const,
       title: 'Parabolic SAR: стратегія слідування за трендом',
       category: 'Индикаторы',
       image: '/images/main8.PNG',
@@ -535,6 +543,7 @@ export default function EducationPage() {
     },
     {
       id: 8,
+      section: 'indicators' as const,
       title: 'ZigZag: стратегія аналізу ринкової структури',
       category: 'Индикаторы',
       image: '/images/main9.PNG',
@@ -605,6 +614,7 @@ export default function EducationPage() {
     },
     {
       id: 9,
+      section: 'indicators' as const,
       title: 'OsMA: як фільтрувати слабкі рухи',
       category: 'Индикаторы',
       image: '/images/main10.PNG',
@@ -672,6 +682,7 @@ export default function EducationPage() {
     },
     {
       id: 10,
+      section: 'indicators' as const,
       title: 'CCI: індикатор, який випереджає ціну',
       category: 'Индикаторы',
       image: '/images/main11.PNG',
@@ -728,6 +739,7 @@ export default function EducationPage() {
     },
     {
       id: 11,
+      section: 'indicators' as const,
       title: 'Envelopes: стратегія торгівлі від меж',
       category: 'Индикаторы',
       image: '/images/main12.PNG',
@@ -781,6 +793,7 @@ export default function EducationPage() {
     },
     {
       id: 12,
+      section: 'indicators' as const,
       title: 'Vortex: впіймай початок руху',
       category: 'Индикаторы',
       image: '/images/main13.PNG',
@@ -833,6 +846,7 @@ export default function EducationPage() {
     },
     {
       id: 13,
+      section: 'indicators' as const,
       title: 'Fractal: структура ринку без зайвого шуму',
       category: 'Индикаторы',
       image: '/images/main14.PNG',
@@ -886,6 +900,7 @@ export default function EducationPage() {
     },
     {
       id: 14,
+      section: 'indicators' as const,
       title: 'Keltner: торгівля всередині та поза каналом',
       category: 'Индикаторы',
       image: '/images/main15.PNG',
@@ -941,6 +956,7 @@ export default function EducationPage() {
     },
     {
       id: 15,
+      section: 'indicators' as const,
       title: 'Williams %R: класика, яка досі працює',
       category: 'Индикаторы',
       image: '/images/main16.PNG',
@@ -994,6 +1010,12 @@ export default function EducationPage() {
     }
   ]
 
+  const articles = articlesRaw.map((a) => ({
+    ...a,
+    title: t(`art_${a.id}_title`),
+    category: t(`art_${a.id}_cat`),
+  }))
+
   return (
     <div className="min-h-screen bg-white">
       <SiteHeader
@@ -1033,7 +1055,7 @@ export default function EducationPage() {
                   <div>
                     <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3">{t('sidebar_articles')}</h4>
                     <div className="space-y-2">
-                      {articles.filter(a => a.category !== 'Индикаторы' && a.category !== 'Стратегии').map((article) => (
+                      {articles.filter((a) => a.section === 'main').map((article) => (
                         <button
                           key={article.id}
                           onClick={() => setSelectedArticle(article.id)}
@@ -1053,27 +1075,7 @@ export default function EducationPage() {
                   <div>
                     <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3">{t('sidebar_indicators')}</h4>
                     <div className="space-y-2">
-                      {articles.filter(a => a.category === 'Индикаторы').map((article) => (
-                        <button
-                          key={article.id}
-                          onClick={() => setSelectedArticle(article.id)}
-                          className={`w-full text-left px-4 py-3 rounded-lg transition-colors ${
-                            selectedArticle === article.id
-                              ? 'bg-[#3347ff]/10 text-[#3347ff] font-medium'
-                              : 'text-gray-700 hover:bg-gray-50'
-                          }`}
-                        >
-                          <div className="text-sm font-medium">{article.title}</div>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Стратегии */}
-                  <div>
-                    <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3">{t('sidebar_strategies')}</h4>
-                    <div className="space-y-2">
-                      {articles.filter(a => a.category === 'Стратегии').map((article) => (
+                      {articles.filter((a) => a.section === 'indicators').map((article) => (
                         <button
                           key={article.id}
                           onClick={() => setSelectedArticle(article.id)}

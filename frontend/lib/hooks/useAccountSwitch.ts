@@ -12,7 +12,7 @@ export function useAccountSwitch() {
     const normalized = type.toLowerCase();
     try {
       const r = await api<{ accounts: Array<{ id: string; type: string }> }>('/api/accounts');
-      const a = r.accounts.find((x) => x.type === normalized);
+      const a = r.accounts.find((x) => x.type.toLowerCase() === normalized);
       if (!a) return false;
       await api('/api/accounts/switch', {
         method: 'POST',

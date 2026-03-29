@@ -1,51 +1,52 @@
 'use client';
 
 import { useEffect, useState, useCallback, useRef } from 'react';
+import { useTranslations } from 'next-intl';
 
 export const ONBOARDING_STORAGE_KEY = 'onboarding_completed';
 
-const TOUR_STEPS = [
+const TOUR_STEP_DEFS = [
   {
     id: 'instrument',
     selector: '[data-tour="instrument"]',
     placement: 'bottom' as const,
-    title: 'Выбор актива',
-    text: 'Более 100 валютных пар, крипто и OTC активов. OTC - круглосуточно.',
+    titleKey: 'tour_instrument_title' as const,
+    bodyKey: 'tour_instrument_body' as const,
   },
   {
     id: 'timeframe',
     selector: '[data-tour="timeframe"]',
     placement: 'bottom' as const,
-    title: 'Таймфрейм',
-    text: 'Выбери временной интервал свечи - от 5 секунд до 1 дня.',
+    titleKey: 'tour_timeframe_title' as const,
+    bodyKey: 'tour_timeframe_body' as const,
   },
   {
     id: 'time-field',
     selector: '[data-tour="time-field"]',
     placement: 'left' as const,
-    title: 'Время экспирации',
-    text: 'Укажи через сколько закроется сделка. Чем точнее прогноз - тем выше прибыль.',
+    titleKey: 'tour_expiry_title' as const,
+    bodyKey: 'tour_expiry_body' as const,
   },
   {
     id: 'amount-field',
     selector: '[data-tour="amount-field"]',
     placement: 'left' as const,
-    title: 'Сумма сделки',
-    text: 'Введи сумму которую хочешь поставить. Начни с минимальной чтобы освоиться.',
+    titleKey: 'tour_amount_title' as const,
+    bodyKey: 'tour_amount_body' as const,
   },
   {
     id: 'trade-buttons',
     selector: '[data-tour="trade-buttons"]',
     placement: 'left' as const,
-    title: 'Открыть сделку',
-    text: 'КУПИТЬ - если считаешь что цена вырастет. ПРОДАТЬ - если упадёт. Результат через время экспирации.',
+    titleKey: 'tour_trade_title' as const,
+    bodyKey: 'tour_trade_body' as const,
   },
   {
     id: 'balance',
     selector: '[data-tour="balance"]',
     placement: 'bottom' as const,
-    title: 'Твой счёт',
-    text: 'Здесь отображается баланс. Переключайся между демо и реальным счётом.',
+    titleKey: 'tour_balance_title' as const,
+    bodyKey: 'tour_balance_body' as const,
   },
 ] as const;
 
@@ -91,6 +92,7 @@ interface OnboardingTourProps {
 }
 
 export function OnboardingTour({ onComplete }: OnboardingTourProps) {
+  const t = useTranslations('terminal');
   const [stepIdx, setStepIdx] = useState(0);
   const [target, setTarget] = useState<TargetInfo | null>(null);
   const [popupPos, setPopupPos] = useState<PopupPos | null>(null);
@@ -98,8 +100,8 @@ export function OnboardingTour({ onComplete }: OnboardingTourProps) {
   const popupRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef<number>(0);
 
-  const step = TOUR_STEPS[stepIdx];
-  const isLast = stepIdx === TOUR_STEPS.length - 1;
+  const step = TOUR_STEP_DEFS[stepIdx];
+  const isLast = stepIdx === TOUR_STEP_DEFS.length - 1;
 
   const finish = useCallback(() => {
     localStorage.setItem(ONBOARDING_STORAGE_KEY, 'true');
@@ -107,7 +109,6 @@ export function OnboardingTour({ onComplete }: OnboardingTourProps) {
     setTimeout(onComplete, 200);
   }, [onComplete]);
 
-  // Find target element and compute positions
   const updatePosition = useCallback(() => {
     if (!step) return;
     const el = document.querySelector(step.selector);
@@ -120,7 +121,6 @@ export function OnboardingTour({ onComplete }: OnboardingTourProps) {
     setPopupPos(calcPopupPos(rect, step.placement, popupW, popupH));
   }, [step]);
 
-  // Re-position on step change
   useEffect(() => {
     if (localStorage.getItem(ONBOARDING_STORAGE_KEY)) return;
     setVisible(false);
@@ -132,7 +132,6 @@ export function OnboardingTour({ onComplete }: OnboardingTourProps) {
       if (el) {
         const rect = el.getBoundingClientRect();
         setTarget({ rect, el });
-        // After setting target, wait for popup to render then position it
         requestAnimationFrame(() => {
           const popupW = 300;
           const popupH = popupRef.current?.offsetHeight || 150;
@@ -148,21 +147,18 @@ export function OnboardingTour({ onComplete }: OnboardingTourProps) {
     return () => clearTimeout(delay);
   }, [stepIdx, step]);
 
-  // Re-compute on resize
   useEffect(() => {
-    const onResize = () => updatePosition();
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
+    const ev = () => updatePosition();
+    window.addEventListener('resize', ev);
+    return () => window.removeEventListener('resize', ev);
   }, [updatePosition]);
 
-  // ESC to skip
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') finish(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [finish]);
 
-  // Cleanup raf on unmount
   useEffect(() => () => cancelAnimationFrame(rafRef.current), []);
 
   if (typeof window !== 'undefined' && localStorage.getItem(ONBOARDING_STORAGE_KEY)) return null;
@@ -171,13 +167,11 @@ export function OnboardingTour({ onComplete }: OnboardingTourProps) {
   const hasTarget = target !== null && popupPos !== null;
   const r = target?.rect;
 
-  // Cutout padding
   const PAD = 6;
   const rx = 8;
 
   return (
     <>
-      {/* ── Overlay with cutout ── */}
       <svg
         style={{
           position: 'fixed',
@@ -213,7 +207,6 @@ export function OnboardingTour({ onComplete }: OnboardingTourProps) {
         />
       </svg>
 
-      {/* ── Target highlight border ── */}
       {r && (
         <svg
           style={{
@@ -240,7 +233,6 @@ export function OnboardingTour({ onComplete }: OnboardingTourProps) {
         </svg>
       )}
 
-      {/* ── Popup ── */}
       <div
         ref={popupRef}
         style={{
@@ -261,19 +253,16 @@ export function OnboardingTour({ onComplete }: OnboardingTourProps) {
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
         <div style={{ padding: '14px 16px 0' }}>
           <div style={{ fontSize: '14px', fontWeight: 600, color: '#fff', lineHeight: 1.4 }}>
-            {step.title}
+            {t(step.titleKey)}
           </div>
         </div>
 
-        {/* Body */}
         <div style={{ padding: '8px 16px 12px', fontSize: '13px', color: 'rgba(255,255,255,0.58)', lineHeight: 1.6 }}>
-          {step.text}
+          {t(step.bodyKey)}
         </div>
 
-        {/* Footer */}
         <div style={{
           display: 'flex',
           alignItems: 'center',
@@ -281,7 +270,6 @@ export function OnboardingTour({ onComplete }: OnboardingTourProps) {
           padding: '10px 14px 13px',
           borderTop: '1px solid rgba(255,255,255,0.07)',
         }}>
-          {/* Skip */}
           <button
             type="button"
             onClick={finish}
@@ -299,12 +287,11 @@ export function OnboardingTour({ onComplete }: OnboardingTourProps) {
             onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = 'rgba(255,255,255,0.65)'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = 'rgba(255,255,255,0.32)'; }}
           >
-            Пропустить
+            {t('tour_skip')}
           </button>
 
-          {/* Progress dots */}
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px' }}>
-            {TOUR_STEPS.map((_, i) => (
+            {TOUR_STEP_DEFS.map((_, i) => (
               <span
                 key={i}
                 style={{
@@ -320,7 +307,6 @@ export function OnboardingTour({ onComplete }: OnboardingTourProps) {
             ))}
           </div>
 
-          {/* Next / Finish */}
           <button
             type="button"
             onClick={() => {
@@ -345,7 +331,7 @@ export function OnboardingTour({ onComplete }: OnboardingTourProps) {
             onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = '#3d8aff'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = '#2478ff'; }}
           >
-            {isLast ? 'Начать' : 'Далее →'}
+            {isLast ? t('tour_start') : t('tour_next')}
           </button>
         </div>
       </div>

@@ -1,15 +1,18 @@
 import type { Metadata } from 'next';
 
-export const metadata: Metadata = {
-  title: 'Политика AML/KYC',
-  description: 'Политика противодействия отмыванию денег (AML) и проверки клиентов (KYC) COMFORTRADE. Требования к верификации и документам.',
-  keywords: ['AML', 'KYC', 'верификация', 'проверка клиентов', 'отмывание денег'],
-};
+type Props = { children: React.ReactNode; params: Promise<{ locale: string }> };
 
-export default function AmlKycLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { locale } = await params;
+  const messages = (await import(`../../../../messages/${locale}.json`)).default;
+  const m = messages.metadata;
+  return {
+    title: m.policy_aml_title,
+    description: m.policy_aml_description,
+    keywords: m.policy_aml_keywords,
+  };
+}
+
+export default function AmlKycLayout({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }

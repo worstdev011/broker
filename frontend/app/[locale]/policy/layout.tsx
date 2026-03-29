@@ -1,15 +1,18 @@
 import type { Metadata } from 'next';
 
-export const metadata: Metadata = {
-  title: 'Политики и документы',
-  description: 'Политики конфиденциальности, условия использования, политика AML/KYC и предупреждения о рисках COMFORTRADE.',
-  keywords: ['политика', 'условия', 'конфиденциальность', 'риски', 'документы'],
-};
+type Props = { children: React.ReactNode; params: Promise<{ locale: string }> };
 
-export default function PolicyLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { locale } = await params;
+  const messages = (await import(`../../../messages/${locale}.json`)).default;
+  const m = messages.metadata;
+  return {
+    title: m.policy_hub_title,
+    description: m.policy_hub_description,
+    keywords: m.policy_hub_keywords,
+  };
+}
+
+export default function PolicyLayout({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }

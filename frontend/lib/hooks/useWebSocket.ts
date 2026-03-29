@@ -26,7 +26,7 @@ type WsEvent =
   | { type: 'trade:close'; data: TradeClosePayload }
   | { type: 'trade:countdown'; data: { tradeId: string; secondsLeft: number } }
   | { type: 'server:time'; data: { timestamp: number } }
-  | { type: 'account.snapshot'; data: { accountId: string; type: 'REAL' | 'DEMO'; balance: number; currency: 'USD' | 'RUB' | 'UAH'; updatedAt: number } }
+  | { type: 'account.snapshot'; data: { accountId: string; accountType?: string; type?: 'REAL' | 'DEMO'; balance: number; currency: 'USD' | 'RUB' | 'UAH'; updatedAt?: number } }
   | { type: 'error'; message: string }
   | { type: 'ws:ready'; sessionId: string; serverTime: number }
   | { type: 'subscribed'; instrument: string }
@@ -39,6 +39,7 @@ export interface TradeOpenPayload {
   amount: string;
   entryPrice: string;
   payout: string;
+  payoutPercent?: number;
   status: string;
   openedAt: string;
   expiresAt: string;
@@ -52,6 +53,7 @@ export interface TradeClosePayload {
   entryPrice: string;
   exitPrice: string | null;
   payout: string;
+  pnl?: number;
   status: string;
   result: 'WIN' | 'LOSS' | 'TIE';
   openedAt: string;
@@ -72,9 +74,9 @@ interface UseWebSocketParams {
   enabled?: boolean;
 }
 
-const MAX_RECONNECT_ATTEMPTS = 5;
-const RECONNECT_BASE_DELAY = 2000;
-const RECONNECT_MAX_DELAY = 30_000;
+const MAX_RECONNECT_ATTEMPTS = Infinity;
+const RECONNECT_BASE_DELAY = 1000;
+const RECONNECT_MAX_DELAY = 15_000;
 const PING_INTERVAL_MS = 30_000;
 const INSTRUMENT_POLL_INTERVAL_MS = 50;
 
@@ -93,6 +95,7 @@ export function useWebSocket({ activeInstrumentRef, activeTimeframeRef, onPriceU
   const reconnectAttemptsRef = useRef(0);
   const sessionIdRef = useRef<string | null>(null);
   const isConnectingRef = useRef(false);
+  const mountedRef = useRef(true);
 
   const onPriceUpdateRef = useRef(onPriceUpdate);
   const onCandleCloseRef = useRef(onCandleClose);
@@ -150,6 +153,7 @@ export function useWebSocket({ activeInstrumentRef, activeTimeframeRef, onPriceU
   }, [subscribeToInstrument]);
 
   const connect = useCallback(() => {
+    if (!mountedRef.current) return;
     if (!enabled || !isAuthenticated) return;
     if (isConnectingRef.current) return;
 
@@ -159,8 +163,23 @@ export function useWebSocket({ activeInstrumentRef, activeTimeframeRef, onPriceU
     isConnectingRef.current = true;
 
     if (wsRef.current) {
-      wsRef.current.close();
+      const old = wsRef.current;
+      old.onclose = null;
+      old.onerror = null;
+      old.onmessage = null;
+      old.onopen = null;
       wsRef.current = null;
+
+      if (old.readyState === WebSocket.OPEN || old.readyState === WebSocket.CLOSING) {
+        old.close(1000, 'replace');
+      } else if (old.readyState === WebSocket.CONNECTING) {
+        old.addEventListener('open', () => {
+          try { old.close(1000, 'replace'); } catch { /* ignore */ }
+        }, { once: true });
+        old.addEventListener('error', () => {
+          try { old.close(); } catch { /* ignore */ }
+        }, { once: true });
+      }
     }
 
     setWsState('connecting');
@@ -180,6 +199,18 @@ export function useWebSocket({ activeInstrumentRef, activeTimeframeRef, onPriceU
       ws.onopen = () => {
         isConnectingRef.current = false;
         reconnectAttemptsRef.current = 0;
+
+        // Eagerly send subscribe without waiting for ws:ready — saves one server RTT
+        const activeId = activeInstrumentRefRef.current?.current;
+        if (activeId) {
+          const currentTimeframe = activeTimeframeRefRef.current?.current ?? null;
+          const subscribeMsg: Record<string, string> = { type: 'subscribe', instrument: activeId };
+          if (currentTimeframe) subscribeMsg.timeframe = currentTimeframe;
+          try {
+            ws.send(JSON.stringify(subscribeMsg));
+            pendingSubscribeRef.current = { instrument: activeId, timeframe: currentTimeframe };
+          } catch { /* ignore */ }
+        }
 
         if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
         pingIntervalRef.current = setInterval(() => {
@@ -203,8 +234,8 @@ export function useWebSocket({ activeInstrumentRef, activeTimeframeRef, onPriceU
           const instrBytes = new Uint8Array(buf, 2, instrLen);
           let instrument = '';
           for (let i = 0; i < instrLen; i++) instrument += String.fromCharCode(instrBytes[i]);
-          const price = view.getFloat64(2 + instrLen);
-          const timestamp = view.getFloat64(2 + instrLen + 8);
+          const price = view.getFloat64(2 + instrLen, true);
+          const timestamp = view.getFloat64(2 + instrLen + 8, true);
           if (!Number.isFinite(price) || !Number.isFinite(timestamp) || price <= 0) return;
           const activeId = activeInstrumentRefRef.current?.current;
           if (activeId != null && instrument !== activeId) return;
@@ -218,7 +249,11 @@ export function useWebSocket({ activeInstrumentRef, activeTimeframeRef, onPriceU
             sessionIdRef.current = message.sessionId;
             setWsState('ready');
             if (activeId && subscribeToInstrumentRef.current) {
-              subscribeToInstrumentRef.current(activeId);
+              // Skip if we already eagerly sent subscribe in onopen for this instrument
+              const pending = pendingSubscribeRef.current;
+              if (!pending || pending.instrument !== activeId) {
+                subscribeToInstrumentRef.current(activeId);
+              }
             }
             return;
           }
@@ -285,7 +320,13 @@ export function useWebSocket({ activeInstrumentRef, activeTimeframeRef, onPriceU
           }
 
           if (message.type === 'trade:open') {
-            if (message.data?.id != null) onTradeOpenRef.current?.(message.data);
+            if (message.data?.id != null) {
+              const d = message.data as TradeOpenPayload & { payoutPercent?: number };
+              if (d.payoutPercent != null && !d.payout) {
+                d.payout = String(d.payoutPercent);
+              }
+              onTradeOpenRef.current?.(d);
+            }
             return;
           }
 
@@ -305,7 +346,15 @@ export function useWebSocket({ activeInstrumentRef, activeTimeframeRef, onPriceU
           }
 
           if (message.type === 'account.snapshot') {
-            useAccountStore.getState().setSnapshot(message.data);
+            const raw = message.data;
+            const acctType = (raw.type ?? raw.accountType ?? 'DEMO').toUpperCase() as 'REAL' | 'DEMO';
+            useAccountStore.getState().setSnapshot({
+              accountId: raw.accountId,
+              type: acctType,
+              balance: raw.balance,
+              currency: raw.currency,
+              updatedAt: raw.updatedAt ?? Date.now(),
+            });
             return;
           }
         };
@@ -366,7 +415,7 @@ export function useWebSocket({ activeInstrumentRef, activeTimeframeRef, onPriceU
           pingIntervalRef.current = null;
         }
 
-        if (event.code !== 1000 && reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
+        if (mountedRef.current && event.code !== 1000 && reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
           reconnectAttemptsRef.current++;
           const delay = Math.min(
             RECONNECT_BASE_DELAY * Math.pow(2, reconnectAttemptsRef.current - 1),
@@ -382,6 +431,10 @@ export function useWebSocket({ activeInstrumentRef, activeTimeframeRef, onPriceU
     }
   }, [enabled, isAuthenticated]);
 
+  // Stable ref — lets poll and mount effects call the latest connect() without it being a dep
+  const connectRef = useRef(connect);
+  useEffect(() => { connectRef.current = connect; }, [connect]);
+
   // Poll for instrument/timeframe changes (refs don't trigger useEffect)
   useEffect(() => {
     if (!enabled || !isAuthenticated) return;
@@ -394,8 +447,8 @@ export function useWebSocket({ activeInstrumentRef, activeTimeframeRef, onPriceU
       if (!ws || ws.readyState !== WebSocket.OPEN) {
         // Don't auto-retry from poll after max attempts - wait for user action or remount
         if (reconnectAttemptsRef.current >= MAX_RECONNECT_ATTEMPTS) return;
-        if (!isConnectingRef.current && currentState !== 'connecting' && currentState !== 'closed') {
-          connect();
+        if (!isConnectingRef.current && currentState !== 'connecting') {
+          connectRef.current();
         }
         return;
       }
@@ -419,28 +472,59 @@ export function useWebSocket({ activeInstrumentRef, activeTimeframeRef, onPriceU
     }, INSTRUMENT_POLL_INTERVAL_MS);
 
     return () => clearInterval(interval);
-  }, [enabled, isAuthenticated, connect]);
+  }, [enabled, isAuthenticated]); // connect removed: connectRef.current() always calls latest
 
   // Connect on mount
   useEffect(() => {
-    if (enabled && isAuthenticated) connect();
+    mountedRef.current = true;
+    if (enabled && isAuthenticated) connectRef.current();
 
     return () => {
-      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
-      if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
+      mountedRef.current = false;
 
-      if (wsRef.current) {
-        if (subscribedInstrumentRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-          try { wsRef.current.send(JSON.stringify({ type: 'unsubscribe_all' })); } catch { /* ignore */ }
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
+      if (pingIntervalRef.current) {
+        clearInterval(pingIntervalRef.current);
+        pingIntervalRef.current = null;
+      }
+
+      const ws = wsRef.current;
+      if (ws) {
+        ws.onclose = null;
+        ws.onerror = null;
+        ws.onmessage = null;
+        ws.onopen = null;
+
+        if (ws.readyState === WebSocket.OPEN) {
+          if (subscribedInstrumentRef.current) {
+            try { ws.send(JSON.stringify({ type: 'unsubscribe_all' })); } catch { /* ignore */ }
+          }
+          ws.close(1000, 'unmount');
+        } else if (ws.readyState === WebSocket.CONNECTING) {
+          // Wait for the connection to open before closing, avoids
+          // "WebSocket is closed before the connection is established" errors
+          const pending = ws;
+          pending.addEventListener('open', () => {
+            try { pending.close(1000, 'unmount'); } catch { /* ignore */ }
+          }, { once: true });
+          pending.addEventListener('error', () => {
+            try { pending.close(); } catch { /* ignore */ }
+          }, { once: true });
         }
-        wsRef.current.close();
         wsRef.current = null;
       }
-      setWsState('closed');
+
+      isConnectingRef.current = false;
+      setWsState('idle');
       subscribedInstrumentRef.current = null;
+      subscribedTimeframeRef.current = null;
+      pendingSubscribeRef.current = null;
       sessionIdRef.current = null;
     };
-  }, [enabled, isAuthenticated, connect]);
+  }, [enabled, isAuthenticated]); // connect removed: connectRef.current() always calls latest
 
   return {
     isConnected: wsState === 'subscribed' || wsState === 'ready',

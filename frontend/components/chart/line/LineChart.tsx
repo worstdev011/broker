@@ -1,9 +1,8 @@
 'use client';
 
 import { forwardRef, useRef, useEffect, useImperativeHandle, useCallback } from 'react';
-import { useWebSocket, type TradeClosePayload } from '@/lib/hooks/useWebSocket';
+import type { TradeClosePayload } from '@/lib/hooks/useWebSocket';
 import { netPnlFromTradeClose } from '@/lib/tradeClosePnl';
-import { dismissToastByKey, showTradeOpenToast, showTradeCloseToast } from '@/stores/toast.store';
 import { api } from '@/lib/api/api';
 import { logger } from '@/lib/logger';
 import type { IndicatorConfig } from '../internal/indicators/indicator.types';
@@ -14,6 +13,9 @@ import { pointsToIndicatorCandles } from './pointsToIndicatorCandles';
 import type { OverlayRegistryParams } from '../useChart';
 import type { Drawing } from '../internal/drawings/drawing.types';
 import { clampToDataBounds } from '../internal/interactions/math';
+import { useDrawings } from '../internal/drawings/useDrawings';
+import { useDrawingInteractions } from '../internal/drawings/useDrawingInteractions';
+import { renderDrawings } from '../internal/drawings/renderDrawings';
 
 // ═══════════════════════════════════════════════════════════════════════
 // Committed Trail Line Chart
@@ -43,6 +45,7 @@ const WIN_MS = 200_000;
 const R_PAD = 0.30;
 const MAX_RAW = 7000;
 const DAMP = 6;
+const FOLLOW_LERP = 0.07;
 const SNAP_GAP = 3000;
 const TRAIL_MARGIN_MS = 10_000;
 const TRAIL_SAFETY = 30_000;
@@ -52,10 +55,6 @@ const PULSE = 1500;
 const DOT_R = 4;
 const GLOW_R = 20;
 const MIN_ZOOM_MS_DESKTOP = 100_000;
-/** Узкий экран: можно сильнее приблизить (меньший минимальный диапазон по времени). */
-const MIN_ZOOM_MS_NARROW = 48_000;
-/** Узкий экран: pinch-zoom сильнее реагирует на разведение/сведение пальцев. */
-const PINCH_ZOOM_GAIN_MOBILE = 1.42;
 const MAX_ZOOM_MS = 400_000;
 const TIME_H = 25;
 const TIME_BG = '#05122a';
@@ -120,7 +119,10 @@ function mkVp() {
   const n = Date.now(), pad = WIN_MS * R_PAD;
   let ts = n + pad - WIN_MS, te = n + pad, af = true;
   let aw = Date.now(), ap = performance.now();
-  let st: number | null = null, ls = 0;
+  // Follow-mode target: updated on each tick via cal(), lerped toward in adv()
+  let followTarget: number | null = null;
+  // Return-to-follow: smooth transition target (timeEnd) when re-entering follow mode
+  let returnTarget: number | null = null;
   // Animated zoom targets
   let zts: number | null = null, zte: number | null = null;
   const wall = (pn: number) => aw + (pn - ap);
@@ -154,7 +156,15 @@ function mkVp() {
       te = timeEnd;
     },
     get ts() { return ts; }, get te() { return te; }, get af() { return af; },
-    cal(s: number) { const e = s - wall(performance.now()); if (Math.abs(e) > 50) aw += e * 0.3; },
+    cal(s: number) {
+      const e = s - wall(performance.now()); if (Math.abs(e) > 50) aw += e * 0.3;
+      if (af) {
+        const w = te - ts, p = w * R_PAD;
+        const ideal = s + p;
+        followTarget = ideal;
+        if (returnTarget !== null) returnTarget = ideal;
+      }
+    },
     wall,
     adv(pn: number) {
       if (zts !== null && zte !== null) {
@@ -162,19 +172,26 @@ function mkVp() {
         if (Math.abs(ds) < 1 && Math.abs(de) < 1) { ts = zts; te = zte; zts = null; zte = null; }
         else { ts += ds / ZOOM_DAMP; te += de / ZOOM_DAMP; return; }
       }
+      if (returnTarget !== null) {
+        const diff = returnTarget - te;
+        const w = te - ts;
+        if (Math.abs(diff) < 1) { te = returnTarget; ts = te - w; returnTarget = null; }
+        else { te += diff * FOLLOW_LERP; ts = te - w; }
+        return;
+      }
       if (!af) return;
-      const w = te - ts, wn = wall(pn), p = w * R_PAD, ideal = wn + p;
-      if (st === null) { st = ideal; ls = 0; }
-      const sec = Math.floor(wn / 1000); if (ls === 0) ls = sec;
-      if (sec > ls) { st += (sec - ls) * 1000; ls = sec; }
-      const d = st - te; if (Math.abs(d) < 0.5) te = st; else te += d / DAMP; ts = te - w;
+      if (followTarget === null) return;
+      const w = te - ts;
+      const diff = followTarget - te;
+      if (Math.abs(diff) < 0.5) { te = followTarget; } else { te += diff * FOLLOW_LERP; }
+      ts = te - w;
     },
-    follow() { af = true; st = null; ls = 0; const wn = wall(performance.now()), w = te - ts, p = w * R_PAD; zts = wn + p - w; zte = wn + p; },
-    set(s: number, e: number, f: boolean) { ts = s; te = e; af = f; st = null; ls = 0; zts = null; zte = null; },
-    setAf(v: boolean) { af = v; if (!v) { st = null; ls = 0; } },
-    zoom(f: number) { const w = te - ts, nw = clampZoomWidth(w / f); const m = (ts + te) / 2; zts = m - nw / 2; zte = m + nw / 2; af = false; st = null; ls = 0; },
-    zoomAt(f: number, a: number) { const w = te - ts, nw = clampZoomWidth(w / f); const pv = ts + w * a; zts = pv - nw * a; zte = pv + nw * (1 - a); af = false; st = null; ls = 0; },
-    pan(ms: number) { ts += ms; te += ms; af = false; st = null; ls = 0; zts = null; zte = null; },
+    follow() { af = true; followTarget = null; const wn = wall(performance.now()), w = te - ts, p = w * R_PAD; returnTarget = wn + p; },
+    set(s: number, e: number, f: boolean) { ts = s; te = e; af = f; followTarget = null; returnTarget = null; zts = null; zte = null; },
+    setAf(v: boolean) { af = v; if (!v) { followTarget = null; returnTarget = null; } },
+    zoom(f: number) { const w = te - ts, nw = clampZoomWidth(w / f); const m = (ts + te) / 2; zts = m - nw / 2; zte = m + nw / 2; af = false; followTarget = null; returnTarget = null; },
+    zoomAt(f: number, a: number) { const w = te - ts, nw = clampZoomWidth(w / f); const pv = ts + w * a; zts = pv - nw * a; zte = pv + nw * (1 - a); af = false; followTarget = null; returnTarget = null; },
+    pan(ms: number) { ts += ms; te += ms; af = false; followTarget = null; returnTarget = null; zts = null; zte = null; },
   };
 }
 
@@ -342,6 +359,7 @@ function drawSessionExpiration(
   te: number,
   w: number,
   chartH: number,
+  topInset = 0,
 ) {
   const tr = te - ts;
   if (tr <= 0) return;
@@ -352,10 +370,8 @@ function drawSessionExpiration(
 
   ctx.save();
   const CIRCLE_RADIUS = 18;
-  const isMobile = w < 600;
-  const CIRCLE_Y = isMobile ? 78 : 30;
   const circleX = expirationX;
-  const circleY = CIRCLE_Y;
+  const circleY = 30 + topInset;
 
   ctx.fillStyle = '#40648f';
   ctx.beginPath();
@@ -411,6 +427,7 @@ function drawChart(
   trades: TradeOverlay[],
   payoutPct: number,
   expirationRenderTime: number | null,
+  expirationTopInset: number,
 ) {
   const ch = h - TIME_H;
   const tr = e - s; if (tr <= 0) return; const inv = 1 / tr;
@@ -449,7 +466,7 @@ function drawChart(
   }
 
   if (expirationRenderTime != null && Number.isFinite(expirationRenderTime)) {
-    drawSessionExpiration(ctx, expirationRenderTime, s, e, w, ch);
+    drawSessionExpiration(ctx, expirationRenderTime, s, e, w, ch, expirationTopInset);
   }
 
   // trade overlays
@@ -467,9 +484,9 @@ function drawChart(
     ctx.save();
     ctx.strokeStyle = isCall ? 'rgba(74,222,128,0.55)' : 'rgba(248,113,113,0.55)';
     ctx.lineWidth = 1.5; ctx.setLineDash([4, 4]);
-    ctx.beginPath(); ctx.moveTo(tx, 0); ctx.lineTo(tx, ch); ctx.stroke(); ctx.setLineDash([]);
+    ctx.beginPath(); ctx.moveTo(tx, expirationTopInset); ctx.lineTo(tx, ch); ctx.stroke(); ctx.setLineDash([]);
     ctx.fillStyle = isCall ? '#4ade80' : '#f87171';
-    ctx.beginPath(); ctx.arc(tx, 8, 4, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(tx, expirationTopInset + 8, 4, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
   }
 
@@ -573,6 +590,14 @@ interface LineChartProps {
   indicatorConfigs?: IndicatorConfig[];
   overlayRegistry?: OverlayRegistryParams;
   onReady?: () => void;
+  extraBottomPadding?: number;
+  extraTopPadding?: number;
+  /** External price ticks from parent's WS connection */
+  onPriceUpdateRef?: React.MutableRefObject<((price: number, timestamp: number) => void) | null>;
+  /** External server time sync from parent's WS connection */
+  onServerTimeRef?: React.MutableRefObject<((timestamp: number) => void) | null>;
+  /** External trade close handler from parent's WS connection */
+  onTradeCloseRef?: React.MutableRefObject<((data: TradeClosePayload) => void) | null>;
 }
 
 export interface LineChartRef {
@@ -602,7 +627,8 @@ export interface LineChartRef {
 // ═══════════════════════════════════════════════════════════════════════
 
 export const LineChart = forwardRef<LineChartRef, LineChartProps>(
-  ({ className, style, instrument, payoutPercent: payoutPctProp, activeInstrumentRef, indicatorConfigs = [], onReady }, ref) => {
+  ({ className, style, instrument, payoutPercent: payoutPctProp, activeInstrumentRef, drawingMode = null, indicatorConfigs = [], overlayRegistry, onReady, extraBottomPadding = 0, extraTopPadding = 0, onPriceUpdateRef: extPriceRef, onServerTimeRef: extServerTimeRef, onTradeCloseRef: extTradeCloseRef }, ref) => {
+
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const indicatorConfigsRef = useRef(indicatorConfigs);
     indicatorConfigsRef.current = indicatorConfigs;
@@ -621,21 +647,73 @@ export const LineChart = forwardRef<LineChartRef, LineChartProps>(
     getIndicatorSeriesRef.current = getIndicatorSeries;
 
     useEffect(() => {
-      const mq = window.matchMedia('(max-width: 767px)');
-      const apply = () => {
-        const narrow = mq.matches;
-        vpRef.current.setZoomLimits(narrow ? MIN_ZOOM_MS_NARROW : MIN_ZOOM_MS_DESKTOP);
-        pinchZoomGainRef.current = narrow ? PINCH_ZOOM_GAIN_MOBILE : 1;
-      };
-      apply();
-      mq.addEventListener('change', apply);
-      return () => mq.removeEventListener('change', apply);
+      vpRef.current.setZoomLimits(MIN_ZOOM_MS_DESKTOP);
+      pinchZoomGainRef.current = 1;
     }, []);
     const prevRef = useRef<Point | null>(null);
     const tradesRef = useRef<TradeOverlay[]>([]);
     const mouseRef = useRef<{ x: number; y: number } | null>(null);
+    const canvasSizeRef = useRef<{ w: number; h: number }>({ w: 0, h: 0 });
     const payoutRef = useRef(payoutPctProp ?? 75);
+
+    // ── Drawings ──
+    const drawings = useDrawings();
+    const overlayRegistryRef = useRef(overlayRegistry);
+    overlayRegistryRef.current = overlayRegistry;
+
+    const addDrawingWithOverlay = useCallback((d: Drawing) => {
+      drawings.addDrawing(d);
+      overlayRegistryRef.current?.onDrawingAdded?.({
+        id: d.id,
+        type: 'drawing',
+        name: d.type,
+        visible: true,
+        drawingType: d.type as import('../internal/overlay/overlay.types').DrawingOverlay['drawingType'],
+        points: d.type === 'horizontal'
+          ? [{ time: 0, price: (d as import('../internal/drawings/drawing.types').HorizontalLine).price }]
+          : d.type === 'vertical'
+            ? [{ time: (d as import('../internal/drawings/drawing.types').VerticalLine).time, price: 0 }]
+            : [(d as { start: { time: number; price: number } }).start, (d as { end: { time: number; price: number } }).end],
+      });
+    }, [drawings]);
+
+    const getLineViewport = useCallback((): Viewport | null => {
+      const vp = vpRef.current;
+      const mn = yMn.current.cur;
+      const mx = yMx.current.cur;
+      if (mx <= mn) return null;
+      return { timeStart: vp.ts, timeEnd: vp.te, priceMin: mn, priceMax: mx, yMode: 'auto' };
+    }, []);
+
+    const getLineCrosshair = useCallback(() => {
+      const m = mouseRef.current;
+      if (!m) return null;
+      const { w, h } = canvasSizeRef.current;
+      if (w === 0 || h === 0) return null;
+      const vp = vpRef.current;
+      const mn = yMn.current.cur, mx = yMx.current.cur;
+      const tr = vp.te - vp.ts;
+      if (tr <= 0 || mx <= mn) return null;
+      const chartH = h - TIME_H;
+      const time = vp.ts + (m.x / w) * tr;
+      const price = mx - (m.y / chartH) * (mx - mn);
+      return { isActive: true, x: m.x, y: m.y, time, price };
+    }, []);
+
+    useDrawingInteractions({
+      canvasRef,
+      getViewport: getLineViewport,
+      getCrosshair: getLineCrosshair,
+      mode: drawingMode as Parameters<typeof useDrawingInteractions>[0]['mode'],
+      addDrawing: addDrawingWithOverlay,
+    });
+
     payoutRef.current = payoutPctProp ?? 75;
+
+    const extraBottomPaddingRef = useRef(extraBottomPadding);
+    extraBottomPaddingRef.current = extraBottomPadding;
+    const extraTopPaddingRef = useRef(extraTopPadding);
+    extraTopPaddingRef.current = extraTopPadding;
 
     const expirationSecRef = useRef(60);
     const expirationRenderRef = useRef<number | null>(null);
@@ -672,25 +750,27 @@ export const LineChart = forwardRef<LineChartRef, LineChartProps>(
 
     const handleServerTime = useCallback((ts: number) => { vpRef.current.cal(ts); }, []);
 
-    // ── WebSocket ──
-    useWebSocket({
-      activeInstrumentRef,
-      onPriceUpdate: handleTick,
-      onServerTime: handleServerTime,
-      onTradeOpen: (data) => showTradeOpenToast(data),
-      onTradeClose: (data) => {
-        const t = tradesRef.current.find(tr => tr.id === data.id);
-        if (t) {
-          t.result = data.result;
-          t.closedAt = Date.now();
-          t.pnl = netPnlFromTradeClose(data);
-          setTimeout(() => { tradesRef.current = tradesRef.current.filter(tr => tr.id !== data.id); }, 5000);
-        }
-        dismissToastByKey(data.id);
-        showTradeCloseToast(data);
-      },
-      enabled: true,
-    });
+    const handleTradeCloseWs = useCallback((data: TradeClosePayload) => {
+      const trade = tradesRef.current.find(tr => tr.id === data.id);
+      if (trade) {
+        trade.result = data.result;
+        trade.closedAt = Date.now();
+        trade.pnl = netPnlFromTradeClose(data);
+        setTimeout(() => { tradesRef.current = tradesRef.current.filter(tr => tr.id !== data.id); }, 5000);
+      }
+    }, []);
+
+    // Register callbacks into external refs so the parent's WS can feed us data
+    useEffect(() => {
+      if (extPriceRef) extPriceRef.current = handleTick;
+      if (extServerTimeRef) extServerTimeRef.current = handleServerTime;
+      if (extTradeCloseRef) extTradeCloseRef.current = handleTradeCloseWs;
+      return () => {
+        if (extPriceRef) extPriceRef.current = null;
+        if (extServerTimeRef) extServerTimeRef.current = null;
+        if (extTradeCloseRef) extTradeCloseRef.current = null;
+      };
+    }, [handleTick, handleServerTime, handleTradeCloseWs, extPriceRef, extServerTimeRef, extTradeCloseRef]);
 
     // ── Initialize from snapshot ──
     const doInit = useCallback((snap: { points: Point[]; currentPrice: number; serverTime: number }) => {
@@ -770,10 +850,10 @@ export const LineChart = forwardRef<LineChartRef, LineChartProps>(
         tradesRef.current.push({ id: t.id, direction: t.direction, entryPrice: parseFloat(t.entryPrice), openedAt: new Date(t.openedAt).getTime(), expiresAt: new Date(t.expiresAt).getTime(), amount: t.amount != null ? Number(t.amount) : undefined });
       },
       removeTrade(id) { tradesRef.current = tradesRef.current.filter(t => t.id !== id); },
-      removeDrawing() {},
-      getDrawings() { return []; },
-      addDrawing() {},
-      clearDrawings() {},
+      removeDrawing(id) { drawings.removeDrawing(id); },
+      getDrawings() { return drawings.getDrawings(); },
+      addDrawing(d) { addDrawingWithOverlay(d); },
+      clearDrawings() { drawings.clearDrawings(); },
       initializeFromSnapshot(snap) { doInit(snap); },
       prependHistory(pts) { if (pts.length > 0) { storeRef.current.pushMany(pts.sort((a, b) => a.time - b.time)); } },
       setHoverAction() {},
@@ -825,7 +905,7 @@ export const LineChart = forwardRef<LineChartRef, LineChartProps>(
 
         const ctx = cvs!.getContext('2d');
         if (!ctx) { raf = requestAnimationFrame(frame); return; }
-        if (dirty) { const r = cvs!.getBoundingClientRect(); cw = r.width; ch = r.height; dirty = false; }
+        if (dirty) { const r = cvs!.getBoundingClientRect(); cw = r.width; ch = r.height; canvasSizeRef.current = { w: cw, h: ch }; dirty = false; }
         if (cw === 0 || ch === 0) { raf = requestAnimationFrame(frame); return; }
         const nd = window.devicePixelRatio || 1;
         if (nd !== dpr || cvs!.width !== Math.round(cw * nd) || cvs!.height !== Math.round(ch * nd)) { dpr = nd; cvs!.width = Math.round(cw * dpr); cvs!.height = Math.round(ch * dpr); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); }
@@ -914,7 +994,12 @@ export const LineChart = forwardRef<LineChartRef, LineChartProps>(
 
         const tgt = an.tp;
         const r = pRange(combined.length > 0 ? combined : raw, vp.ts, vp.te, tgt > 0 ? tgt : undefined);
-        setYv(yMn.current, r.min, now); setYv(yMx.current, r.max, now);
+        // Expand priceMin downward so candles/line don't render under the floating trade panel.
+        // Add 32px extra gap so the time-axis labels stay visible above the panel.
+        const extraPaddingRatio = (extraBottomPaddingRef.current ?? 0) > 0 && ch > 0
+          ? ((extraBottomPaddingRef.current + 32) / ch) * (r.max - r.min)
+          : 0;
+        setYv(yMn.current, r.min - extraPaddingRatio, now); setYv(yMx.current, r.max, now);
         tickYv(yMn.current, now); tickYv(yMx.current, now);
 
         const strip = indicatorStripHeights(indicatorConfigsRef.current);
@@ -928,7 +1013,7 @@ export const LineChart = forwardRef<LineChartRef, LineChartProps>(
 
         if (combined.length > 0 || live) {
           grid(ctx, cw, layoutMainH, vp.ts, vp.te, yMn.current.cur, yMx.current.cur);
-          drawChart(ctx, combined, live, vp.ts, vp.te, cw, layoutMainH, yMn.current.cur, yMx.current.cur, now, tradesRef.current, payoutRef.current, expirationDraw);
+          drawChart(ctx, combined, live, vp.ts, vp.te, cw, layoutMainH, yMn.current.cur, yMx.current.cur, now, tradesRef.current, payoutRef.current, expirationDraw, Math.max(0, extraTopPaddingRef.current));
         }
 
         const indSeries = getIndicatorSeriesRef.current();
@@ -955,6 +1040,12 @@ export const LineChart = forwardRef<LineChartRef, LineChartProps>(
             atrHeight: strip.atr,
             adxHeight: strip.adx,
           });
+        }
+
+        const drawingsList = drawings.getDrawings();
+        if (drawingsList.length > 0) {
+          const dvp: Viewport = { timeStart: vp.ts, timeEnd: vp.te, priceMin: yMn.current.cur, priceMax: yMx.current.cur, yMode: 'auto' };
+          renderDrawings({ ctx, drawings: drawingsList, viewport: dvp, width: cw, height: layoutMainH });
         }
 
         const m = mouseRef.current;

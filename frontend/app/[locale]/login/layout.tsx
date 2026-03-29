@@ -1,15 +1,18 @@
 import type { Metadata } from 'next';
 
-export const metadata: Metadata = {
-  title: 'Вход в аккаунт',
-  description: 'Войдите в свой аккаунт COMFORTRADE для доступа к торговому терминалу, управлению профилем и истории сделок.',
-  keywords: ['вход', 'авторизация', 'логин', 'аккаунт'],
-};
+type Props = { children: React.ReactNode; params: Promise<{ locale: string }> };
 
-export default function LoginLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { locale } = await params;
+  const messages = (await import(`../../../messages/${locale}.json`)).default;
+  const m = messages.metadata;
+  return {
+    title: m.login_title,
+    description: m.login_description,
+    keywords: m.login_keywords,
+  };
+}
+
+export default function LoginLayout({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }

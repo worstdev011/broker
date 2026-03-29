@@ -7,6 +7,7 @@ const backendUrl = process.env.API_BACKEND_URL || process.env.NEXT_PUBLIC_API_UR
 
 const nextConfig = {
   reactStrictMode: true,
+  transpilePackages: ['next-intl', 'use-intl', '@formatjs/fast-memoize'],
   typescript: { ignoreBuildErrors: false },
   eslint: { ignoreDuringBuilds: false },
   async headers() {

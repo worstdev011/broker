@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { FilePlus, ClockCountdown, CheckCircle, FileText, XCircle, CaretDown, MagnifyingGlass } from '@phosphor-icons/react';
+import { useTranslations, useLocale } from 'next-intl';
 import { SumsubKyc } from '@/components/kyc/SumsubKyc';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { VERIFICATION_STORAGE_KEY } from '@/lib/hooks/useVerification';
@@ -9,38 +10,30 @@ const VERIFICATION_COUNTRY_KEY = 'profile-verification-country';
 
 type VerificationStatus = 'intro' | 'country-select' | 'sdk' | 'pending' | 'verified' | 'rejected';
 
-// ── Country list ─────────────────────────────────────────────────────────────
-
-interface Country {
-  code: string;
-  name: string;
-  flag: string;
-}
-
-const COUNTRIES: Country[] = [
-  { code: 'UA', name: 'Украина', flag: '🇺🇦' },
-  { code: 'RU', name: 'Россия', flag: '🇷🇺' },
-  { code: 'BY', name: 'Беларусь', flag: '🇧🇾' },
-  { code: 'KZ', name: 'Казахстан', flag: '🇰🇿' },
-  { code: 'UZ', name: 'Узбекистан', flag: '🇺🇿' },
-  { code: 'GE', name: 'Грузия', flag: '🇬🇪' },
-  { code: 'AZ', name: 'Азербайджан', flag: '🇦🇿' },
-  { code: 'AM', name: 'Армения', flag: '🇦🇲' },
-  { code: 'MD', name: 'Молдова', flag: '🇲🇩' },
-  { code: 'PL', name: 'Польша', flag: '🇵🇱' },
-  { code: 'DE', name: 'Германия', flag: '🇩🇪' },
-  { code: 'FR', name: 'Франция', flag: '🇫🇷' },
-  { code: 'GB', name: 'Великобритания', flag: '🇬🇧' },
-  { code: 'TR', name: 'Турция', flag: '🇹🇷' },
-  { code: 'AE', name: 'ОАЭ', flag: '🇦🇪' },
-  { code: 'US', name: 'США', flag: '🇺🇸' },
-  { code: 'CA', name: 'Канада', flag: '🇨🇦' },
-  { code: 'IL', name: 'Израиль', flag: '🇮🇱' },
-  { code: 'IN', name: 'Индия', flag: '🇮🇳' },
-  { code: 'CN', name: 'Китай', flag: '🇨🇳' },
-  { code: 'BR', name: 'Бразилия', flag: '🇧🇷' },
-  { code: 'OTHER', name: 'Другая страна', flag: '🌐' },
-];
+const VERIFICATION_COUNTRY_ENTRIES = [
+  { code: 'UA', flag: '🇺🇦' },
+  { code: 'RU', flag: '🇷🇺' },
+  { code: 'BY', flag: '🇧🇾' },
+  { code: 'KZ', flag: '🇰🇿' },
+  { code: 'UZ', flag: '🇺🇿' },
+  { code: 'GE', flag: '🇬🇪' },
+  { code: 'AZ', flag: '🇦🇿' },
+  { code: 'AM', flag: '🇦🇲' },
+  { code: 'MD', flag: '🇲🇩' },
+  { code: 'PL', flag: '🇵🇱' },
+  { code: 'DE', flag: '🇩🇪' },
+  { code: 'FR', flag: '🇫🇷' },
+  { code: 'GB', flag: '🇬🇧' },
+  { code: 'TR', flag: '🇹🇷' },
+  { code: 'AE', flag: '🇦🇪' },
+  { code: 'US', flag: '🇺🇸' },
+  { code: 'CA', flag: '🇨🇦' },
+  { code: 'IL', flag: '🇮🇱' },
+  { code: 'IN', flag: '🇮🇳' },
+  { code: 'CN', flag: '🇨🇳' },
+  { code: 'BR', flag: '🇧🇷' },
+  { code: 'OTHER', flag: '🌐' },
+] as const;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -72,20 +65,33 @@ function resetAll(setStatus: (s: VerificationStatus) => void, setCountry: (c: st
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function VerificationSection() {
+  const t = useTranslations('verification');
+  const locale = useLocale();
+  const sumsubLang = locale === 'ua' ? 'uk' : locale;
   const { user, isLoading } = useAuth();
   const [status, setStatus] = useState<VerificationStatus>(getStoredStatus);
   const [selectedCountry, setSelectedCountry] = useState<string>(getStoredCountry);
   const [search, setSearch] = useState('');
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
-  const activeCountry = COUNTRIES.find((c) => c.code === selectedCountry);
+  const countries = useMemo(
+    () =>
+      VERIFICATION_COUNTRY_ENTRIES.map((c) => ({
+        code: c.code,
+        flag: c.flag,
+        name: t(`countries.${c.code}`),
+      })),
+    [t],
+  );
+
+  const activeCountry = countries.find((c) => c.code === selectedCountry);
 
   const filteredCountries = search.trim()
-    ? COUNTRIES.filter((c) =>
+    ? countries.filter((c) =>
         c.name.toLowerCase().includes(search.trim().toLowerCase()) ||
         c.code.toLowerCase().includes(search.trim().toLowerCase()),
       )
-    : COUNTRIES;
+    : countries;
 
   const handleSelectCountry = (code: string) => {
     setSelectedCountry(code);
@@ -131,35 +137,20 @@ export function VerificationSection() {
       {status === 'intro' && (
         <div className="space-y-6">
           <div>
-            <h3 className="text-sm font-medium text-white mb-3">
-              Добро пожаловать в процесс верификации
-            </h3>
-            <p className="text-xs sm:text-sm text-white/70 mb-4 leading-relaxed">
-              Для завершения верификации аккаунта необходимо загрузить документы,
-              подтверждающие вашу личность. Это стандартная процедура KYC, которая
-              повышает безопасность платформы и позволяет снять ограничения.
-            </p>
-            <p className="text-xs sm:text-sm font-medium text-white/80 mb-2">
-              Требуемые документы:
-            </p>
-            <ul className="space-y-2 text-xs sm:text-sm text-white/60">
+            <h3 className="text-sm font-medium text-white mb-3">{t('intro_title')}</h3>
+            <p className="text-sm text-white/70 mb-4 leading-relaxed">{t('intro_p1')}</p>
+            <p className="text-sm font-medium text-white/80 mb-2">{t('intro_docs_title')}</p>
+            <ul className="space-y-2 text-sm text-white/60">
               <li className="flex items-start gap-2">
                 <FileText className="w-4 h-4 shrink-0 mt-0.5" />
-                <span>
-                  Документ, удостоверяющий личность (паспорт, водительские права или
-                  ID-карта)
-                </span>
+                <span>{t('intro_doc_id')}</span>
               </li>
               <li className="flex items-start gap-2">
                 <FileText className="w-4 h-4 shrink-0 mt-0.5" />
-                <span>
-                  Подтверждение адреса проживания - не старше 3 месяцев (опционально)
-                </span>
+                <span>{t('intro_doc_address')}</span>
               </li>
             </ul>
-            <p className="text-[11px] sm:text-xs text-white/40 mt-4">
-              Форматы: JPG, PNG, PDF. Максимальный размер файла - 10 МБ.
-            </p>
+            <p className="text-xs text-white/40 mt-4">{t('intro_formats')}</p>
           </div>
 
           <div className="flex justify-end">
@@ -167,10 +158,10 @@ export function VerificationSection() {
               type="button"
               onClick={() => setStatus('country-select')}
               disabled={isLoading || !user}
-              className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 sm:px-8 py-3 rounded-xl bg-[#3347ff] hover:bg-[#3347ff]/90 text-white text-xs sm:text-sm font-medium uppercase tracking-wider transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-auto flex items-center justify-center gap-2 px-8 py-3 rounded-xl bg-[#3347ff] hover:bg-[#3347ff]/90 text-white text-sm font-medium uppercase tracking-wider transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <FilePlus className="w-4 h-4" />
-              Начать верификацию
+              {t('btn_start')}
             </button>
           </div>
         </div>
@@ -180,12 +171,8 @@ export function VerificationSection() {
       {status === 'country-select' && (
         <div className="space-y-5 max-w-md">
           <div>
-            <h3 className="text-sm font-semibold text-white mb-1">
-              Выберите вашу страну
-            </h3>
-            <p className="text-xs text-white/50">
-              Страна гражданства - нужна для подбора подходящих документов
-            </p>
+            <h3 className="text-sm font-semibold text-white mb-1">{t('country_title')}</h3>
+            <p className="text-xs text-white/50">{t('country_subtitle')}</p>
           </div>
 
           {/* Dropdown */}
@@ -201,7 +188,7 @@ export function VerificationSection() {
                   <span>{activeCountry.name}</span>
                 </span>
               ) : (
-                <span className="text-white/40">Выберите страну...</span>
+                <span className="text-white/40">{t('select_country_placeholder')}</span>
               )}
               <CaretDown
                 className={`w-4 h-4 shrink-0 text-white/50 transition-transform duration-200 ${dropdownOpen ? 'rotate-180' : ''}`}
@@ -225,7 +212,7 @@ export function VerificationSection() {
                         type="text"
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
-                        placeholder="Поиск страны..."
+                        placeholder={t('search_country')}
                         className="flex-1 bg-transparent text-sm text-white placeholder-white/30 focus:outline-none"
                       />
                     </div>
@@ -233,7 +220,7 @@ export function VerificationSection() {
                   {/* List */}
                   <div className="max-h-56 overflow-y-auto py-1 scrollbar-dropdown">
                     {filteredCountries.length === 0 ? (
-                      <p className="px-4 py-3 text-xs text-white/40 text-center">Ничего не найдено</p>
+                      <p className="px-4 py-3 text-xs text-white/40 text-center">{t('nothing_found')}</p>
                     ) : (
                       filteredCountries.map((c) => (
                         <button
@@ -266,7 +253,7 @@ export function VerificationSection() {
               onClick={() => setStatus('intro')}
               className="px-5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 hover:text-white text-xs font-medium uppercase tracking-wider transition-colors"
             >
-              Назад
+              {t('back')}
             </button>
             <button
               type="button"
@@ -275,7 +262,7 @@ export function VerificationSection() {
               className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-[#3347ff] hover:bg-[#3347ff]/90 text-white text-xs font-medium uppercase tracking-wider transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <FilePlus className="w-4 h-4" />
-              Продолжить
+              {t('continue')}
             </button>
           </div>
         </div>
@@ -287,7 +274,7 @@ export function VerificationSection() {
           {user ? (
             <SumsubKyc
               userId={user.id}
-              lang="ru"
+              lang={sumsubLang}
               country={selectedCountry !== 'OTHER' ? selectedCountry : undefined}
               onStepCompleted={handleStepCompleted}
               onApplicantStatusChanged={handleApplicantStatusChanged}
@@ -307,16 +294,9 @@ export function VerificationSection() {
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-amber-500/20 mb-4">
             <ClockCountdown className="w-7 h-7 text-amber-400" />
           </div>
-          <h3 className="text-base sm:text-lg font-semibold text-white mb-2">
-            Документы отправлены на проверку
-          </h3>
-          <p className="text-sm text-white/70 max-w-md mx-auto mb-6">
-            Ваши документы получены и находятся на проверке. Обычно верификация
-            занимает до 24 часов. Мы уведомим вас по email о результате.
-          </p>
-          <p className="text-xs text-white/50 mb-4">
-            В случае вопросов обратитесь в службу поддержки
-          </p>
+          <h3 className="text-lg font-semibold text-white mb-2">{t('pending_title')}</h3>
+          <p className="text-sm text-white/70 max-w-md mx-auto mb-6">{t('pending_desc')}</p>
+          <p className="text-xs text-white/50 mb-4">{t('pending_support')}</p>
 
         </div>
       )}
@@ -327,13 +307,8 @@ export function VerificationSection() {
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-emerald-500/20 mb-4">
             <CheckCircle className="w-7 h-7 text-emerald-400" weight="fill" />
           </div>
-          <h3 className="text-base sm:text-lg font-semibold text-white mb-2">
-            Аккаунт успешно верифицирован
-          </h3>
-          <p className="text-sm text-white/70 max-w-md mx-auto mb-4">
-            Ваша личность подтверждена. Теперь вам доступен вывод средств и все
-            возможности платформы.
-          </p>
+          <h3 className="text-lg font-semibold text-white mb-2">{t('verified_title')}</h3>
+          <p className="text-sm text-white/70 max-w-md mx-auto mb-4">{t('verified_desc')}</p>
 
         </div>
       )}
@@ -344,20 +319,15 @@ export function VerificationSection() {
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-red-500/20 mb-4">
             <XCircle className="w-7 h-7 text-red-400" />
           </div>
-          <h3 className="text-base sm:text-lg font-semibold text-white mb-2">
-            Верификация отклонена
-          </h3>
-          <p className="text-sm text-white/70 max-w-md mx-auto mb-6">
-            К сожалению, ваши документы не прошли проверку. Пожалуйста, попробуйте
-            загрузить документы повторно или обратитесь в службу поддержки.
-          </p>
+          <h3 className="text-lg font-semibold text-white mb-2">{t('rejected_title')}</h3>
+          <p className="text-sm text-white/70 max-w-md mx-auto mb-6">{t('rejected_desc')}</p>
           <button
             type="button"
             onClick={() => setStatus('country-select')}
-            className="flex items-center gap-2 mx-auto px-6 py-2.5 rounded-xl bg-[#3347ff] hover:bg-[#3347ff]/90 text-white text-xs sm:text-sm font-medium uppercase tracking-wider transition-colors"
+            className="flex items-center gap-2 mx-auto px-6 py-2.5 rounded-xl bg-[#3347ff] hover:bg-[#3347ff]/90 text-white text-sm font-medium uppercase tracking-wider transition-colors"
           >
             <FilePlus className="w-4 h-4" />
-            Попробовать снова
+            {t('try_again')}
           </button>
 
         </div>

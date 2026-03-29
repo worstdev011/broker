@@ -1,8 +1,10 @@
 import { NextIntlClientProvider } from 'next-intl';
 import { getMessages, setRequestLocale } from 'next-intl/server';
 import { notFound } from 'next/navigation';
-import { routing } from '@/i18n/routing';
+import { routing, type Locale } from '@/i18n/routing';
 import type { Metadata } from 'next';
+import { AuthProvider } from '@/components/providers/AuthProvider';
+import { ToastProvider } from '@/components/providers/ToastProvider';
 
 type Props = {
   children: React.ReactNode;
@@ -24,11 +26,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       template: '%s | COMFORTRADE',
     },
     description: t.description,
-    keywords: locale === 'ru'
-      ? ['валютный рынок', 'торговля', 'форекс', 'криптовалюта', 'финансовые рынки', 'трейдинг']
-      : locale === 'ua'
-        ? ['валютний ринок', 'торгівля', 'форекс', 'криптовалюта', 'фінансові ринки', 'трейдинг']
-        : ['currency market', 'trading', 'forex', 'cryptocurrency', 'financial markets'],
+    keywords: Array.isArray(t.root_keywords) ? t.root_keywords : [],
     openGraph: {
       type: 'website',
       locale: locale === 'ru' ? 'ru_RU' : locale === 'ua' ? 'uk_UA' : 'en_US',
@@ -43,7 +41,7 @@ export default async function LocaleLayout({ children, params }: Props) {
   const { locale } = await params;
 
   // Validate locale
-  if (!routing.locales.includes(locale as any)) {
+  if (!routing.locales.includes(locale as Locale)) {
     notFound();
   }
 
@@ -53,7 +51,11 @@ export default async function LocaleLayout({ children, params }: Props) {
 
   return (
     <NextIntlClientProvider messages={messages}>
-      {children}
+      <AuthProvider>
+        <ToastProvider>
+          {children}
+        </ToastProvider>
+      </AuthProvider>
     </NextIntlClientProvider>
   );
 }

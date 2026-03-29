@@ -18,6 +18,9 @@ interface UseViewportParams {
   };
   onViewportChangeRef?: React.MutableRefObject<((viewport: Viewport) => void) | null>;
   getMarketStatus?: () => 'OPEN' | 'WEEKEND' | 'MAINTENANCE' | 'HOLIDAY';
+  getServerTimeMs?: () => number;
+  /** CSS pixels of floating panel at the bottom — chart content shifts up to avoid it */
+  extraBottomPx?: number;
 }
 
 // 🔥 FLOW: Timeframe-aware visibleCandles - UX константы
@@ -49,6 +52,8 @@ interface UseViewportReturn {
   shouldShowReturnToLatest: () => boolean;
   /** Плавный сдвиг viewport к цели в follow mode. Вызывать каждый кадр из render loop. */
   advanceFollowAnimation: (now: number) => void;
+  /** Непрерывное обновление viewport X по серверному времени в follow mode (каждый кадр). */
+  advanceContinuousFollow: () => void;
   // 🔥 FLOW Y1: Y-scale drag API
   beginYScaleDrag: (startY: number) => void;
   updateYScaleDrag: (currentY: number) => void;
@@ -147,10 +152,12 @@ function getVisibleCandles(
 
 /**
  * Вычисляет priceMin и priceMax для видимых свечей с padding
+ * @param bottomExtraPaddingRatio дополнительный отступ снизу (чтобы свечи не рисовались под плавающей панелью)
  */
 function calculatePriceRange(
   visibleCandles: Candle[],
-  yPaddingRatio: number
+  yPaddingRatio: number,
+  bottomExtraPaddingRatio = 0,
 ): { priceMin: number; priceMax: number } | null {
   if (visibleCandles.length === 0) {
     return null;
@@ -173,12 +180,12 @@ function calculatePriceRange(
     priceMax = center + 1;
   }
 
-  // Добавляем padding
+  // Добавляем симметричный padding и дополнительный отступ снизу
   const range = priceMax - priceMin;
   const padding = range * yPaddingRatio;
 
   return {
-    priceMin: priceMin - padding,
+    priceMin: priceMin - padding - range * bottomExtraPaddingRatio,
     priceMax: priceMax + padding,
   };
 }
@@ -201,6 +208,22 @@ function applyYScaleFactor(
   };
 }
 
+/**
+ * Compute the right-edge anchor for follow mode using real server time.
+ * Returns the end of the current time-slot so the viewport keeps advancing
+ * even when no ticks arrive.
+ */
+function getFollowAnchor(
+  liveCandle: Candle,
+  serverTimeMs: number | undefined,
+  timeframeMs: number,
+): number {
+  if (!serverTimeMs) return liveCandle.endTime;
+  const elapsed = Math.max(0, serverTimeMs - liveCandle.startTime);
+  const slotsElapsed = Math.max(1, Math.ceil(elapsed / timeframeMs));
+  return Math.max(liveCandle.endTime, liveCandle.startTime + slotsElapsed * timeframeMs);
+}
+
 export function useViewport({
   getCandles,
   getLiveCandle,
@@ -210,6 +233,8 @@ export function useViewport({
   panInertiaRefs,
   onViewportChangeRef,
   getMarketStatus,
+  getServerTimeMs,
+  extraBottomPx = 0,
 }: UseViewportParams): UseViewportReturn {
   const viewportRef = useRef<Viewport | null>(null);
   
@@ -229,6 +254,18 @@ export function useViewport({
     visibleCandles: calculatedVisibleCandles,
     ...config 
   });
+
+  // Keep fresh ref to extraBottomPx so viewport calculations always use the latest value
+  const extraBottomPxRef = useRef<number>(extraBottomPx ?? 0);
+  extraBottomPxRef.current = extraBottomPx ?? 0;
+
+  /** Convert CSS pixel bottom offset → price-range ratio using canvas height.
+   *  Adds an extra 32px gap so the time-axis labels stay fully visible above the panel. */
+  const getBottomExtraPaddingRatio = (): number => {
+    const h = canvasRef?.current?.clientHeight;
+    if (!h || h <= 0 || extraBottomPxRef.current <= 0) return 0;
+    return (extraBottomPxRef.current + 32) / h;
+  };
   
   // Ref для хранения функции recalculateViewport (определена позже)
   const recalculateViewportRef = useRef<(() => void) | null>(null);
@@ -285,8 +322,9 @@ export function useViewport({
         : (visibleCount * timeframeMs);               // Дефолт только при первом создании
       const rightPaddingMs = totalWindowMs * rightPaddingRatio;
       
-      // Правая граница viewport = endTime live-свечи + right padding
-      const timeEnd = liveCandle.endTime + rightPaddingMs;
+      // Правая граница viewport = anchor (на основе серверного времени) + right padding
+      const anchor = getFollowAnchor(liveCandle, getServerTimeMs?.(), timeframeMs);
+      const timeEnd = anchor + rightPaddingMs;
       const timeStart = timeEnd - totalWindowMs;
 
       // Инвариант: timeStart < timeEnd
@@ -308,7 +346,7 @@ export function useViewport({
       const visibleCandlesList = getVisibleCandles(candles, liveCandle, timeStart, timeEnd);
       const currentYMode = viewportRef.current?.yMode || 'auto';
 
-      const priceRange = calculatePriceRange(visibleCandlesList, yPaddingRatio);
+      const priceRange = calculatePriceRange(visibleCandlesList, yPaddingRatio, getBottomExtraPaddingRatio());
       if (!priceRange) {
         viewportRef.current = {
           timeStart,
@@ -411,7 +449,7 @@ export function useViewport({
 
     // Auto-fit по Y: вычисляем priceMin и priceMax
     const currentYMode = viewportRef.current?.yMode || 'auto';
-    const priceRange = calculatePriceRange(visibleCandlesList, yPaddingRatio);
+    const priceRange = calculatePriceRange(visibleCandlesList, yPaddingRatio, getBottomExtraPaddingRatio());
     if (!priceRange) {
       viewportRef.current = {
         timeStart,
@@ -472,7 +510,7 @@ export function useViewport({
 
     const visibleCandles = getVisibleCandles(candles, liveCandle, xStart, xEnd);
 
-    const priceRange = calculatePriceRange(visibleCandles, yPaddingRatio);
+    const priceRange = calculatePriceRange(visibleCandles, yPaddingRatio, getBottomExtraPaddingRatio());
 
     if (!priceRange) {
       return;
@@ -549,7 +587,7 @@ export function useViewport({
 
     // Auto-fit по Y: вычисляем priceMin и priceMax
     const { yPaddingRatio } = configRef.current;
-    const priceRange = calculatePriceRange(visibleCandles, yPaddingRatio);
+    const priceRange = calculatePriceRange(visibleCandles, yPaddingRatio, getBottomExtraPaddingRatio());
 
     if (!priceRange) {
       // Если нет видимых свечей, используем дефолтные значения
@@ -640,7 +678,8 @@ export function useViewport({
     viewportRef.current = { ...vp, priceMin: newMin, priceMax: newMax };
   };
 
-  /** Плавный сдвиг viewport к цели. Вызывать каждый кадр из render loop при follow mode. */
+  /** Плавный сдвиг viewport к цели. Вызывать каждый кадр из render loop при follow mode.
+   *  X movement is handled by advanceContinuousFollow — this only animates Y (price axis). */
   const advanceFollowAnimation = (now: number): void => {
     if (!followModeRef.current) {
       targetViewportRef.current = null;
@@ -652,7 +691,6 @@ export function useViewport({
     const start = followAnimationStartRef.current;
     if (!target || !start) return;
 
-    // Первый кадр анимации - фиксируем время старта
     const startTime = start.time === 0 ? now : start.time;
     if (start.time === 0) {
       followAnimationStartRef.current = { viewport: start.viewport, time: now };
@@ -663,21 +701,71 @@ export function useViewport({
     const t = easeOutCubic(progress);
 
     const from = followAnimationStartRef.current ? followAnimationStartRef.current.viewport : target;
+
+    const currentVp = viewportRef.current;
     viewportRef.current = {
-      timeStart: lerp(from.timeStart, target.timeStart, t),
-      timeEnd: lerp(from.timeEnd, target.timeEnd, t),
+      timeStart: currentVp ? currentVp.timeStart : lerp(from.timeStart, target.timeStart, t),
+      timeEnd: currentVp ? currentVp.timeEnd : lerp(from.timeEnd, target.timeEnd, t),
       priceMin: lerp(from.priceMin, target.priceMin, t),
       priceMax: lerp(from.priceMax, target.priceMax, t),
       yMode: target.yMode,
     };
 
     if (progress >= 1) {
-      viewportRef.current = { ...target };
-      // Sync Y targets so advanceYAnimation doesn't snap back
+      const vp = viewportRef.current!;
+      viewportRef.current = { ...vp, priceMin: target.priceMin, priceMax: target.priceMax };
       yTargetMinRef.current = target.priceMin;
       yTargetMaxRef.current = target.priceMax;
       targetViewportRef.current = null;
       followAnimationStartRef.current = null;
+    }
+  };
+
+  /**
+   * Continuous follow: update viewport X every frame based on real server time.
+   * Uses smooth lerp so the viewport glides continuously instead of snapping.
+   * Runs even when a discrete follow animation (candle:close) is active —
+   * advanceFollowAnimation handles only Y in that case.
+   */
+  const CONTINUOUS_FOLLOW_LERP = 0.07;
+
+  const advanceContinuousFollow = (): void => {
+    if (!followModeRef.current) return;
+
+    const currentVp = viewportRef.current;
+    if (!currentVp) return;
+
+    const now = getServerTimeMs ? getServerTimeMs() : Date.now();
+    const liveCandle = getLiveCandle();
+    if (!liveCandle) return;
+
+    const { rightPaddingRatio } = configRef.current;
+    const totalWindowMs = currentVp.timeEnd - currentVp.timeStart;
+    const rightPaddingMs = totalWindowMs * rightPaddingRatio;
+
+    const anchor = getFollowAnchor(liveCandle, now, timeframeMs);
+    const desiredTimeEnd = anchor + rightPaddingMs;
+    const desiredTimeStart = desiredTimeEnd - totalWindowMs;
+
+    const diffEnd = Math.abs(currentVp.timeEnd - desiredTimeEnd);
+    if (diffEnd < 0.5) return;
+
+    const newTimeEnd = lerp(currentVp.timeEnd, desiredTimeEnd, CONTINUOUS_FOLLOW_LERP);
+    const newTimeStart = lerp(currentVp.timeStart, desiredTimeStart, CONTINUOUS_FOLLOW_LERP);
+
+    viewportRef.current = {
+      ...currentVp,
+      timeStart: newTimeStart,
+      timeEnd: newTimeEnd,
+    };
+
+    // Keep the follow-animation target X in sync so it doesn't fight
+    if (targetViewportRef.current) {
+      targetViewportRef.current = {
+        ...targetViewportRef.current,
+        timeStart: newTimeStart,
+        timeEnd: newTimeEnd,
+      };
     }
   };
 
@@ -705,8 +793,11 @@ export function useViewport({
 
     if (candles.length === 0 && !liveCandle) return;
 
-    const anchorTime = liveCandle?.endTime ?? (candles.length > 0 ? candles[candles.length - 1].endTime : null);
-    if (anchorTime == null) return;
+    const rawAnchor = liveCandle?.endTime ?? (candles.length > 0 ? candles[candles.length - 1].endTime : null);
+    if (rawAnchor == null) return;
+    const anchorTime = liveCandle
+      ? getFollowAnchor(liveCandle, getServerTimeMs?.(), timeframeMs)
+      : rawAnchor;
 
     // 🔥 Сохраняем текущий масштаб (если viewport существует)
     const currentVp = viewportRef.current;
@@ -722,7 +813,7 @@ export function useViewport({
     const visibleCandlesList = getVisibleCandles(candles, liveCandle ?? null, timeStart, timeEnd);
     const currentYMode = viewportRef.current?.yMode || 'auto';
     
-    const priceRange = calculatePriceRange(visibleCandlesList, yPaddingRatio);
+    const priceRange = calculatePriceRange(visibleCandlesList, yPaddingRatio, getBottomExtraPaddingRatio());
     if (!priceRange) return;
 
     let priceMin: number;
@@ -800,11 +891,14 @@ export function useViewport({
         return;
       }
       
-      const anchorTime = liveCandle?.endTime ?? (candles.length > 0 ? candles[candles.length - 1].endTime : null);
-      if (anchorTime == null) {
+      const rawAnchor = liveCandle?.endTime ?? (candles.length > 0 ? candles[candles.length - 1].endTime : null);
+      if (rawAnchor == null) {
         followModeRef.current = true;
         return;
       }
+      const anchorTime = liveCandle
+        ? getFollowAnchor(liveCandle, getServerTimeMs?.(), timeframeMs)
+        : rawAnchor;
       
       // Используем ТЕКУЩИЙ масштаб, а не дефолтный visibleCandles
       const rightPaddingMs = currentWindowMs * rightPaddingRatio;
@@ -819,7 +913,7 @@ export function useViewport({
       const visibleCandlesList = getVisibleCandles(candles, liveCandle ?? null, timeStart, timeEnd);
       const currentYMode = currentVp.yMode || 'auto';
       
-      const priceRange = calculatePriceRange(visibleCandlesList, yPaddingRatio);
+      const priceRange = calculatePriceRange(visibleCandlesList, yPaddingRatio, getBottomExtraPaddingRatio());
       let priceMin: number;
       let priceMax: number;
 
@@ -902,7 +996,7 @@ export function useViewport({
     const liveCandle_ = getLiveCandle();
     const { yPaddingRatio } = configRef.current;
     const visibleCandlesList = getVisibleCandles(candles_, liveCandle_, viewport.timeStart, viewport.timeEnd);
-    const autoRange_ = calculatePriceRange(visibleCandlesList, yPaddingRatio);
+    const autoRange_ = calculatePriceRange(visibleCandlesList, yPaddingRatio, getBottomExtraPaddingRatio());
     const autoRangeValue = autoRange_ ? (autoRange_.priceMax - autoRange_.priceMin) : startRange;
 
     yDragRef.current = {
@@ -1159,6 +1253,7 @@ export function useViewport({
     followLatest,
     shouldShowReturnToLatest,
     advanceFollowAnimation,
+    advanceContinuousFollow,
     // 🔥 FLOW Y1: Y-scale drag API
     beginYScaleDrag,
     updateYScaleDrag,

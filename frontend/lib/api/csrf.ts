@@ -1,12 +1,9 @@
-
-
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? '';
 
 let cachedToken: string | null = null;
+let pendingFetch: Promise<string> | null = null;
 
-export async function getCsrfToken(): Promise<string> {
-  if (cachedToken) return cachedToken;
-
+async function fetchCsrfToken(): Promise<string> {
   const url = `${API_BASE_URL}/api/auth/csrf`;
   const res = await fetch(url, { credentials: 'include' });
   if (!res.ok) {
@@ -14,15 +11,30 @@ export async function getCsrfToken(): Promise<string> {
   }
   const data = (await res.json()) as { csrfToken: string };
   cachedToken = data.csrfToken;
+  pendingFetch = null;
   return cachedToken;
 }
 
-/** Store token from login/register response (avoids extra fetch) */
-export function setCsrfToken(token: string): void {
-  cachedToken = token;
+export async function getCsrfToken(): Promise<string> {
+  if (cachedToken) return cachedToken;
+  if (pendingFetch) return pendingFetch;
+  pendingFetch = fetchCsrfToken();
+  return pendingFetch;
 }
 
-/** Clear cached token on logout */
+export async function refreshCsrfToken(): Promise<string> {
+  cachedToken = null;
+  pendingFetch = null;
+  pendingFetch = fetchCsrfToken();
+  return pendingFetch;
+}
+
+export function setCsrfToken(token: string): void {
+  cachedToken = token;
+  pendingFetch = null;
+}
+
 export function clearCsrfToken(): void {
   cachedToken = null;
+  pendingFetch = null;
 }

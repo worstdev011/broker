@@ -13,6 +13,8 @@ interface RenderOhlcPanelParams {
   height: number;
   /** Количество знаков после запятой для цен (по инструменту). */
   digits?: number;
+  /** Подписи O/H/L/C (локаль). */
+  labels?: { open: string; high: string; low: string; close: string };
 }
 
 const PANEL_TEXT_COLOR = 'rgba(255, 255, 255, 0.45)'; // Как у меток осей
@@ -37,6 +39,7 @@ export function renderOhlcPanel({
   width,
   height,
   digits,
+  labels,
 }: RenderOhlcPanelParams): void {
   if (!ohlc) {
     return;
@@ -50,11 +53,16 @@ export function renderOhlcPanel({
   ctx.textBaseline = 'top';
   ctx.textAlign = 'left';
 
+  const lo = labels?.open ?? 'Open';
+  const lh = labels?.high ?? 'High';
+  const ll = labels?.low ?? 'Low';
+  const lc = labels?.close ?? 'Close';
+
   // Форматируем значения по digits инструмента
-  const openLabel = `Открытие: ${formatPrice(ohlc.open, digits)}`;
-  const highLabel = `Максимум: ${formatPrice(ohlc.high, digits)}`;
-  const lowLabel = `Минимум: ${formatPrice(ohlc.low, digits)}`;
-  const closeLabel = `Закрытие: ${formatPrice(ohlc.close, digits)}`;
+  const openLabel = `${lo}: ${formatPrice(ohlc.open, digits)}`;
+  const highLabel = `${lh}: ${formatPrice(ohlc.high, digits)}`;
+  const lowLabel = `${ll}: ${formatPrice(ohlc.low, digits)}`;
+  const closeLabel = `${lc}: ${formatPrice(ohlc.close, digits)}`;
 
   // Вычисляем высоту блока OHLC (без фоновой плашки)
   const lineCount = 4;

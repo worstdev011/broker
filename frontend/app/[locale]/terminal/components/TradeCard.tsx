@@ -3,6 +3,7 @@
 import { ArrowUp, ArrowDown, CaretDown } from '@phosphor-icons/react';
 import ReactCountryFlag from 'react-country-flag';
 import { useEffect, useRef } from 'react';
+import { useTranslations, useLocale } from 'next-intl';
 import { getInstrumentOrDefault } from '@/lib/instruments';
 import type { TradeHistoryItem } from '@/types/trade';
 
@@ -48,10 +49,13 @@ interface TradeCardProps {
 }
 
 export function TradeCard({ trade, currentTime, isExpanded, onToggle, currency = 'USD' }: TradeCardProps) {
+  const t = useTranslations('terminal');
+  const locale = useLocale();
+  const localeTag = locale === 'ua' ? 'uk-UA' : locale === 'ru' ? 'ru-RU' : 'en-US';
   const { displayName, isOTC } = getInstrumentDisplay(trade.instrument);
   const amount = parseFloat(trade.amount);
   const payout = parseFloat(trade.payout);
-  const payoutAmount = amount * payout;
+  const payoutAmount = amount * payout / 100;
   const isWin = trade.status === 'WIN';
   const isOpen = trade.status === 'OPEN';
   const entryPrice = trade.entryPrice ? parseFloat(trade.entryPrice) : null;
@@ -143,7 +147,7 @@ export function TradeCard({ trade, currentTime, isExpanded, onToggle, currency =
       tabIndex={0}
       onClick={onToggle}
       onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onToggle?.()}
-      className={`bg-[#1f2a45] rounded-lg p-2.5 flex flex-col gap-1.5 cursor-pointer transition-all md:hover:bg-[#1f2a45]/90 border-l-[3px] ${
+      className={`bg-[#1f2a45] rounded-lg p-2.5 flex flex-col gap-1.5 cursor-pointer transition-all hover:bg-[#1f2a45]/90 border-l-[3px] ${
         isOpen ? 'border-[#2478ff]' : isWin ? 'border-green-500' : 'border-red-500'
       }`}
     >
@@ -174,7 +178,7 @@ export function TradeCard({ trade, currentTime, isExpanded, onToggle, currency =
 
       {/* Payout % + amount */}
       <div className="flex items-center justify-between">
-        <span className="text-sm text-gray-300">{Math.round(payout * 100)}%</span>
+        <span className="text-sm text-gray-300">{Math.round(payout)}%</span>
         <div className="flex items-center gap-1.5">
           <span className="text-xs text-gray-500">{currency}</span>
           <span className="text-sm text-white">{fmtAmount(amount)}</span>
@@ -199,7 +203,7 @@ export function TradeCard({ trade, currentTime, isExpanded, onToggle, currency =
       {/* Result + direction */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">
-          <span className={`text-sm font-medium ${isOpen ? 'text-green-400' : isWin ? 'text-green-400' : 'text-red-400'}`}>
+          <span className={`text-sm font-medium ${isOpen ? 'text-blue-400' : isWin ? 'text-green-400' : 'text-red-400'}`}>
             {isOpen ? `+${fmtAmount(payoutAmount)}` : isWin ? `+${fmtAmount(payoutAmount)}` : `-${fmtAmount(amount)}`} {currency}
           </span>
         </div>
@@ -217,18 +221,18 @@ export function TradeCard({ trade, currentTime, isExpanded, onToggle, currency =
       {isExpanded && (
         <div className="pt-3 mt-1 border-t border-white/10 flex flex-col gap-2">
           <div className="flex justify-between text-xs">
-            <span className="text-gray-400">Точка входа</span>
+            <span className="text-gray-400">{t('trade_card_entry')}</span>
             <span className="text-white font-medium">{entryPrice != null ? fmtPrice(entryPrice) : '-'}</span>
           </div>
           {!isOpen && (
             <>
               <div className="flex justify-between text-xs">
-                <span className="text-gray-400">Точка выхода</span>
+                <span className="text-gray-400">{t('trade_card_exit')}</span>
                 <span className="text-white font-medium">{exitPrice != null ? fmtPrice(exitPrice) : '-'}</span>
               </div>
               {entryPrice != null && exitPrice != null && (
                 <div className="flex justify-between text-xs">
-                  <span className="text-gray-400">Разница пунктов</span>
+                  <span className="text-gray-400">{t('trade_card_points_diff')}</span>
                   <span className={`font-medium ${exitPrice >= entryPrice ? 'text-green-400' : 'text-red-400'}`}>
                     {exitPrice >= entryPrice ? '+' : ''}{fmtPrice(exitPrice - entryPrice)}
                   </span>
@@ -237,27 +241,27 @@ export function TradeCard({ trade, currentTime, isExpanded, onToggle, currency =
             </>
           )}
           <div className="flex justify-between text-xs">
-            <span className="text-gray-400">Доходность</span>
-            <span className="text-white">{Math.round(payout * 100)}%</span>
+            <span className="text-gray-400">{t('trade_card_yield')}</span>
+            <span className="text-white">{Math.round(payout)}%</span>
           </div>
           <div className="flex justify-between text-xs">
-            <span className="text-gray-400">Сумма</span>
+            <span className="text-gray-400">{t('trade_card_amount')}</span>
             <span className="text-white">{fmtAmount(amount)}</span>
           </div>
           <div className="flex justify-between text-xs">
-            <span className="text-gray-400">Направление</span>
+            <span className="text-gray-400">{t('trade_card_direction')}</span>
             <span className={trade.direction === 'CALL' ? 'text-green-400' : 'text-red-400'}>
-              {trade.direction === 'CALL' ? 'Вверх' : 'Вниз'}
+              {trade.direction === 'CALL' ? t('trade_card_up') : t('trade_card_down')}
             </span>
           </div>
           <div className="flex justify-between text-xs">
-            <span className="text-gray-400">Открыта</span>
-            <span className="text-white">{trade.openedAt ? new Date(trade.openedAt).toLocaleString('ru-RU') : '-'}</span>
+            <span className="text-gray-400">{t('trade_card_opened')}</span>
+            <span className="text-white">{trade.openedAt ? new Date(trade.openedAt).toLocaleString(localeTag) : '-'}</span>
           </div>
           {!isOpen && trade.closedAt && (
             <div className="flex justify-between text-xs">
-              <span className="text-gray-400">Закрыта</span>
-              <span className="text-white">{new Date(trade.closedAt).toLocaleString('ru-RU')}</span>
+              <span className="text-gray-400">{t('trade_card_closed')}</span>
+              <span className="text-white">{new Date(trade.closedAt).toLocaleString(localeTag)}</span>
             </div>
           )}
         </div>

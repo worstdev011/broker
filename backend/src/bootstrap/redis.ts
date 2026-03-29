@@ -1,77 +1,45 @@
-import { Redis } from 'ioredis';
-import { env } from '../config/env.js';
-import { logger } from '../shared/logger.js';
+import Redis from "ioredis";
+import { env } from "../shared/types/env.js";
+import { logger } from "../shared/logger.js";
 
-export type KeyValueStore = {
-  set(key: string, value: string, ex?: 'EX', seconds?: number): Promise<void>;
-  get(key: string): Promise<string | null>;
-  del(key: string): Promise<void>;
-};
+let redisClient: Redis | null = null;
 
-let redis: Redis | null = null;
-let store: KeyValueStore | null = null;
-
-function createKeyValueStore(client: Redis): KeyValueStore {
-  return {
-    async set(key: string, value: string, ex?: 'EX', seconds?: number): Promise<void> {
-      if (ex === 'EX' && seconds != null) {
-        await client.set(key, value, 'EX', seconds);
-      } else {
-        await client.set(key, value);
-      }
-    },
-    async get(key: string): Promise<string | null> {
-      return await client.get(key);
-    },
-    async del(key: string): Promise<void> {
-      await client.del(key);
-    },
-  };
-}
-
-export async function connectRedis(): Promise<KeyValueStore> {
-  if (store) {
-    return store;
-  }
-
-  const url = env.REDIS_URL || 'redis://127.0.0.1:6379';
-  if (!env.REDIS_URL) {
-    logger.warn('REDIS_URL not set - connecting to local Redis at 127.0.0.1:6379');
-  }
-
-  redis = new Redis(url, { lazyConnect: true });
-
-  redis.on('error', (err: Error) => {
-    logger.error({ err }, 'Redis error');
-  });
-
-  redis.on('connect', () => {
-    logger.info('Redis connected');
-  });
-
+export async function connectRedis(): Promise<void> {
   try {
-    await redis.connect();
+    const config = env();
+    redisClient = new Redis(config.REDIS_URL, {
+      maxRetriesPerRequest: 3,
+      lazyConnect: true,
+    });
+
+    await redisClient.connect();
+    const pong = await redisClient.ping();
+
+    if (pong !== "PONG") {
+      throw new Error(`Unexpected Redis ping response: ${pong}`);
+    }
+
+    logger.info("Redis connected successfully");
   } catch (error) {
-    logger.error({ err: error }, 'Failed to connect to Redis');
+    logger.fatal({ err: error }, "Failed to connect to Redis");
     throw error;
   }
+}
 
-  store = createKeyValueStore(redis);
-  return store;
+export function getRedis(): Redis {
+  if (!redisClient) {
+    throw new Error("Redis not initialized. Call connectRedis() first.");
+  }
+  return redisClient;
 }
 
 export async function disconnectRedis(): Promise<void> {
-  if (redis) {
-    await redis.quit();
-    redis = null;
-    store = null;
-    logger.info('Redis disconnected');
+  if (!redisClient) return;
+  try {
+    await redisClient.quit();
+    redisClient = null;
+    logger.info("Redis disconnected");
+  } catch (error) {
+    logger.error({ err: error }, "Error disconnecting from Redis");
   }
-}
-
-export function getRedisClient(): KeyValueStore {
-  if (!store) {
-    throw new Error('Redis not initialized. Call connectRedis() first.');
-  }
-  return store;
 }

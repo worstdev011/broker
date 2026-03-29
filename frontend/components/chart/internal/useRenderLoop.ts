@@ -29,6 +29,7 @@ import type { IndicatorSeries, IndicatorConfig } from './indicators/indicator.ty
 import type { Drawing } from './drawings/drawing.types';
 import type { PriceAlert } from './alerts/priceAlerts.types';
 import type { InteractionZone } from './interactions/interaction.types';
+import type { ChartCanvasCopy } from './chartCanvasCopy.types';
 
 interface UseRenderLoopParams {
   canvasRef: RefObject<HTMLCanvasElement>;
@@ -51,7 +52,7 @@ interface UseRenderLoopParams {
   getDrawings: () => Drawing[];
   getHoveredDrawingId: () => string | null;
   getSelectedDrawingId: () => string | null;
-  getVisibleOverlayIds?: () => Set<string>;
+  getVisibleOverlayIds?: () => Set<string> | undefined;
   getServerTimeText?: () => string;
   getDigits?: () => number | undefined;
   getPriceAlerts: () => PriceAlert[];
@@ -88,6 +89,8 @@ interface UseRenderLoopParams {
   getMarketStatus?: () => MarketStatus;
   getNextMarketOpenAt?: () => number | null;
   getServerTimeMs?: () => number;
+  advanceLiveCandle?: (serverTimeMs: number) => void;
+  advanceContinuousFollow?: () => void;
   getTopAlternatives?: () => Array<{ instrumentId: string; label: string; payout: number }>;
   marketAlternativesHitboxesRef?: React.MutableRefObject<Array<{
     x: number;
@@ -99,6 +102,11 @@ interface UseRenderLoopParams {
   getMarketAlternativesHoveredIndex?: () => number | null;
   instrument?: string;
   timeframe?: string;
+  extraBottomPadding?: number;
+  /** Pixels to inset expiration / trade vertical lines from canvas top (e.g. mobile floating toolbar). */
+  extraTopPadding?: number;
+  showMinMaxLabels?: boolean;
+  getChartCanvasCopy?: () => ChartCanvasCopy;
 }
 
 export function useRenderLoop({
@@ -142,11 +150,17 @@ export function useRenderLoop({
     advancePanInertia,
     getMarketStatus,
     getNextMarketOpenAt,
+    advanceLiveCandle,
+    advanceContinuousFollow,
     getTopAlternatives,
     marketAlternativesHitboxesRef,
     getMarketAlternativesHoveredIndex,
     instrument,
     timeframe,
+    extraBottomPadding,
+    extraTopPadding = 0,
+    showMinMaxLabels = true,
+    getChartCanvasCopy,
 }: UseRenderLoopParams): void {
   const rafIdRef = useRef<number | null>(null);
   // Stable ref so RAF loop reads fresh callbacks without restarting useEffect
@@ -192,11 +206,17 @@ export function useRenderLoop({
     advancePanInertia,
     getMarketStatus,
     getNextMarketOpenAt,
+    advanceLiveCandle,
+    advanceContinuousFollow,
     getTopAlternatives,
     marketAlternativesHitboxesRef,
     getMarketAlternativesHoveredIndex,
     instrument,
     timeframe,
+    extraBottomPadding,
+    extraTopPadding,
+    showMinMaxLabels,
+    getChartCanvasCopy,
   };
 
   // Static layer cache: grid + closed candles + axes (redrawn only when viewport/data change)
@@ -224,12 +244,19 @@ export function useRenderLoop({
 
     const render = (now: number) => {
       const p = paramsRef.current;
+
+      // Auto-advance live candle when timeframe expires without ticks
+      const serverNow = p.getServerTimeMs?.() ?? Date.now();
+      p.advanceLiveCandle?.(serverNow);
+
       p.updateAnimator(now);
       if (p.advancePanInertia && !p.getFollowMode()) {
         p.advancePanInertia(now);
       }
       if (p.getFollowMode()) {
         p.advanceFollowAnimation(now);
+        // Continuous follow: move viewport right edge with real time between discrete animations
+        p.advanceContinuousFollow?.();
       }
       p.advanceYAnimation(now);
       p.clearInteractionZones();
@@ -293,7 +320,8 @@ export function useRenderLoop({
       const marketStatus = p.getMarketStatus?.() ?? 'OPEN';
       const marketOpen = marketStatus === 'OPEN';
 
-      // Filter by visible overlay IDs
+      // Overlay visibility: undefined means no overlays registered yet — show everything.
+      // A Set means the registry is active — filter to only visible items.
       const visibleIds = p.getVisibleOverlayIds?.();
       const allIndicators = p.getIndicatorSeries();
       const indicators = visibleIds
@@ -370,12 +398,14 @@ export function useRenderLoop({
           countdown = getMarketCountdown(serverTimeMs, nextMarketOpenAt);
         }
 
+        const canvasCopy = p.getChartCanvasCopy?.();
         renderMarketClosedOverlay({
           ctx,
           width,
           height: mainHeight,
           status: marketStatus,
           countdown,
+          copy: canvasCopy,
         });
 
         const alternatives = p.getTopAlternatives?.() ?? [];
@@ -388,6 +418,7 @@ export function useRenderLoop({
             alternatives,
             hoveredIndex,
             hitboxesRef: p.marketAlternativesHitboxesRef,
+            header: canvasCopy?.alternativesHeader,
           });
         }
 
@@ -432,7 +463,7 @@ export function useRenderLoop({
       }
 
       // Min/max price labels
-      if (candles.length > 0) {
+      if (candles.length > 0 && (p.showMinMaxLabels ?? true)) {
         renderCandleMinMaxLabels({ ctx, viewport, candles, liveCandle, width, height: mainHeight, digits });
       }
 
@@ -481,9 +512,9 @@ export function useRenderLoop({
         if (expirationX >= 0 && expirationX <= maxX) {
           ctx.save();
           
+          const topPad = Math.max(0, p.extraTopPadding ?? 0);
           const CIRCLE_RADIUS = 18;
-          const isMobile = width < 600;
-          const CIRCLE_Y = isMobile ? 78 : 30;
+          const CIRCLE_Y = 30 + topPad;
           const circleX = expirationX;
           const circleY = CIRCLE_Y;
           
@@ -539,6 +570,7 @@ export function useRenderLoop({
         const openTrades = p.getTrades().filter(t => t.expiresAt > now - 500);
         const PRICE_LABEL_AREA_WIDTH = 60;
         const TIME_LABEL_HEIGHT = 25;
+        const tradeLineTopPad = Math.max(0, p.extraTopPadding ?? 0);
         for (const trade of openTrades) {
           const tx = ((trade.expiresAt - viewport.timeStart) / (viewport.timeEnd - viewport.timeStart)) * width;
           const maxX = width - PRICE_LABEL_AREA_WIDTH;
@@ -552,14 +584,14 @@ export function useRenderLoop({
           ctx.lineWidth = 1.5;
           ctx.setLineDash([4, 4]);
           ctx.beginPath();
-          ctx.moveTo(tx, 0);
+          ctx.moveTo(tx, tradeLineTopPad);
           ctx.lineTo(tx, mainHeight - TIME_LABEL_HEIGHT);
           ctx.stroke();
           ctx.setLineDash([]);
           // Small dot at top
           ctx.fillStyle = dotColor;
           ctx.beginPath();
-          ctx.arc(tx, 8, 4, 0, Math.PI * 2);
+          ctx.arc(tx, tradeLineTopPad + 8, 4, 0, Math.PI * 2);
           ctx.fill();
           ctx.restore();
         }
@@ -697,12 +729,21 @@ export function useRenderLoop({
       p.updateOhlc();
 
       const ohlc = p.getOhlc();
+      const canvasCopy = p.getChartCanvasCopy?.();
       renderOhlcPanel({
         ctx,
         ohlc,
         width,
         height: mainHeight,
         digits,
+        labels: canvasCopy
+          ? {
+              open: canvasCopy.ohlcOpen,
+              high: canvasCopy.ohlcHigh,
+              low: canvasCopy.ohlcLow,
+              close: canvasCopy.ohlcClose,
+            }
+          : undefined,
       });
 
 

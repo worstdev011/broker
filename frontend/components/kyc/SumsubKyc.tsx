@@ -78,9 +78,9 @@ export function SumsubKyc({
   // ── Token helpers ──────────────────────────────────────────────────
 
   const fetchToken = useCallback(async (): Promise<string> => {
-    const { token } = await kycApi.init(userId);
+    const { token } = await kycApi.init();
     return token;
-  }, [userId]);
+  }, []);
 
   // ── SDK lifecycle ──────────────────────────────────────────────────
 

@@ -1,172 +1,111 @@
-import type { FastifyRequest, FastifyReply } from 'fastify';
-import { UserService } from '../../domain/user/UserService.js';
-import { hashToken } from '../../utils/crypto.js';
-import { getSessionToken, clearSessionCookie } from '../../infrastructure/auth/CookieAuthAdapter.js';
-import type { AccountRepository } from '../../ports/repositories/AccountRepository.js';
-import type {
-  UpdateProfileInput,
-  ChangePasswordInput,
-  DeleteProfileInput,
-  SetPasswordInput,
-  Verify2FASetupInput,
-  Disable2FAInput,
-} from './user.validation.js';
+import { createHash } from "node:crypto";
+import type { FastifyRequest, FastifyReply } from "fastify";
+import { userService } from "../../domain/user/user.service.js";
+import { AppError } from "../../shared/errors/AppError.js";
+import {
+  updateProfileSchema,
+  changePasswordSchema,
+  setPasswordSchema,
+  deleteProfileSchema,
+  verify2FASchema,
+  disable2FASchema,
+} from "./user.schema.js";
 
-export class UserController {
-  constructor(
-    private userService: UserService,
-    private accountRepository?: AccountRepository,
-  ) {}
+const ALLOWED_AVATAR_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
+export const userController = {
   async getProfile(request: FastifyRequest, reply: FastifyReply) {
-    const userId = request.userId!;
-    const profile = await this.userService.getProfile(userId);
+    const user = await userService.getProfile(request.userId!);
+    return reply.send({ user });
+  },
 
-    if (profile.currency && this.accountRepository) {
-      const activeAccount = await this.accountRepository.findActiveByUserId(userId);
-      if (activeAccount && activeAccount.currency !== profile.currency) {
-        await this.accountRepository.updateCurrencyByUserId(userId, profile.currency);
-      }
+  async updateProfile(request: FastifyRequest, reply: FastifyReply) {
+    const body = updateProfileSchema.parse(request.body);
+    const user = await userService.updateProfile(request.userId!, body);
+    return reply.send({ user });
+  },
+
+  async uploadAvatar(request: FastifyRequest, reply: FastifyReply) {
+    const data = await request.file();
+    if (!data) {
+      return reply.status(400).send({ error: "BAD_REQUEST", message: "No file uploaded" });
     }
 
-    return reply.send({ user: profile });
-  }
-
-  async updateProfile(
-    request: FastifyRequest<{ Body: UpdateProfileInput }>,
-    reply: FastifyReply,
-  ) {
-    const userId = request.userId!;
-    const body = request.body;
-
-    const updateData: {
-      firstName?: string | null;
-      lastName?: string | null;
-      nickname?: string | null;
-      phone?: string | null;
-      country?: string | null;
-      currency?: string | null;
-      dateOfBirth?: Date | null;
-      avatarUrl?: string | null;
-    } = {};
-
-    if (body.firstName !== undefined) updateData.firstName = body.firstName || null;
-    if (body.lastName !== undefined) updateData.lastName = body.lastName || null;
-    if (body.nickname !== undefined) updateData.nickname = body.nickname || null;
-    if (body.phone !== undefined) updateData.phone = body.phone || null;
-    if (body.country !== undefined) updateData.country = body.country || null;
-    if (body.currency !== undefined) updateData.currency = body.currency || null;
-    if (body.dateOfBirth !== undefined) {
-      updateData.dateOfBirth = body.dateOfBirth ? new Date(body.dateOfBirth) : null;
-    }
-    if (body.avatarUrl !== undefined) updateData.avatarUrl = body.avatarUrl || null;
-
-    const profile = await this.userService.updateProfile(userId, updateData);
-
-    if (body.currency && this.accountRepository) {
-      await this.accountRepository.updateCurrencyByUserId(userId, body.currency);
+    if (!ALLOWED_AVATAR_MIME_TYPES.has(data.mimetype)) {
+      throw AppError.badRequest("Unsupported file type. Allowed: JPEG, PNG, WebP");
     }
 
-    return reply.send({ user: profile });
-  }
+    const buffer = await data.toBuffer();
+    const avatarUrl = await userService.uploadAvatar(
+      request.userId!,
+      buffer,
+      data.filename,
+    );
+    return reply.send({ avatarUrl });
+  },
 
-  async deleteProfile(
-    request: FastifyRequest<{ Body: DeleteProfileInput }>,
-    reply: FastifyReply,
-  ) {
-    const userId = request.userId!;
-    const { password } = request.body;
+  async deleteAvatar(request: FastifyRequest, reply: FastifyReply) {
+    await userService.deleteAvatar(request.userId!);
+    return reply.status(204).send();
+  },
 
-    await this.userService.deleteProfile(userId, password ?? undefined);
-    clearSessionCookie(reply);
+  async deleteProfile(request: FastifyRequest, reply: FastifyReply) {
+    const body = deleteProfileSchema.parse(request.body ?? {});
+    await userService.deleteAccount(request.userId!, body.password);
+    return reply.status(204).send();
+  },
 
-    return reply.send({ message: 'User profile deleted successfully' });
-  }
+  async changePassword(request: FastifyRequest, reply: FastifyReply) {
+    const body = changePasswordSchema.parse(request.body);
+    await userService.changePassword(request.userId!, body.currentPassword, body.newPassword);
+    return reply.send({ message: "Password changed" });
+  },
 
-  async changePassword(
-    request: FastifyRequest<{ Body: ChangePasswordInput }>,
-    reply: FastifyReply,
-  ) {
-    const userId = request.userId!;
-    const { currentPassword, newPassword } = request.body;
-
-    await this.userService.changePassword({ userId, currentPassword, newPassword });
-
-    return reply.send({ message: 'Password changed successfully' });
-  }
-
-  async setPassword(
-    request: FastifyRequest<{ Body: SetPasswordInput }>,
-    reply: FastifyReply,
-  ) {
-    const userId = request.userId!;
-    const { newPassword } = request.body;
-
-    await this.userService.setInitialPassword(userId, newPassword);
-
-    return reply.send({ message: 'Password set successfully' });
-  }
+  async setPassword(request: FastifyRequest, reply: FastifyReply) {
+    const body = setPasswordSchema.parse(request.body);
+    await userService.setPassword(request.userId!, body.newPassword);
+    return reply.send({ message: "Password set" });
+  },
 
   async getSessions(request: FastifyRequest, reply: FastifyReply) {
-    const userId = request.userId!;
-    const sessions = await this.userService.getUserSessions(userId);
+    const sessions = await userService.getSessions(request.userId!);
     return reply.send({ sessions });
-  }
+  },
 
-  async revokeSession(
-    request: FastifyRequest<{ Params: { sessionId: string } }>,
-    reply: FastifyReply,
-  ) {
-    const userId = request.userId!;
-    const { sessionId } = request.params;
+  async deleteSession(request: FastifyRequest, reply: FastifyReply) {
+    const { id } = request.params as { id: string };
+    await userService.deleteSession(request.userId!, id);
+    return reply.status(204).send();
+  },
 
-    await this.userService.revokeSession(userId, sessionId);
-
-    return reply.send({ message: 'Session revoked successfully' });
-  }
-
-  async revokeOtherSessions(request: FastifyRequest, reply: FastifyReply) {
-    const userId = request.userId!;
-    const sessionToken = getSessionToken(request);
-    if (!sessionToken) {
-      return reply.status(401).send({ error: 'NOT_AUTHENTICATED', message: 'Not authenticated' });
+  async deleteOtherSessions(request: FastifyRequest, reply: FastifyReply) {
+    const signed = request.cookies["session_token"];
+    if (!signed) {
+      return reply.status(401).send({ error: "UNAUTHORIZED", message: "No session" });
     }
-
-    const currentTokenHash = hashToken(sessionToken);
-    await this.userService.revokeOtherSessions(userId, currentTokenHash);
-
-    return reply.send({ message: 'All other sessions revoked successfully' });
-  }
+    const unsigned = request.unsignCookie(signed);
+    if (!unsigned.valid || !unsigned.value) {
+      return reply.status(401).send({ error: "UNAUTHORIZED", message: "Invalid cookie" });
+    }
+    const currentHash = createHash("sha256").update(unsigned.value).digest("hex");
+    const count = await userService.deleteOtherSessions(request.userId!, currentHash);
+    return reply.send({ deleted: count });
+  },
 
   async enable2FA(request: FastifyRequest, reply: FastifyReply) {
-    const userId = request.userId!;
-    const profile = await this.userService.getProfile(userId);
-    const result = await this.userService.enable2FA(userId, profile.email);
-
+    const result = await userService.enable2FA(request.userId!);
     return reply.send({ qrCode: result.qrCode });
-  }
+  },
 
-  async verify2FA(
-    request: FastifyRequest<{ Body: Verify2FASetupInput }>,
-    reply: FastifyReply,
-  ) {
-    const userId = request.userId!;
-    const { code } = request.body;
+  async verify2FA(request: FastifyRequest, reply: FastifyReply) {
+    const body = verify2FASchema.parse(request.body);
+    await userService.verify2FA(request.userId!, body.code);
+    return reply.send({ message: "2FA enabled" });
+  },
 
-    await this.userService.verify2FA(userId, code);
-
-    return reply.send({ success: true, message: 'Two-factor authentication enabled' });
-  }
-
-  async disable2FA(
-    request: FastifyRequest<{ Body: Disable2FAInput }>,
-    reply: FastifyReply,
-  ) {
-    const userId = request.userId!;
-    const { password, code } = request.body;
-
-    await this.userService.disable2FA(userId, password, code);
-
-    return reply.send({ success: true, message: '2FA disabled successfully' });
-  }
-}
+  async disable2FA(request: FastifyRequest, reply: FastifyReply) {
+    const body = disable2FASchema.parse(request.body);
+    await userService.disable2FA(request.userId!, body.password, body.code);
+    return reply.send({ message: "2FA disabled" });
+  },
+};

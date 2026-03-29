@@ -1,11 +1,18 @@
-import type { Metadata } from 'next'
+import type { Metadata } from 'next';
 
-export const metadata: Metadata = {
-  title: 'Как начать торговлю',
-  description: 'Пошаговое руководство по началу торговли на COMFORTRADE. Регистрация аккаунта, верификация, пополнение счета, открытие первых сделок.',
-  keywords: ['как начать', 'руководство', 'первые шаги', 'регистрация', 'верификация', 'демо счет'],
+type Props = { children: React.ReactNode; params: Promise<{ locale: string }> };
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { locale } = await params;
+  const messages = (await import(`../../../messages/${locale}.json`)).default;
+  const m = messages.metadata;
+  return {
+    title: m.start_page_title,
+    description: m.start_page_description,
+    keywords: m.start_page_keywords,
+  };
 }
 
 export default function StartLayout({ children }: { children: React.ReactNode }) {
-  return <>{children}</>
+  return <>{children}</>;
 }

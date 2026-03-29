@@ -1,6 +1,23 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import ProfileError from '../error';
 
+jest.mock('@/components/navigation', () => ({
+  Link: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
+    <a href={href} {...rest}>{children}</a>
+  ),
+}));
+
+jest.mock('next-intl', () => ({
+  useTranslations: () => (key: string) => {
+    const ru: Record<string, string> = {
+      error_profile: 'Ошибка загрузки профиля',
+      retry_action: 'Попробовать снова',
+      back_to_home: 'На главную',
+    };
+    return ru[key] ?? key;
+  },
+}));
+
 describe('ProfileError', () => {
   it('shows profile error message', () => {
     render(<ProfileError error={new Error('Failed to load')} reset={() => {}} />);
@@ -17,6 +34,6 @@ describe('ProfileError', () => {
 
   it('has link to home', () => {
     render(<ProfileError error={new Error('x')} reset={() => {}} />);
-    expect(screen.getByRole('link', { name: /главную/i })).toHaveAttribute('href', '/');
+    expect(screen.getByRole('link', { name: /На главную/i })).toHaveAttribute('href', '/');
   });
 });

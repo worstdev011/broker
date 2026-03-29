@@ -1,84 +1,36 @@
-import Bull from 'bull';
-import { env } from '../config/env.js';
-import { logger } from '../shared/logger.js';
+import { Queue } from "bullmq";
+import Redis from "ioredis";
+import { env } from "../shared/types/env.js";
+import { TRADE_CLOSING_QUEUE } from "../domain/trades/trade.constants.js";
 
-export const QUEUE_NAMES = {
-  TRADE_CLOSING: 'trade-closing',
-  EMAIL: 'email',
-  REPORTS: 'reports',
-  CLEANUP: 'cleanup',
-} as const;
+let connection: Redis | null = null;
+let tradeClosingQueue: Queue | null = null;
 
-const queues: Bull.Queue[] = [];
-
-export function createTradeClosingQueue(): Bull.Queue | null {
-  if (!env.REDIS_URL) return null;
-
-  try {
-    const queue = new Bull(QUEUE_NAMES.TRADE_CLOSING, env.REDIS_URL, {
-      defaultJobOptions: {
-        attempts: 3,
-        backoff: { type: 'exponential', delay: 1000 },
-        removeOnComplete: 100,
-      },
+function getConnection(): Redis {
+  if (!connection) {
+    connection = new Redis(env().REDIS_URL, {
+      maxRetriesPerRequest: null,
     });
-
-    queue.on('error', (err) => logger.error({ err }, 'Trade closing queue error'));
-    queue.on('failed', (job, err) =>
-      logger.error({ err, jobId: job?.id }, 'Trade closing job failed'),
-    );
-
-    queues.push(queue);
-    return queue;
-  } catch (err) {
-    logger.error({ err }, 'Failed to create trade closing queue');
-    return null;
   }
+  return connection;
 }
 
-export function createEmailQueue(): Bull.Queue | null {
-  if (!env.REDIS_URL) return null;
-
-  try {
-    const queue = new Bull(QUEUE_NAMES.EMAIL, env.REDIS_URL, {
-      defaultJobOptions: {
-        attempts: 3,
-        backoff: { type: 'exponential', delay: 2000 },
-        removeOnComplete: 500,
-      },
+export function getTradeClosingQueue(): Queue {
+  if (!tradeClosingQueue) {
+    tradeClosingQueue = new Queue(TRADE_CLOSING_QUEUE, {
+      connection: getConnection(),
     });
-    queues.push(queue);
-    return queue;
-  } catch (err) {
-    logger.error({ err }, 'Failed to create email queue');
-    return null;
   }
+  return tradeClosingQueue;
 }
 
-export function createCleanupQueue(): Bull.Queue | null {
-  if (!env.REDIS_URL) return null;
-
-  try {
-    const queue = new Bull(QUEUE_NAMES.CLEANUP, env.REDIS_URL, {
-      defaultJobOptions: {
-        attempts: 2,
-        backoff: { type: 'fixed', delay: 5000 },
-        removeOnComplete: 50,
-      },
-    });
-    queues.push(queue);
-    return queue;
-  } catch (err) {
-    logger.error({ err }, 'Failed to create cleanup queue');
-    return null;
+export async function closeQueues(): Promise<void> {
+  if (tradeClosingQueue) {
+    await tradeClosingQueue.close();
+    tradeClosingQueue = null;
   }
-}
-
-export function getQueues(): Bull.Queue[] {
-  return queues;
-}
-
-export async function closeAllQueues(): Promise<void> {
-  await Promise.all(queues.map((q) => q.close()));
-  queues.length = 0;
+  if (connection) {
+    connection.disconnect();
+    connection = null;
+  }
 }

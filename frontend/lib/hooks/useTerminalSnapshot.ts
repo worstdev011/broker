@@ -8,15 +8,18 @@ import { DEFAULT_INSTRUMENT_ID } from '@/lib/instruments';
 /**
  * Fetches user/account/trade data via HTTP.
  * Chart data (candles, price, market status) is delivered via WS `chart:init`.
+ * Pass null to defer the request until the instrument is confirmed (e.g. after loadInstruments).
  */
 export function useTerminalSnapshot(
-  instrument: string = DEFAULT_INSTRUMENT_ID,
+  instrument: string | null,
 ) {
   const [data, setData] = useState<TerminalSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!instrument) return; // wait until instrument is confirmed valid
+
     const controller = new AbortController();
 
     setLoading(true);

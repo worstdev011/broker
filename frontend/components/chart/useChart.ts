@@ -8,12 +8,16 @@
  * FLOW G3: viewport & auto-fit
  */
 
-import { RefObject, useRef, useEffect, useCallback } from 'react';
+'use client';
+
+import { RefObject, useRef, useEffect, useCallback, useMemo } from 'react';
+import { useTranslations } from 'next-intl';
 import { logger } from '@/lib/logger';
 import { useCanvasInfrastructure } from './internal/useCanvasInfrastructure';
 import { useChartData } from './internal/useChartData';
 import { useViewport } from './internal/useViewport';
 import { useRenderLoop } from './internal/useRenderLoop';
+import type { ChartCanvasCopy } from './internal/chartCanvasCopy.types';
 import { useChartInteractions } from './internal/interactions/useChartInteractions';
 import { useHistoryLoader } from './internal/history/useHistoryLoader';
 import { useCrosshair } from './internal/crosshair/useCrosshair';
@@ -28,7 +32,7 @@ import { useCandleAnimator } from './internal/useCandleAnimator';
 import { useWebSocket, type TradeClosePayload } from '@/lib/hooks/useWebSocket';
 import { netPnlFromTradeClose } from '@/lib/tradeClosePnl';
 import { DEFAULT_INSTRUMENT_ID } from '@/lib/instruments';
-import { dismissToastByKey, showTradeOpenToast, showTradeCloseToast } from '@/stores/toast.store';
+import { dismissToastByKey, showTradeOpenToast, showTradeCloseToast, toast } from '@/stores/toast.store';
 import { parseTimeframeToMs } from './internal/utils/timeframe';
 import { zoomViewportTime } from './internal/interactions/math';
 import { getMinVisibleCandlesForZoom } from './internal/interactions/zoomBreakpoints';
@@ -41,7 +45,7 @@ import type { Viewport } from './internal/viewport.types';
 
 /** FLOW O: Overlay Registry - canvas читает visibility, UI пишет в registry */
 export interface OverlayRegistryParams {
-  getVisibleOverlayIds?: () => Set<string>;
+  getVisibleOverlayIds?: () => Set<string> | undefined;
   onDrawingAdded?: (overlay: import('./internal/overlay/overlay.types').DrawingOverlay) => void;
   onTradeAdded?: (overlay: import('./internal/overlay/overlay.types').TradeOverlay) => void;
   onDrawingEdited?: () => void;
@@ -60,6 +64,9 @@ interface UseChartParams {
   onInstrumentChange?: (instrumentId: string) => void;
   candleMode?: 'classic' | 'heikin_ashi' | 'bars';
   onReady?: () => void;
+  extraBottomPadding?: number;
+  extraTopPadding?: number;
+  showMinMaxLabels?: boolean;
 }
 
 export type HoverAction = 'CALL' | 'PUT' | null;
@@ -124,9 +131,56 @@ interface UseChartReturn {
   handleAlternativeClick: (instrumentId: string) => void;
   /** FLOW C-MARKET-ALTERNATIVES: обработка hover по альтернативной паре */
   handleAlternativeHover: (mouseX: number, mouseY: number) => number | null;
+  zoomIn: () => void;
+  zoomOut: () => void;
 }
 
-export function useChart({ canvasRef, timeframe = '5s', instrument, payoutPercent = 75, digits, activeInstrumentRef, indicatorConfigs = [], drawingMode = null, overlayRegistry, onInstrumentChange, candleMode: initialCandleMode = 'classic', onReady }: UseChartParams): UseChartReturn {
+const DRAWING_OVERLAY_LABEL_KEYS: Record<
+  import('./internal/drawings/drawing.types').Drawing['type'],
+  string
+> = {
+  horizontal: 'draw_horizontal',
+  vertical: 'draw_vertical',
+  trend: 'draw_trend',
+  rectangle: 'draw_rectangle',
+  fibonacci: 'draw_fibonacci',
+  'parallel-channel': 'draw_parallel',
+  ray: 'draw_ray',
+  arrow: 'draw_arrow',
+};
+
+export function useChart({ canvasRef, timeframe = '5s', instrument, payoutPercent = 75, digits, activeInstrumentRef, indicatorConfigs = [], drawingMode = null, overlayRegistry, onInstrumentChange, candleMode: initialCandleMode = 'classic', onReady, extraBottomPadding = 0, extraTopPadding = 0, showMinMaxLabels = true }: UseChartParams): UseChartReturn {
+  const t = useTranslations('terminal');
+
+  const tradeToastRef = useRef<{ openMsg: string; formatTie: (amt: string) => string }>({
+    openMsg: '',
+    formatTie: () => '',
+  });
+  tradeToastRef.current = {
+    openMsg: t('toast_trade_opened'),
+    formatTie: (amt: string) => t('toast_trade_tie', { amount: amt }),
+  };
+
+  const chartCanvasCopy: ChartCanvasCopy = useMemo(
+    () => ({
+      ohlcOpen: t('ohlc_open'),
+      ohlcHigh: t('ohlc_high'),
+      ohlcLow: t('ohlc_low'),
+      ohlcClose: t('ohlc_close'),
+      marketClosedTitle: t('market_closed_title'),
+      marketResumeIn: t('market_resume_in'),
+      marketWeekendIdle: t('market_weekend_idle'),
+      marketHolidayIdle: t('market_holiday_idle'),
+      marketMaintenanceIdle: t('market_maintenance_idle'),
+      formatCountdownDHM: (days, hours, minutes) =>
+        t('market_countdown_dhm', { days, hours, minutes }),
+      formatCountdownHMS: (hours, minutes, seconds) =>
+        t('market_countdown_hms', { hours, minutes, seconds }),
+      alternativesHeader: t('market_alternatives_header'),
+    }),
+    [t],
+  );
+
   // FLOW G1: инициализация инфраструктуры canvas
   useCanvasInfrastructure({ canvasRef });
 
@@ -141,6 +195,10 @@ export function useChart({ canvasRef, timeframe = '5s', instrument, payoutPercen
   // При смене chartType компонент полностью пересоздается через ChartContainer (key),
   // поэтому reset при монтировании гарантирует чистое состояние
   const isInitialMountRef = useRef<boolean>(true);
+
+  // Always-current ref for instrument — avoids stale closure in initializeChart useCallback
+  const instrumentRef = useRef(instrument);
+  instrumentRef.current = instrument;
 
   // При price:update - только Y (auto-fit), без движения по X. Сдвиг по X только при candle:close и по кнопке «Вернуться».
   const viewportRecalculateYOnlyRef = useRef<() => void>(() => {});
@@ -164,6 +222,9 @@ export function useChart({ canvasRef, timeframe = '5s', instrument, payoutPercen
   // 🔥 FLOW C-INERTIA: Создаем ref для onViewportChange callback (обновляется после создания historyLoader)
   const onViewportChangeRef = useRef<((viewport: Viewport) => void) | null>(null);
 
+  // FLOW CONTINUOUS-FOLLOW: ref для getServerTimeMs (определяется позже, ref позволяет избежать TDZ)
+  const getServerTimeMsRef = useRef<(() => number) | null>(null);
+
   // FLOW G3: инициализация viewport
   const viewport = useViewport({
     getCandles: chartData.getCandles,
@@ -173,6 +234,8 @@ export function useChart({ canvasRef, timeframe = '5s', instrument, payoutPercen
     panInertiaRefs,
     onViewportChangeRef, // 🔥 FLOW C-INERTIA: Передаем ref для callback
     getMarketStatus: chartData.getMarketStatus, // FLOW C-MARKET-CLOSED: останавливать инерцию когда рынок закрыт
+    getServerTimeMs: () => getServerTimeMsRef.current?.() ?? Date.now(),
+    extraBottomPx: extraBottomPadding,
   });
 
   viewportRecalculateYOnlyRef.current = viewport.recalculateYOnly;
@@ -308,22 +371,8 @@ export function useChart({ canvasRef, timeframe = '5s', instrument, payoutPercen
       drawings.addDrawing(d);
       const cb = onDrawingAddedRef.current;
       if (cb) {
-        const name =
-          d.type === 'horizontal'
-            ? 'Горизонтальная линия'
-            : d.type === 'vertical'
-              ? 'Вертикальная линия'
-              : d.type === 'trend'
-                ? 'Трендовая линия'
-                : d.type === 'rectangle'
-                  ? 'Область'
-                  : d.type === 'fibonacci'
-                    ? 'Фибоначчи'
-                    : d.type === 'parallel-channel'
-                      ? 'Параллельный канал'
-                      : d.type === 'arrow'
-                        ? 'Стрелка'
-                        : 'Луч';
+        const labelKey = DRAWING_OVERLAY_LABEL_KEYS[d.type] ?? 'draw_ray';
+        const name = t(labelKey);
         const points: { time: number; price: number }[] =
           d.type === 'trend' || d.type === 'rectangle' || d.type === 'fibonacci' || d.type === 'parallel-channel' || d.type === 'ray' || d.type === 'arrow'
             ? [d.start, d.end]
@@ -343,7 +392,7 @@ export function useChart({ canvasRef, timeframe = '5s', instrument, payoutPercen
         });
       }
     },
-    [drawings]
+    [drawings, t]
   );
 
   // FLOW G14: Drawing interactions (создание)
@@ -486,6 +535,7 @@ export function useChart({ canvasRef, timeframe = '5s', instrument, payoutPercen
     if (!s) return Date.now(); // Fallback на локальное время
     return s.timestamp + (performance.now() - lastSyncTimeRef.current);
   }, []);
+  getServerTimeMsRef.current = getServerTimeMs;
 
   // FLOW E3: единственный источник truth по времени экспирации (в мс)
   // Anchored to the right edge of the live candle so the line never
@@ -557,6 +607,8 @@ export function useChart({ canvasRef, timeframe = '5s', instrument, payoutPercen
     getArrowUpImg: () => arrowUpImgRef.current,
     getArrowDownImg: () => arrowDownImgRef.current,
     advancePanInertia: viewport.advancePanInertia, // 🔥 FLOW C-INERTIA: Pan inertia animation
+    advanceLiveCandle: chartData.advanceLiveCandle, // FLOW CONTINUOUS-FOLLOW: авто-создание flat свечей
+    advanceContinuousFollow: viewport.advanceContinuousFollow, // FLOW CONTINUOUS-FOLLOW: непрерывное движение viewport
     getMarketStatus: chartData.getMarketStatus, // FLOW C-MARKET-CLOSED: статус рынка
     getNextMarketOpenAt: chartData.getNextMarketOpenAt, // FLOW C-MARKET-COUNTDOWN: время следующего открытия
     getTopAlternatives: chartData.getTopAlternatives, // FLOW C-MARKET-ALTERNATIVES: альтернативные пары
@@ -564,6 +616,10 @@ export function useChart({ canvasRef, timeframe = '5s', instrument, payoutPercen
     getMarketAlternativesHoveredIndex: () => marketAlternativesHoveredIndexRef.current, // FLOW C-MARKET-ALTERNATIVES: hovered index
     instrument, // Watermark: полупрозрачное название инструмента
     timeframe,  // Watermark: таймфрейм под названием
+    extraBottomPadding,
+    extraTopPadding,
+    showMinMaxLabels,
+    getChartCanvasCopy: () => chartCanvasCopy,
   });
 
   // FLOW G6/P9: history loading по instrument (id для API ?instrument=)
@@ -655,7 +711,7 @@ export function useChart({ canvasRef, timeframe = '5s', instrument, payoutPercen
 
   // Chart initialization from WS chart:init (single source of truth for chart data)
   const initializeChart = useCallback((chartSnapshot: ChartSnapshot) => {
-    if (instrument && chartSnapshot.instrument !== instrument) return;
+    if (instrumentRef.current && chartSnapshot.instrument !== instrumentRef.current) return;
 
     chartData.reset();
     candleAnimator.reset();
@@ -695,14 +751,13 @@ export function useChart({ canvasRef, timeframe = '5s', instrument, payoutPercen
         historyLoader.maybeLoadMore(currentViewport);
       }
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [instrument]);
+  }, []); // instrumentRef.current always reflects latest value — no stale closure
 
   // WebSocket - single source of truth for chart data + real-time updates
   useWebSocket({
     activeInstrumentRef,
     activeTimeframeRef,
-    onTradeOpen: (data) => showTradeOpenToast(data),
+    onTradeOpen: (data) => showTradeOpenToast(data, tradeToastRef.current.openMsg),
     onTradeClose: (data: TradeClosePayload) => {
       // Удаляем активный оверлей сделки и добавляем краткосрочную метку результата
       removeTrade(data.id);
@@ -747,7 +802,7 @@ export function useChart({ canvasRef, timeframe = '5s', instrument, payoutPercen
       }
 
       dismissToastByKey(data.id);
-      showTradeCloseToast(data);
+      showTradeCloseToast(data, tradeToastRef.current.formatTie);
     },
     onServerTime: (timestamp) => {
       if (serverTimeRef.current) serverTimeRef.current.timestamp = timestamp;
@@ -778,8 +833,7 @@ export function useChart({ canvasRef, timeframe = '5s', instrument, payoutPercen
 
         if (crossed) {
           priceAlert.triggered = true;
-          // eslint-disable-next-line no-alert
-          window.alert(`Цена пересекла уровень ${priceAlert.price.toFixed(2)}`);
+          toast(t('price_alert_crossed', { price: priceAlert.price.toFixed(2) }), 'info');
         }
       }
     },
@@ -825,7 +879,7 @@ export function useChart({ canvasRef, timeframe = '5s', instrument, payoutPercen
         viewport.recalculateYOnly();
       }
     },
-    enabled: !!(activeInstrumentRef && instrument),
+    enabled: !!instrument,
   });
 
   useEffect(() => {
@@ -893,7 +947,10 @@ export function useChart({ canvasRef, timeframe = '5s', instrument, payoutPercen
       onTradeAdded({
         id: trade.id,
         type: 'trade',
-        name: `Сделка ${trade.direction === 'CALL' ? 'ВЫШЕ' : 'НИЖЕ'} @ ${entryPrice.toFixed(5)}`,
+        name:
+          trade.direction === 'CALL'
+            ? t('overlay_trade_higher', { price: entryPrice.toFixed(5) })
+            : t('overlay_trade_lower', { price: entryPrice.toFixed(5) }),
         visible: true,
         tradeId: trade.id,
         direction: trade.direction,

@@ -1,85 +1,56 @@
-import type { FastifyRequest, FastifyReply } from 'fastify';
-import { AccountService } from '../../domain/accounts/AccountService.js';
-import { AccountType } from '../../domain/accounts/AccountTypes.js';
-import { emitAccountSnapshot } from '../../bootstrap/websocket.bootstrap.js';
-import { logger } from '../../shared/logger.js';
+import type { FastifyRequest, FastifyReply } from "fastify";
+import { accountService } from "../../domain/accounts/account.service.js";
+import { switchBodySchema, snapshotQuerySchema } from "./accounts.schema.js";
+import { sendAccountSnapshot } from "../../shared/websocket/ws.events.js";
+import { AppError } from "../../shared/errors/AppError.js";
 
-export class AccountsController {
-  constructor(private accountService: AccountService) {}
-
-  async getAccounts(request: FastifyRequest, reply: FastifyReply) {
-    const userId = request.userId!;
-    const accounts = await this.accountService.getAccounts(userId);
-    return reply.send({ accounts });
-  }
-
-  async createAccount(
-    request: FastifyRequest<{ Body: { type: 'demo' | 'real' } }>,
+export const accountsController = {
+  async handleList(
+    request: FastifyRequest,
     reply: FastifyReply,
-  ) {
-    const userId = request.userId!;
-    const { type } = request.body;
+  ): Promise<void> {
+    if (!request.userId) throw AppError.unauthorized();
 
-    const account = await this.accountService.createAccount({
-      userId,
-      type: type === 'demo' ? AccountType.DEMO : AccountType.REAL,
-    });
+    const accounts = await accountService.listByUser(request.userId);
+    reply.send({ accounts });
+  },
 
-    return reply.status(201).send({ account });
-  }
-
-  async switchAccount(
-    request: FastifyRequest<{ Body: { accountId: string } }>,
+  async handleSwitch(
+    request: FastifyRequest,
     reply: FastifyReply,
-  ) {
-    const userId = request.userId!;
-    const { accountId } = request.body;
+  ): Promise<void> {
+    if (!request.userId) throw AppError.unauthorized();
 
-    const account = await this.accountService.setActiveAccount(userId, accountId);
+    const body = switchBodySchema.parse(request.body);
+    const account = await accountService.switchAccount(
+      request.userId,
+      body.accountId,
+    );
 
-    this.emitSnapshot(userId);
+    sendAccountSnapshot(request.userId, account);
+    reply.send({ account });
+  },
 
-    return reply.send({ account });
-  }
+  async handleDemoReset(
+    request: FastifyRequest,
+    reply: FastifyReply,
+  ): Promise<void> {
+    if (!request.userId) throw AppError.unauthorized();
 
-  async getAccountSnapshot(request: FastifyRequest, reply: FastifyReply) {
-    const userId = request.userId!;
+    const account = await accountService.resetDemo(request.userId);
 
-    const snapshot = await this.accountService.getAccountSnapshot(userId);
-    if (!snapshot) {
-      return reply.status(404).send({ error: 'ACCOUNT_NOT_FOUND', message: 'No active account found' });
-    }
+    sendAccountSnapshot(request.userId, account);
+    reply.send({ account });
+  },
 
-    return reply.send(snapshot);
-  }
+  async handleSnapshot(
+    request: FastifyRequest,
+    reply: FastifyReply,
+  ): Promise<void> {
+    if (!request.userId) throw AppError.unauthorized();
 
-  async resetDemoAccount(request: FastifyRequest, reply: FastifyReply) {
-    const userId = request.userId!;
-
-    const account = await this.accountService.resetDemoAccount(userId);
-
-    this.emitSnapshot(userId);
-
-    return reply.send({
-      account: {
-        id: account.id,
-        balance: account.balance,
-        currency: account.currency,
-        type: account.type,
-      },
-    });
-  }
-
-  private emitSnapshot(userId: string): void {
-    this.accountService.getAccountSnapshot(userId).then((snapshot) => {
-      if (snapshot) {
-        emitAccountSnapshot(userId, {
-          ...snapshot,
-          currency: snapshot.currency as 'USD' | 'RUB' | 'UAH',
-        });
-      }
-    }).catch((err) => {
-      logger.error({ err }, 'Failed to emit account snapshot');
-    });
-  }
-}
+    const query = snapshotQuerySchema.parse(request.query);
+    const snapshot = await accountService.snapshot(request.userId, query.type);
+    reply.send(snapshot);
+  },
+};

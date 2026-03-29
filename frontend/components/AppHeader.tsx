@@ -34,7 +34,7 @@ export function AppHeader() {
     real: { balance: string; currency: string } | null;
   }>({ demo: null, real: null });
   const terminalHref = accountType === 'demo' ? '/terminal/demo' : '/terminal';
-  const accountTypeShort = accountType === 'demo' ? 'Демо' : 'Реал';
+  const accountTypeShort = accountType === 'demo' ? t('demo_short') : t('real_short');
   const accountTypeBadgeClass = accountType === 'demo'
     ? 'bg-[#2478ff]/20 text-[#6ba4ff] border border-[#2478ff]/40'
     : 'bg-[#1f9d5a]/20 text-[#44d08a] border border-[#1f9d5a]/40';
@@ -44,7 +44,7 @@ export function AppHeader() {
   useEffect(() => {
     const initSnapshot = async () => {
       try {
-        const snap = await api<AccountSnapshot>('/api/account/snapshot');
+        const snap = await api<AccountSnapshot>('/api/accounts/snapshot');
         useAccountStore.getState().setSnapshot(snap);
       } catch {
         // ignore
@@ -86,7 +86,7 @@ export function AppHeader() {
       setDisplayedBalance('0.00');
       return;
     }
-    setDisplayedBalance(snapshot.balance.toFixed(2));
+    setDisplayedBalance(Number(snapshot.balance).toFixed(2));
   }, [snapshot?.balance, snapshot?.accountId]);
 
   useEffect(() => {
@@ -110,7 +110,7 @@ export function AppHeader() {
       }
       try {
         const real = await api<{ currency: string; balance: number }>('/api/wallet/balance');
-        setModalBalances((p) => ({ ...p, real: { balance: real.balance.toFixed(2), currency: real.currency } }));
+        setModalBalances((p) => ({ ...p, real: { balance: Number(real.balance).toFixed(2), currency: real.currency } }));
       } catch {
         setModalBalances((p) => ({ ...p, real: null }));
       }
@@ -121,7 +121,7 @@ export function AppHeader() {
 
   const getCurrentBalance = () => {
     if (!snapshot) return { balance: '0.00', currency: 'UAH' };
-    return { balance: snapshot.balance.toFixed(2), currency: snapshot.currency };
+    return { balance: Number(snapshot.balance).toFixed(2), currency: snapshot.currency };
   };
 
   const handleLogout = async () => {
@@ -149,7 +149,7 @@ export function AppHeader() {
               onClick={() => setShowProfileModal(!showProfileModal)}
               onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowProfileModal((v) => !v); } }}
               className="relative w-10 h-10 rounded-full flex items-center justify-center cursor-pointer md:hover:opacity-90 transition-opacity overflow-hidden ring-2 ring-white/20 ring-offset-2 ring-offset-[#05122a] shadow-lg"
-              aria-label="Открыть меню профиля"
+              aria-label={t('open_profile_menu')}
               aria-expanded={showProfileModal}
               aria-haspopup="menu"
             >
@@ -169,7 +169,7 @@ export function AppHeader() {
             {showProfileModal && (
               <>
                 <div className="fixed inset-0 z-[170]" onClick={() => setShowProfileModal(false)} aria-hidden="true" />
-                <div role="menu" aria-label="Меню профиля" className="absolute left-full right-auto top-full mt-2 -ml-32 w-[280px] bg-[#1a2438] border border-white/[0.08] rounded-[14px] backdrop-blur-[12px] shadow-[0_8px_32px_rgba(0,0,0,0.5)] z-[180] overflow-hidden p-2 md:left-1/2 md:ml-0 md:-translate-x-1/2">
+                <div role="menu" aria-label={t('profile_menu_aria')} className="absolute left-full right-auto top-full mt-2 -ml-32 w-[280px] bg-[#1a2438] border border-white/[0.08] rounded-[14px] backdrop-blur-[12px] shadow-[0_8px_32px_rgba(0,0,0,0.5)] z-[180] overflow-hidden p-2 md:left-1/2 md:ml-0 md:-translate-x-1/2">
                   <div className="px-3 py-3 border-b border-white/[0.06]">
                     <div className="flex items-center gap-2.5">
                       <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 bg-[#2478ff]">

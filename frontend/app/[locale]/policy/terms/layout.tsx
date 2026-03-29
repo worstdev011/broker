@@ -1,15 +1,18 @@
 import type { Metadata } from 'next';
 
-export const metadata: Metadata = {
-  title: 'Условия использования',
-  description: 'Условия использования платформы COMFORTRADE. Правила торговли, права и обязанности пользователей, условия предоставления услуг.',
-  keywords: ['условия использования', 'правила', 'соглашение', 'услуги'],
-};
+type Props = { children: React.ReactNode; params: Promise<{ locale: string }> };
 
-export default function TermsLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { locale } = await params;
+  const messages = (await import(`../../../../messages/${locale}.json`)).default;
+  const m = messages.metadata;
+  return {
+    title: m.policy_terms_title,
+    description: m.policy_terms_description,
+    keywords: m.policy_terms_keywords,
+  };
+}
+
+export default function TermsLayout({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }

@@ -1,95 +1,79 @@
-/**
- * File storage - handles file uploads
- * FLOW U1: Avatar upload (local storage for MVP)
- */
+import { mkdir, unlink, writeFile } from "node:fs/promises";
+import path from "node:path";
+import { env } from "../../shared/types/env.js";
+import { AppError } from "../../shared/errors/AppError.js";
+import { logger } from "../../shared/logger.js";
 
-import { promises as fs } from 'fs';
-import path from 'path';
-import { randomBytes } from 'crypto';
-import { logger } from '../../shared/logger.js';
-import { env } from '../../config/env.js';
+const MAGIC_BYTES: Record<string, number[]> = {
+  jpeg: [0xff, 0xd8, 0xff],
+  png: [0x89, 0x50, 0x4e, 0x47],
+  webp: [0x52, 0x49, 0x46, 0x46],
+};
 
-const UPLOADS_DIR = path.join(process.cwd(), 'uploads');
-const AVATARS_DIR = path.join(UPLOADS_DIR, 'avatars');
+const EXT_MAP: Record<string, string> = {
+  jpeg: ".jpg",
+  png: ".png",
+  webp: ".webp",
+};
 
-// Ensure directories exist
-async function ensureDirectories(): Promise<void> {
-  try {
-    await fs.mkdir(UPLOADS_DIR, { recursive: true });
-    await fs.mkdir(AVATARS_DIR, { recursive: true });
-  } catch (error) {
-    logger.error('Failed to create upload directories:', error);
-    throw error;
+const MAX_SIZE = 2 * 1024 * 1024; // 2 MB
+
+function detectFormat(buffer: Buffer): string | null {
+  for (const [format, bytes] of Object.entries(MAGIC_BYTES)) {
+    if (buffer.length >= bytes.length && bytes.every((b, i) => buffer[i] === b)) {
+      return format;
+    }
   }
+  return null;
 }
 
-// Initialize directories on module load
-ensureDirectories().catch((error) => {
-  logger.error('Failed to initialize upload directories:', error);
-});
-
-export interface UploadResult {
-  filename: string;
-  filepath: string;
-  url: string;
-}
-
-export class FileStorage {
+export const fileStorage = {
   /**
-   * Save avatar file
+   * Validate magic bytes and size BEFORE writing anything to disk.
+   * Returns the saved relative path (e.g. "avatars/uuid.jpg").
    */
-  async saveAvatar(file: Buffer, originalFilename: string, userId: string): Promise<UploadResult> {
-    await ensureDirectories();
-
-    // Generate unique filename
-    const ext = path.extname(originalFilename).toLowerCase();
-    const allowedExtensions = ['.jpg', '.jpeg', '.png', '.webp'];
-    if (!allowedExtensions.includes(ext)) {
-      throw new Error(`Invalid file type. Allowed: ${allowedExtensions.join(', ')}`);
+  async saveAvatar(buffer: Buffer, originalFilename: string): Promise<string> {
+    if (buffer.length > MAX_SIZE) {
+      throw AppError.badRequest("File too large (max 2 MB)");
     }
 
-    // Check file size (from env)
-    if (file.length > env.MAX_UPLOAD_SIZE) {
-      throw new Error(`File size exceeds ${Math.round(env.MAX_UPLOAD_SIZE / 1024)}KB limit`);
+    if (buffer.length < 4) {
+      throw AppError.badRequest("File too small to be a valid image");
     }
 
-    const randomId = randomBytes(16).toString('hex');
-    const filename = `${userId}-${randomId}${ext}`;
-    const filepath = path.join(AVATARS_DIR, filename);
+    const format = detectFormat(buffer);
+    if (!format) {
+      throw AppError.badRequest("Unsupported image format. Allowed: JPEG, PNG, WebP");
+    }
 
-    // Save file
-    await fs.writeFile(filepath, file);
+    const ext = EXT_MAP[format] ?? path.extname(originalFilename).toLowerCase();
+    const filename = `${crypto.randomUUID()}${ext}`;
+    const dir = path.join(env().UPLOAD_DIR, "avatars");
 
-    // Return public URL (for MVP, relative path)
-    const url = `/uploads/avatars/${filename}`;
+    await mkdir(dir, { recursive: true });
+    const fullPath = path.join(dir, filename);
+    await writeFile(fullPath, buffer);
 
-    return {
-      filename,
-      filepath,
-      url,
-    };
-  }
+    logger.debug({ filename, format, size: buffer.length }, "Avatar saved");
+    return `avatars/${filename}`;
+  },
 
-  /**
-   * Delete avatar file
-   */
-  async deleteAvatar(url: string): Promise<void> {
+  async deleteAvatar(relativePath: string): Promise<void> {
+    if (!relativePath) return;
+    const fullPath = path.join(env().UPLOAD_DIR, relativePath);
+    const resolved = path.resolve(fullPath);
+    const baseDir = path.resolve(env().UPLOAD_DIR);
+    if (!resolved.startsWith(baseDir + path.sep) && resolved !== baseDir) {
+      logger.warn({ path: relativePath }, "Path traversal attempt blocked");
+      return;
+    }
     try {
-      // Extract filename from URL
-      const filename = path.basename(url);
-      const filepath = path.join(AVATARS_DIR, filename);
-
-      // Check if file exists
-      try {
-        await fs.access(filepath);
-        await fs.unlink(filepath);
-      } catch (error) {
-        // File doesn't exist, ignore
-        logger.warn(`Avatar file not found: ${filepath}`);
+      await unlink(fullPath);
+      logger.debug({ path: relativePath }, "Avatar deleted");
+    } catch (err: unknown) {
+      if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
+        logger.warn({ err, path: relativePath }, "Failed to delete avatar file");
       }
-    } catch (error) {
-      logger.error('Failed to delete avatar:', error);
-      throw error;
     }
-  }
-}
+  },
+};

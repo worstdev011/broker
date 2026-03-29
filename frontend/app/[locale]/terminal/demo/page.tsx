@@ -1,6 +1,6 @@
 'use client';
 
-import { TerminalPageContent } from '../page';
+import { TerminalPageContent } from '../TerminalPageContent';
 
 export default function TerminalDemoPage() {
   return <TerminalPageContent defaultAccount="demo" />;

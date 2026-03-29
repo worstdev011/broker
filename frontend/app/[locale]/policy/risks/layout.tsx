@@ -1,15 +1,18 @@
 import type { Metadata } from 'next';
 
-export const metadata: Metadata = {
-  title: 'Предупреждение о рисках',
-  description: 'Предупреждение о рисках торговли на валютном рынке. Торговля на финансовых рынках сопряжена с рисками потери капитала.',
-  keywords: ['риски', 'предупреждение', 'потеря капитала', 'финансовые риски'],
-};
+type Props = { children: React.ReactNode; params: Promise<{ locale: string }> };
 
-export default function RisksLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { locale } = await params;
+  const messages = (await import(`../../../../messages/${locale}.json`)).default;
+  const m = messages.metadata;
+  return {
+    title: m.policy_risks_title,
+    description: m.policy_risks_description,
+    keywords: m.policy_risks_keywords,
+  };
+}
+
+export default function RisksLayout({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }

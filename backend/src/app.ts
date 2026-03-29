@@ -1,149 +1,198 @@
-import { randomUUID } from 'crypto';
-import Fastify from 'fastify';
-import fastifyCookie from '@fastify/cookie';
-import fastifyCsrfProtection from '@fastify/csrf-protection';
-import fastifyCors from '@fastify/cors';
-import fastifyHelmet from '@fastify/helmet';
-import swagger from '@fastify/swagger';
-import swaggerUi from '@fastify/swagger-ui';
-import { logger } from './shared/logger.js';
-import { env } from './config/env.js';
-import { registerGlobalRateLimit } from './middleware/rateLimit.js';
-import { errorHandler } from './middleware/errorHandler.js';
-import { registerHealthRoutes } from './modules/health/health.routes.js';
-import { registerAuthRoutes } from './modules/auth/auth.routes.js';
-import { registerAccountsRoutes } from './modules/accounts/accounts.routes.js';
-import { registerTradesRoutes } from './modules/trades/trades.routes.js';
-import { registerTerminalRoutes } from './modules/terminal/terminal.routes.js';
-import { registerLineChartRoutes } from './modules/linechart/linechart.routes.js';
-import { registerUserRoutes } from './modules/user/user.routes.js';
-import { registerWalletRoutes } from './modules/wallet/wallet.routes.js';
-import { registerInstrumentsRoutes } from './modules/instruments/instruments.routes.js';
-import { registerKycRoutes } from './modules/kyc/kyc.routes.js';
+import Fastify, { type FastifyInstance, type FastifyError } from "fastify";
+import cors from "@fastify/cors";
+import cookie from "@fastify/cookie";
+import csrf from "@fastify/csrf-protection";
+import helmet from "@fastify/helmet";
+import rateLimit from "@fastify/rate-limit";
+import multipart from "@fastify/multipart";
+import websocket from "@fastify/websocket";
+import { env } from "./shared/types/env";
+import { AppError } from "./shared/errors/AppError";
+import { healthRoutes } from "./modules/health/health.routes";
+import { authRoutes } from "./modules/auth/auth.routes";
+import { accountsRoutes } from "./modules/accounts/accounts.routes";
+import { tradesRoutes } from "./modules/trades/trades.routes";
+import { terminalRoutes } from "./modules/terminal/terminal.routes";
+import { userRoutes } from "./modules/user/user.routes";
+import { walletRoutes } from "./modules/wallet/wallet.routes";
+import { instrumentsRoutes } from "./modules/instruments/instruments.routes";
+import { kycRoutes } from "./modules/kyc/kyc.routes";
+import { adminRoutes } from "./modules/admin/admin.routes";
+import { quotesRoutes } from "./modules/quotes/quotes.routes";
+import { lineRoutes } from "./modules/line/line.routes";
+import { wsRoutes } from "./websocket/ws.routes";
+import { partnersRoutes } from "./modules/partners/partners.routes";
 
-const CSRF_SKIP_PATHS = new Set([
-  '/api/auth/register',
-  '/api/auth/login',
-  '/api/auth/2fa',
-  '/api/auth/logout',
-  '/api/kyc/webhook',
-  '/api/wallet/webhook',
-]);
+const CSRF_SKIP_PATHS = [
+  "/api/auth/register",
+  "/api/auth/login",
+  "/api/auth/logout",
+  "/api/auth/2fa",
+  "/api/wallet/webhook",
+  "/api/kyc/webhook",
+  "/api/kyc/init",
+  "/api/partners/register",
+  "/api/partners/login",
+  "/api/partners/logout",
+  "/api/partners/track-click",
+];
 
-export async function createApp() {
+const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+
+export async function createApp(): Promise<FastifyInstance> {
+  const config = env();
+
   const app = Fastify({
     logger: {
-      level: env.NODE_ENV === 'development' ? 'debug' : 'info',
+      level: config.NODE_ENV === "production" ? "info" : "debug",
+      transport:
+        config.NODE_ENV === "development"
+          ? { target: "pino-pretty" }
+          : undefined,
     },
-    requestIdHeader: 'x-request-id',
-    genReqId: (req) => {
-      return (req.headers['x-request-id'] as string) || randomUUID();
-    },
+    requestIdHeader: "x-request-id",
+    genReqId: () => crypto.randomUUID(),
   });
 
-  app.addHook('onSend', async (request, reply) => {
-    reply.header('X-Request-ID', request.id);
-  });
+  // ─── Plugins ─────────────────────────────────────────────────────────────────
 
-  app.setErrorHandler(errorHandler);
-
-  await app.register(fastifyCors, {
-    origin: env.NODE_ENV === 'production' ? env.FRONTEND_URL : true,
+  await app.register(cors, {
+    origin: [config.FRONTEND_URL, config.ADMIN_URL, config.PARTNERS_URL],
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Request-ID', 'csrf-token'],
-    exposedHeaders: ['Content-Type', 'X-Request-ID'],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "x-csrf-token", "x-request-id"],
   });
 
-  await app.register(fastifyCookie, {
-    secret: env.COOKIE_SECRET,
+  await app.register(cookie, {
+    secret: config.SESSION_SECRET,
+    parseOptions: {},
   });
 
-  await app.register(fastifyCsrfProtection, {
-    cookieOpts: {
-      path: '/',
-      sameSite: 'lax',
-      httpOnly: true,
-      secure: env.NODE_ENV === 'production',
-      signed: true,
+  await app.register(csrf, {
+    sessionPlugin: "@fastify/cookie",
+    cookieOpts: { signed: true, httpOnly: true, sameSite: "strict", path: "/" },
+    getToken: (request) => request.headers["x-csrf-token"] as string,
+  });
+
+  await app.register(helmet, {
+    contentSecurityPolicy: config.NODE_ENV === "production",
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+  });
+
+  await app.register(rateLimit, {
+    max: 100,
+    timeWindow: "1 minute",
+    keyGenerator: (request) => request.ip,
+  });
+
+  await app.register(multipart, {
+    limits: {
+      fileSize: config.MAX_FILE_SIZE,
+      files: 1,
     },
-    getToken: (req) => (req.headers['csrf-token'] as string) || undefined,
   });
 
-  app.addHook('onRequest', async (request, reply) => {
-    if (['GET', 'HEAD', 'OPTIONS'].includes(request.method)) return;
-    if (request.url === '/health') return;
+  await app.register(websocket);
 
-    const pathname = request.url.split('?')[0] ?? '';
-    if (pathname && CSRF_SKIP_PATHS.has(pathname)) return;
+  // ─── Raw body capture for webhook signature verification ────────────────────
 
-    return new Promise<void>((resolve, reject) => {
-      app.csrfProtection(request, reply, (err?: Error) => {
-        if (err) reject(err);
-        else resolve();
+  app.addHook("preParsing", async (request, _reply, payload) => {
+    const path = request.url.split("?")[0];
+    if (path !== "/api/kyc/webhook" && path !== "/api/wallet/webhook") {
+      return;
+    }
+
+    const { Readable } = await import("node:stream");
+    const chunks: Buffer[] = [];
+    for await (const chunk of payload) {
+      chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
+    }
+    const raw = Buffer.concat(chunks);
+    (request as any).rawBody = raw;
+    return Readable.from(raw);
+  });
+
+  // ─── CSRF enforcement (global, with skip list) ───────────────────────────────
+
+  app.addHook("onRequest", (request, reply, done) => {
+    if (!MUTATING_METHODS.has(request.method)) { done(); return; }
+
+    const path = request.url.split("?")[0];
+    if (CSRF_SKIP_PATHS.some((skip) => path === skip)) { done(); return; }
+
+    // @fastify/csrf-protection requires the callback (done) as third argument
+    (app as any).csrfProtection(request, reply, done);
+  });
+
+  // ─── Error handler (section 3.7) ─────────────────────────────────────────────
+  // NEVER returns stack traces or internal details to the client.
+
+  app.setErrorHandler((error: FastifyError | AppError | Error, request, reply) => {
+    if (error instanceof AppError) {
+      request.log.warn(
+        { err: error, userId: request.userId, code: error.code },
+        error.message,
+      );
+      return reply.status(error.statusCode).send({
+        error: error.code,
+        message: error.message,
       });
+    }
+
+    // Fastify validation errors (Zod / schema)
+    if ("validation" in error && (error as FastifyError).statusCode === 400) {
+      request.log.warn({ err: error, userId: request.userId }, "Validation error");
+      return reply.status(400).send({
+        error: "VALIDATION_ERROR",
+        message: error.message,
+      });
+    }
+
+    // Rate limit errors
+    if ((error as FastifyError).statusCode === 429) {
+      return reply.status(429).send({
+        error: "RATE_LIMIT",
+        message: "Too many requests",
+      });
+    }
+
+    // CSRF errors
+    if (error.message?.includes("csrf") || error.message?.includes("CSRF")) {
+      request.log.warn({ err: error, userId: request.userId }, "CSRF validation failed");
+      return reply.status(403).send({
+        error: "CSRF_FAILED",
+        message: "Invalid or missing CSRF token",
+      });
+    }
+
+    // Unknown errors — log full details, return nothing sensitive
+    request.log.error(
+      { err: error, userId: request.userId, url: request.url, method: request.method },
+      "Unhandled error",
+    );
+
+    return reply.status(500).send({
+      error: "INTERNAL_ERROR",
+      message: "An unexpected error occurred",
     });
   });
 
-  await app.register(swagger, {
-    openapi: {
-      openapi: '3.0.3',
-      info: {
-        title: 'Comfortrade API',
-        description: 'Binary options trading platform API',
-        version: '1.0.0',
-      },
-      tags: [
-        { name: 'auth', description: 'Authentication' },
-        { name: 'accounts', description: 'Trading accounts' },
-        { name: 'trades', description: 'Trades' },
-        { name: 'user', description: 'User profile' },
-        { name: 'wallet', description: 'Wallet & balance' },
-        { name: 'instruments', description: 'Instruments & payouts' },
-        { name: 'terminal', description: 'Terminal snapshot' },
-        { name: 'linechart', description: 'Line chart data' },
-        { name: 'kyc', description: 'KYC / identity verification (Sumsub)' },
-      ],
-    },
-  });
+  // ─── Routes ──────────────────────────────────────────────────────────────────
 
-  await app.register(swaggerUi, {
-    routePrefix: '/api/docs',
-    uiConfig: {
-      docExpansion: 'list',
-      deepLinking: true,
-    },
-  });
-
-  await app.register(fastifyHelmet, (instance) => {
-    const csp = instance.swaggerCSP ?? { script: [], style: [] };
-    return {
-      contentSecurityPolicy: {
-        directives: {
-          defaultSrc: ["'self'"],
-          styleSrc: ["'self'", "'unsafe-inline'", 'https:'].concat(csp.style),
-          scriptSrc: ["'self'"].concat(csp.script),
-          imgSrc: ["'self'", 'data:', 'https:', 'validator.swagger.io'],
-          formAction: ["'self'"],
-        },
-      },
-    };
-  });
-
-  await registerGlobalRateLimit(app);
-
-  await registerHealthRoutes(app);
-  await registerAuthRoutes(app);
-  await registerAccountsRoutes(app);
-  await registerTradesRoutes(app);
-  await registerTerminalRoutes(app);
-  await registerLineChartRoutes(app);
-  await registerUserRoutes(app);
-  await registerWalletRoutes(app);
-  await registerInstrumentsRoutes(app);
-  await registerKycRoutes(app);
-
-  logger.info('Fastify application created');
+  await app.register(healthRoutes, { prefix: "/api/health" });
+  await app.register(authRoutes, { prefix: "/api/auth" });
+  await app.register(accountsRoutes, { prefix: "/api/accounts" });
+  await app.register(tradesRoutes, { prefix: "/api/trades" });
+  await app.register(terminalRoutes, { prefix: "/api/terminal" });
+  await app.register(userRoutes, { prefix: "/api/user" });
+  await app.register(walletRoutes, { prefix: "/api/wallet" });
+  await app.register(instrumentsRoutes, { prefix: "/api/instruments" });
+  await app.register(kycRoutes, { prefix: "/api/kyc" });
+  await app.register(adminRoutes, { prefix: "/api/admin" });
+  await app.register(quotesRoutes, { prefix: "/api/quotes" });
+  await app.register(lineRoutes, { prefix: "/api/line" });
+  await app.register(partnersRoutes, { prefix: "/api/partners" });
+  await app.register(wsRoutes);
 
   return app;
 }

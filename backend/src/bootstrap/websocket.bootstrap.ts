@@ -1,127 +1,64 @@
-import { getWebSocketManager } from '../modules/websocket/websocket.routes.js';
-import type { PriceEngineManager } from '../prices/PriceEngineManager.js';
-import { logger } from '../shared/logger.js';
-import type { TradeDTO } from '../domain/trades/TradeTypes.js';
+import type { PriceEngineManager } from "../prices/PriceEngineManager.js";
+import type { CandleAggregator, CandleCloseEvent } from "../prices/CandleAggregator.js";
+import type { PriceTick } from "../prices/engines/OtcPriceEngine.js";
+import { wsManager } from "../websocket/ws.manager.js";
+import { logger } from "../shared/logger.js";
 
-let unsubscribeHandlers: Array<() => void> = [];
-let serverTimeInterval: NodeJS.Timeout | null = null;
+let serverTimeInterval: ReturnType<typeof setInterval> | null = null;
 
-export async function bootstrapWebSocketEvents(
+function encodePriceUpdate(instrument: string, price: number, timestamp: number): Buffer {
+  const nameLen = instrument.length;
+  const buf = Buffer.alloc(2 + nameLen + 16);
+  buf[0] = 0x01;
+  buf[1] = nameLen;
+  buf.write(instrument, 2, nameLen, "ascii");
+  buf.writeDoubleLE(price, 2 + nameLen);
+  buf.writeDoubleLE(timestamp, 2 + nameLen + 8);
+  return buf;
+}
+
+export function bootstrapWebSocketEvents(
   manager: PriceEngineManager,
-): Promise<void> {
-  if (unsubscribeHandlers.length > 0) {
-    logger.warn('WebSocket events already bootstrapped');
-    return;
-  }
+  aggregator: CandleAggregator,
+): void {
+  manager.on("price:tick", (tick: PriceTick) => {
+    wsManager.broadcastRawToInstrument(
+      tick.instrumentId,
+      encodePriceUpdate(tick.instrumentId, tick.price, tick.timestamp),
+    );
 
-  logger.info('Bootstrapping WebSocket events...');
-
-  const wsManager = getWebSocketManager();
-  const instrumentIds = manager.getInstrumentIds();
-
-  for (const instrumentId of instrumentIds) {
-    const eventBus = manager.getEventBus(instrumentId);
-    if (!eventBus) continue;
-
-    // Binary tick format: [0x01][instrLen:1][instrument:ASCII][price:Float64BE][timestamp:Float64BE]
-    const instrBuf = Buffer.from(instrumentId, 'ascii');
-    const headerSize = 2 + instrBuf.length;
-    const tickBufSize = headerSize + 16;
-
-    const unsubTick = eventBus.on('price_tick', (event) => {
-      const tick = event.data as { price: number; timestamp: number };
-      const buf = Buffer.allocUnsafe(tickBufSize);
-      buf[0] = 0x01;
-      buf[1] = instrBuf.length;
-      instrBuf.copy(buf, 2);
-      buf.writeDoubleBE(tick.price, headerSize);
-      buf.writeDoubleBE(tick.timestamp, headerSize + 8);
-      wsManager.broadcastRawToInstrument(instrumentId, buf);
+    wsManager.broadcastToInstrument(tick.instrumentId, {
+      type: "price:update",
+      instrument: tick.instrumentId,
+      data: {
+        asset: tick.instrumentId,
+        price: tick.price,
+        timestamp: tick.timestamp,
+      },
     });
-    unsubscribeHandlers.push(unsubTick);
+  });
 
-    const unsubCandleClose = eventBus.on('candle_closed', (event) => {
-      const candle = event.data as {
-        open: number;
-        high: number;
-        low: number;
-        close: number;
-        timestamp: number;
-        timeframe: string;
-      };
-      wsManager.broadcastCandleToInstrument(instrumentId, candle.timeframe, {
-        instrument: instrumentId,
-        type: 'candle:close',
-        data: {
-          timeframe: candle.timeframe,
-          candle: {
-            open: candle.open,
-            high: candle.high,
-            low: candle.low,
-            close: candle.close,
-            timestamp: candle.timestamp,
-            timeframe: candle.timeframe,
-          },
-        },
-      });
+  aggregator.on("candle:close", (event: CandleCloseEvent) => {
+    wsManager.broadcastToInstrumentTimeframe(event.instrumentId, event.timeframe, {
+      type: "candle:close",
+      instrument: event.instrumentId,
+      data: {
+        timeframe: event.timeframe,
+        candle: event.candle,
+      },
     });
-    unsubscribeHandlers.push(unsubCandleClose);
-  }
+  });
 
   serverTimeInterval = setInterval(() => {
-    wsManager.broadcast({
-      type: 'server:time',
-      data: { timestamp: Date.now() },
-    });
-  }, 1_000);
+    wsManager.broadcastAll({ type: "server:time", data: { timestamp: Date.now() } });
+  }, 1000);
 
-  logger.info(`WebSocket events bootstrapped (${instrumentIds.length} instruments)`);
+  logger.info("WebSocket event bridge started");
 }
 
-export function emitTradeOpen(trade: TradeDTO, userId: string): void {
-  const wsManager = getWebSocketManager();
-  wsManager.sendToUser(userId, {
-    type: 'trade:open',
-    data: trade,
-  });
-}
-
-export function emitTradeClose(
-  trade: TradeDTO,
-  userId: string,
-  result: 'WIN' | 'LOSS' | 'TIE',
-): void {
-  const wsManager = getWebSocketManager();
-  wsManager.sendToUser(userId, {
-    type: 'trade:close',
-    data: { ...trade, result },
-  });
-}
-
-export function emitAccountSnapshot(
-  userId: string,
-  snapshot: { accountId: string; type: 'REAL' | 'DEMO'; balance: number; currency: 'USD' | 'RUB' | 'UAH'; updatedAt: number },
-): void {
-  const wsManager = getWebSocketManager();
-  wsManager.sendToUser(userId, {
-    type: 'account.snapshot',
-    data: snapshot,
-  });
-}
-
-export async function shutdownWebSocketEvents(): Promise<void> {
-  for (const unsubscribe of unsubscribeHandlers) {
-    unsubscribe();
-  }
-  unsubscribeHandlers = [];
-
+export function shutdownWebSocketEvents(): void {
   if (serverTimeInterval) {
     clearInterval(serverTimeInterval);
     serverTimeInterval = null;
   }
-
-  const wsManager = getWebSocketManager();
-  wsManager.stopHeartbeat();
-
-  logger.info('WebSocket events shut down');
 }

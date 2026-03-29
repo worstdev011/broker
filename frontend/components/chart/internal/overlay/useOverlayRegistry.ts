@@ -14,7 +14,7 @@ export interface OverlayRegistryApi {
   toggleVisibility: (id: string) => void;
   getOverlays: () => Overlay[];
   getVisibleOverlays: () => Overlay[];
-  getVisibleOverlayIds: () => Set<string>;
+  getVisibleOverlayIds: () => Set<string> | undefined;
 }
 
 export interface UseOverlayRegistryParams {
@@ -69,7 +69,8 @@ export function useOverlayRegistry(params: UseOverlayRegistryParams = {}): Overl
     return overlaysRef.current.filter((o) => o.visible);
   }, []);
 
-  const getVisibleOverlayIds = useCallback((): Set<string> => {
+  const getVisibleOverlayIds = useCallback((): Set<string> | undefined => {
+    if (overlaysRef.current.length === 0) return undefined;
     return new Set(overlaysRef.current.filter((o) => o.visible).map((o) => o.id));
   }, []);
 

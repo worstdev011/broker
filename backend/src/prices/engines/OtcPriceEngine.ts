@@ -1,91 +1,63 @@
-import type { PriceConfig, PriceTick, PriceEvent } from '../PriceTypes.js';
-import { PriceStore } from '../store/PriceStore.js';
-import { PriceEventBus } from '../events/PriceEventBus.js';
-import { logger } from '../../shared/logger.js';
+import { EventEmitter } from "node:events";
+import { OTC_INSTRUMENTS, type OtcInstrumentConfig } from "../../config/instruments.js";
 
-export class OtcPriceEngine {
-  private intervalId: NodeJS.Timeout | null = null;
+export interface PriceTick {
+  instrumentId: string;
+  price: number;
+  timestamp: number;
+}
+
+const DEFAULT_CONFIG: OtcInstrumentConfig = {
+  initialPrice: 1.0,
+  minPrice: 0.01,
+  maxPrice: 1000000,
+  volatility: 0.0002,
+  tickIntervalMs: 500,
+};
+
+export class OtcPriceEngine extends EventEmitter {
   private currentPrice: number;
-  private isRunning = false;
+  private readonly config: OtcInstrumentConfig;
+  private readonly instrumentId: string;
+  private timer: ReturnType<typeof setInterval> | null = null;
 
-  constructor(
-    private config: PriceConfig,
-    private instrumentId: string,
-    private priceStore: PriceStore,
-    private eventBus: PriceEventBus,
-  ) {
-    this.currentPrice = config.initialPrice;
+  constructor(instrumentId: string) {
+    super();
+    this.instrumentId = instrumentId;
+    this.config = OTC_INSTRUMENTS[instrumentId] ?? DEFAULT_CONFIG;
+    this.currentPrice = this.config.initialPrice;
   }
 
   start(): void {
-    if (this.isRunning) {
-      logger.warn('OTC price engine already running');
-      return;
-    }
-
-    logger.info({ asset: this.config.asset }, 'Starting OTC price engine');
-    this.isRunning = true;
-
-    this.generateTick();
-
-    this.intervalId = setInterval(() => {
-      this.generateTick();
-    }, this.config.tickInterval);
+    if (this.timer) return;
+    this.timer = setInterval(() => this.generateTick(), this.config.tickIntervalMs);
   }
 
   stop(): void {
-    if (!this.isRunning) return;
-
-    logger.info({ asset: this.config.asset }, 'Stopping OTC price engine');
-    this.isRunning = false;
-
-    if (this.intervalId) {
-      clearInterval(this.intervalId);
-      this.intervalId = null;
+    if (this.timer) {
+      clearInterval(this.timer);
+      this.timer = null;
     }
   }
 
-  getCurrentPrice(): PriceTick | null {
-    if (!this.isRunning) return null;
-
-    return {
-      price: this.currentPrice,
-      timestamp: Date.now(),
-    };
+  getPrice(): number {
+    return this.currentPrice;
   }
 
   private generateTick(): void {
     const changePercent = (Math.random() - 0.5) * 2 * this.config.volatility;
-    const change = this.currentPrice * changePercent;
+    let newPrice = this.currentPrice + this.currentPrice * changePercent;
 
-    let newPrice = this.currentPrice + change;
-
-    if (!Number.isFinite(newPrice)) {
-      newPrice = this.config.initialPrice;
-    }
-
-    if (newPrice < this.config.minPrice) {
-      newPrice = this.config.minPrice;
-    } else if (newPrice > this.config.maxPrice) {
-      newPrice = this.config.maxPrice;
-    }
+    if (!Number.isFinite(newPrice)) newPrice = this.config.initialPrice;
+    if (newPrice < this.config.minPrice) newPrice = this.config.minPrice;
+    if (newPrice > this.config.maxPrice) newPrice = this.config.maxPrice;
 
     this.currentPrice = newPrice;
 
-    const tick: PriceTick = {
+    this.emit("tick", {
+      instrumentId: this.instrumentId,
       price: this.currentPrice,
       timestamp: Date.now(),
-    };
-
-    this.priceStore.setCurrentPrice(this.instrumentId, tick).catch((error) => {
-      logger.error({ err: error }, 'Failed to store current price');
-    });
-
-    const event: PriceEvent = {
-      type: 'price_tick',
-      data: tick,
-      timestamp: Date.now(),
-    };
-    this.eventBus.emit(event);
+    } satisfies PriceTick);
   }
 }

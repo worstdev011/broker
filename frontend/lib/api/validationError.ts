@@ -9,25 +9,42 @@ interface ZodIssue {
   message?: string;
 }
 
-export function parseValidationError(data: unknown): string {
-  if (typeof data !== 'object' || data === null) return 'Ошибка валидации';
+export interface ValidationMessageStrings {
+  generic: string;
+  fieldPassword: string;
+  fieldEmail: string;
+  fieldFallback: string;
+  passwordMin6: string;
+}
+
+export const VALIDATION_FALLBACK_EN: ValidationMessageStrings = {
+  generic: 'Validation error',
+  fieldPassword: 'Password',
+  fieldEmail: 'Email',
+  fieldFallback: 'Field',
+  passwordMin6: 'Password: at least 6 characters',
+};
+
+export function parseValidationError(data: unknown, s: ValidationMessageStrings = VALIDATION_FALLBACK_EN): string {
+  if (typeof data !== 'object' || data === null) return s.generic;
 
   const obj = data as { error?: string; message?: string; details?: ZodIssue[] };
 
   if (obj.details && Array.isArray(obj.details)) {
     const messages = obj.details.map((issue) => {
       const field = issue.path?.[0];
-      const fieldName = field === 'password' ? 'Пароль' : field === 'email' ? 'Email' : field || 'Поле';
+      const fieldName =
+        field === 'password' ? s.fieldPassword : field === 'email' ? s.fieldEmail : String(field ?? s.fieldFallback);
       if (issue.validation === 'regex' && field === 'password') {
-        return 'Пароль: минимум 6 символов';
+        return s.passwordMin6;
       }
       if (issue.message) return `${fieldName}: ${issue.message}`;
-      return obj.message || obj.error || 'Ошибка валидации';
+      return obj.message || obj.error || s.generic;
     });
-    return messages.filter(Boolean).join('. ') || obj.message || obj.error || 'Ошибка валидации';
+    return messages.filter(Boolean).join('. ') || obj.message || obj.error || s.generic;
   }
 
   if (typeof obj.message === 'string') return obj.message;
   if (typeof obj.error === 'string') return obj.error;
-  return 'Ошибка валидации';
+  return s.generic;
 }

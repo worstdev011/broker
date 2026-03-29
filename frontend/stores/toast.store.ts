@@ -86,8 +86,8 @@ export function toast(message: string, type?: ToastType, options?: ToastOptions)
 }
 
 /** Показать тост «сделка открыта» (пропадает через 3 сек; key = tradeId для снятия при закрытии) */
-export function showTradeOpenToast(data: TradeOpenPayload & { id: string }): void {
-  useToastStore.getState().toast('Сделка открыта', 'trade-open', {
+export function showTradeOpenToast(data: TradeOpenPayload & { id: string }, summaryMessage: string): void {
+  useToastStore.getState().toast(summaryMessage, 'trade-open', {
     key: data.id,
     duration: 3000,
     tradeOpen: { instrument: data.instrument, direction: data.direction, amount: data.amount },
@@ -95,13 +95,16 @@ export function showTradeOpenToast(data: TradeOpenPayload & { id: string }): voi
 }
 
 /** Показать тост результата сделки (WIN/LOSS/TIE) */
-export function showTradeCloseToast(data: {
-  result: 'WIN' | 'LOSS' | 'TIE';
-  amount: string;
-  payout: string;
-  direction: 'CALL' | 'PUT';
-  instrument: string;
-}): void {
+export function showTradeCloseToast(
+  data: {
+    result: 'WIN' | 'LOSS' | 'TIE';
+    amount: string;
+    payout: string;
+    direction: 'CALL' | 'PUT';
+    instrument: string;
+  },
+  formatTie: (amountFormatted: string) => string,
+): void {
   const amt = parseFloat(data.amount);
   const pay = parseFloat(data.payout);
   if (data.result === 'WIN') {
@@ -110,7 +113,7 @@ export function showTradeCloseToast(data: {
   } else if (data.result === 'LOSS') {
     useToastStore.getState().toast(`-${amt.toFixed(2)} USD`, 'error', { duration: 4000 });
   } else {
-    useToastStore.getState().toast(`Ничья: возврат ${amt.toFixed(2)} USD`, 'info', { duration: 4000 });
+    useToastStore.getState().toast(formatTie(amt.toFixed(2)), 'info', { duration: 4000 });
   }
 }
 

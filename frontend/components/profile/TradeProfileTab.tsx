@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useTranslations, useLocale } from 'next-intl';
 import { Question, CaretDown, Calendar } from '@phosphor-icons/react';
 import {
   XAxis,
@@ -43,45 +44,45 @@ interface TradeAnalytics {
 
 function TradePageSkeleton() {
   return (
-    <div className="flex w-full min-h-[calc(100vh-3.5rem)] relative">
+    <div className="flex w-full min-h-[calc(100vh-3.5rem)] relative overflow-x-hidden">
       <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_120%_80%_at_20%_0%,rgba(51,71,255,0.06),transparent_50%)]" />
-      <div className="flex-1 min-w-0 p-3 sm:p-6 md:p-8 overflow-auto relative">
+      <div className="flex-1 min-w-0 p-4 md:p-8 overflow-auto relative">
         <div className="w-full">
           {/* Header */}
-          <div className="mb-4 sm:mb-10">
-            <div className="h-8 sm:h-9 w-52 bg-white/10 rounded animate-pulse mb-2" />
-            <div className="h-4 w-64 bg-white/5 rounded animate-pulse" />
+          <div className="mb-6 md:mb-10">
+            <div className="h-7 md:h-9 w-44 md:w-52 bg-white/10 rounded animate-pulse mb-1.5" />
+            <div className="h-3 w-48 md:w-64 bg-white/5 rounded animate-pulse" />
           </div>
 
           {/* 4 stat cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4 mb-4 sm:mb-8">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6 md:mb-8">
             {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="rounded-xl border border-white/[0.08] bg-[#030E28] p-4 sm:p-5">
-                <div className="h-3 w-24 bg-white/10 rounded animate-pulse mb-3" />
-                <div className="h-7 w-28 bg-white/10 rounded animate-pulse" />
+              <div key={i} className="rounded-xl border border-white/[0.08] bg-[#030E28] p-4 md:p-5">
+                <div className="h-2.5 w-20 bg-white/10 rounded animate-pulse mb-2.5" />
+                <div className="h-6 md:h-7 w-24 bg-white/10 rounded animate-pulse" />
               </div>
             ))}
           </div>
 
           {/* Charts row */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 mb-4 md:mb-6">
             {Array.from({ length: 2 }).map((_, i) => (
-              <div key={i} className="rounded-xl sm:rounded-2xl border border-white/[0.08] bg-[#030E28] p-4 sm:p-6">
-                <div className="h-5 w-40 bg-white/10 rounded animate-pulse mb-4" />
-                <div className="flex gap-2 mb-4">
-                  {[80, 80, 96].map((w, j) => (
-                    <div key={j} className="h-8 bg-white/5 rounded-lg animate-pulse" style={{ width: w }} />
+              <div key={i} className="rounded-2xl border border-white/[0.08] bg-[#030E28] p-4 md:p-6">
+                <div className="h-4 w-36 bg-white/10 rounded animate-pulse mb-3 md:mb-4" />
+                <div className="flex flex-wrap gap-2 mb-3 md:mb-4">
+                  {[72, 72, 88].map((w, j) => (
+                    <div key={j} className="h-7 md:h-8 bg-white/5 rounded-lg animate-pulse" style={{ width: w }} />
                   ))}
                 </div>
-                <div className="h-[220px] sm:h-[260px] rounded-xl bg-white/5 animate-pulse" />
+                <div className="h-[180px] md:h-[260px] rounded-xl bg-white/5 animate-pulse" />
               </div>
             ))}
           </div>
 
           {/* Trades table */}
-          <div className="rounded-xl sm:rounded-2xl border border-white/[0.08] bg-[#030E28] p-4 sm:p-6">
-            <div className="h-5 w-36 bg-white/10 rounded animate-pulse mb-4" />
-            <TradesTableSkeleton rows={6} />
+          <div className="rounded-2xl border border-white/[0.08] bg-[#030E28] p-4 md:p-6">
+            <div className="h-4 w-32 bg-white/10 rounded animate-pulse mb-3 md:mb-4" />
+            <TradesTableSkeleton rows={4} />
           </div>
         </div>
       </div>
@@ -131,21 +132,10 @@ function TradesTableSkeleton({ rows = 6 }: { rows?: number }) {
   );
 }
 
-const PRESET_INTERVALS = [
-  { id: '24h', label: '24 часа', days: 1 },
-  { id: 'all', label: 'Всё время', days: null },
-];
-
-function formatDate(d: string): string {
-  return new Date(d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
-}
-
-function formatBalance(v: number): string {
-  return new Intl.NumberFormat('ru-RU', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(v);
-}
+const INTERVAL_PRESETS = [
+  { id: '24h' as const, days: 1 },
+  { id: 'all' as const, days: null },
+] as const;
 
 function StatLabel({ label, hint }: { label: string; hint: string }) {
   return (
@@ -153,7 +143,7 @@ function StatLabel({ label, hint }: { label: string; hint: string }) {
       <span className="text-xs font-medium text-white/50 uppercase tracking-wider">{label}</span>
       <span className="group/tip relative inline-flex cursor-help">
         <Question className="w-3.5 h-3.5 text-white/40 hover:text-white/60 transition-colors" weight="bold" />
-        <span className="absolute left-0 bottom-full mb-1.5 px-2.5 py-1.5 bg-[#0f1a2e] border border-white/10 rounded-lg text-xs text-white/80 max-w-[200px] opacity-0 invisible group-hover/tip:opacity-100 group-hover/tip:visible transition-all z-20 shadow-xl pointer-events-none">
+        <span className="absolute left-1/2 -translate-x-1/2 bottom-full mb-1.5 px-2.5 py-1.5 bg-[#0f1a2e] border border-white/10 rounded-lg text-xs text-white/80 w-max max-w-[min(200px,calc(100vw-2rem))] opacity-0 invisible group-hover/tip:opacity-100 group-hover/tip:visible transition-all z-20 shadow-xl pointer-events-none">
           {hint}
         </span>
       </span>
@@ -171,6 +161,15 @@ function instrumentLabel(id: string): string {
 }
 
 export function TradeProfileTab() {
+  const t = useTranslations('tradeProfile');
+  const locale = useLocale();
+  const localeTag = locale === 'ua' ? 'uk-UA' : locale === 'ru' ? 'ru-RU' : 'en-US';
+
+  const formatDate = (d: string) =>
+    new Date(d).toLocaleDateString(localeTag, { day: 'numeric', month: 'short' });
+  const formatBalance = (v: number) =>
+    new Intl.NumberFormat(localeTag, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v);
+
   const today = new Date();
   const defaultEnd = toDateStr(today);
   const defaultStart = toDateStr(new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000));
@@ -201,7 +200,7 @@ export function TradeProfileTab() {
       end.setHours(23, 59, 59, 999);
       endStr = toDateStr(end);
 
-      const preset = PRESET_INTERVALS.find((i) => i.id === interval);
+      const preset = INTERVAL_PRESETS.find((i) => i.id === interval);
       if (preset?.days === null) {
         startStr = '2020-01-01';
       } else {
@@ -251,7 +250,7 @@ export function TradeProfileTab() {
     const end = new Date();
     end.setHours(23, 59, 59, 999);
     const endStrVal = toDateStr(end);
-    const preset = PRESET_INTERVALS.find((i) => i.id === interval);
+    const preset = INTERVAL_PRESETS.find((i) => i.id === interval);
     const startStrVal = preset?.days === null ? '2020-01-01' : (() => {
       const days = preset?.days ?? 30;
       const start = new Date();
@@ -272,61 +271,59 @@ export function TradeProfileTab() {
   }
 
   return (
-    <div className="flex w-full min-h-[calc(100vh-3.5rem)] relative">
+    <div className="flex w-full min-h-[calc(100vh-3.5rem)] relative overflow-x-hidden">
       {/* Фоновый градиент */}
       <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_120%_80%_at_20%_0%,rgba(51,71,255,0.06),transparent_50%)]" />
 
       {/* Основная часть */}
-      <div className="flex-1 min-w-0 p-3 sm:p-6 md:p-8 overflow-auto relative">
+      <div className="flex-1 min-w-0 p-4 md:p-8 overflow-auto relative">
         <div className="w-full">
-          <div className="mb-4 sm:mb-10">
-            <h1 className="text-lg sm:text-3xl font-bold text-white tracking-tight">Торговый профиль</h1>
-            <p className="text-sm text-white/50 mt-1">
-              Статистика и динамика баланса
-            </p>
+          <div className="mb-6 md:mb-10">
+            <h1 className="text-2xl md:text-3xl font-bold text-white tracking-tight">{t('title')}</h1>
+            <p className="text-sm text-white/50 mt-1">{t('subtitle')}</p>
           </div>
 
           {/* Статистика */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4 mb-4 sm:mb-8">
-            <div className="group rounded-xl border border-white/[0.08] bg-[#030E28] p-4 sm:p-5 hover:bg-white/[0.04] transition-all">
-              <StatLabel label="МАКС. ПРИБЫЛЬ" hint="Максимальная прибыль от одной сделки за выбранный период" />
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+            <div className="group rounded-xl border border-white/[0.08] bg-[#030E28] p-5 hover:bg-white/[0.04] transition-all">
+              <StatLabel label={t('stat_max_profit')} hint={t('stat_max_profit_hint')} />
               {loading ? (
                 <div className="h-8 w-20 bg-white/10 rounded animate-pulse" />
               ) : (
-                <p className="text-base sm:text-xl font-bold text-white tabular-nums">
+                <p className="text-xl font-bold text-white tabular-nums">
                   {stats?.bestProfit ? formatBalance(stats.bestProfit.profit) : '0.00'} UAH
                 </p>
               )}
             </div>
 
-            <div className="group rounded-xl border border-white/[0.08] bg-[#030E28] p-4 sm:p-5 hover:bg-white/[0.04] transition-all">
-              <StatLabel label="ОБЪЁМ ТОРГОВ" hint="Суммарный объём всех сделок за период" />
+            <div className="group rounded-xl border border-white/[0.08] bg-[#030E28] p-5 hover:bg-white/[0.04] transition-all">
+              <StatLabel label={t('stat_volume')} hint={t('stat_volume_hint')} />
               {loading ? (
                 <div className="h-8 w-20 bg-white/10 rounded animate-pulse" />
               ) : (
-                <p className="text-base sm:text-xl font-bold text-white tabular-nums">
+                <p className="text-xl font-bold text-white tabular-nums">
                   {stats ? formatBalance(stats.totalVolume) : '0.00'} UAH
                 </p>
               )}
             </div>
 
-            <div className="group rounded-xl border border-white/[0.08] bg-[#030E28] p-4 sm:p-5 hover:bg-white/[0.04] transition-all">
-              <StatLabel label="СДЕЛОК" hint="Количество закрытых сделок за период" />
+            <div className="group rounded-xl border border-white/[0.08] bg-[#030E28] p-5 hover:bg-white/[0.04] transition-all">
+              <StatLabel label={t('stat_trades')} hint={t('stat_trades_hint')} />
               {loading ? (
                 <div className="h-8 w-20 bg-white/10 rounded animate-pulse" />
               ) : (
-                <p className="text-base sm:text-xl font-bold text-white tabular-nums">
+                <p className="text-xl font-bold text-white tabular-nums">
                   {stats?.totalTrades ?? 0}
                 </p>
               )}
             </div>
 
-            <div className="group rounded-xl border border-white/[0.08] bg-[#030E28] p-4 sm:p-5 hover:bg-white/[0.04] transition-all">
-              <StatLabel label="% УСПЕШНЫХ" hint="Win rate - процент прибыльных сделок от общего числа" />
+            <div className="group rounded-xl border border-white/[0.08] bg-[#030E28] p-5 hover:bg-white/[0.04] transition-all">
+              <StatLabel label={t('stat_winrate')} hint={t('stat_winrate_hint')} />
               {loading ? (
                 <div className="h-8 w-20 bg-white/10 rounded animate-pulse" />
               ) : (
-                <p className="text-base sm:text-xl font-bold text-white tabular-nums">
+                <p className="text-xl font-bold text-white tabular-nums">
                   {stats ? `${stats.winRate}%` : '0%'}
                 </p>
               )}
@@ -334,13 +331,13 @@ export function TradeProfileTab() {
           </div>
 
           {/* Средняя секция: Динамика баланса + Распределение по активам */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
             {/* Динамика баланса */}
-            <div className="rounded-xl sm:rounded-2xl border border-white/[0.08] bg-[#030E28] p-4 sm:p-6">
-              <h2 className="text-base font-semibold text-white mb-4">Динамика баланса</h2>
-              <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3 mb-4">
+            <div className="rounded-2xl border border-white/[0.08] bg-[#030E28] p-6">
+              <h2 className="text-base font-semibold text-white mb-4">{t('balance_dynamics')}</h2>
+              <div className="flex flex-row flex-wrap items-center gap-3 mb-4">
                 <div className="flex flex-wrap gap-2">
-                  {PRESET_INTERVALS.map((i) => (
+                  {INTERVAL_PRESETS.map((i) => (
                     <button
                       key={i.id}
                       type="button"
@@ -351,7 +348,7 @@ export function TradeProfileTab() {
                           : 'bg-white/5 text-white/60 hover:text-white/80 border border-white/10'
                       }`}
                     >
-                      {i.label}
+                      {t(i.id === '24h' ? 'interval_24h' : 'interval_all')}
                       {interval === i.id && !isCustom && <CaretDown className="w-3.5 h-3.5" />}
                     </button>
                   ))}
@@ -362,7 +359,7 @@ export function TradeProfileTab() {
                       isCustom ? 'bg-[#3347ff] text-white' : 'bg-white/5 text-white/60 hover:text-white/80 border border-white/10'
                     }`}
                   >
-                    Свой период
+                    {t('custom_period')}
                   </button>
                 </div>
                 {isCustom && (
@@ -393,12 +390,12 @@ export function TradeProfileTab() {
                 )}
               </div>
 
-              <div className="h-[220px] sm:h-[260px]">
+              <div className="h-[260px]">
                 {chartLoading ? (
                   <ChartSkeleton />
                 ) : chartData.length === 0 ? (
                   <div className="h-full flex items-center justify-center text-white/40 text-sm">
-                    Нет данных за выбранный период
+                    {t('no_data_period')}
                   </div>
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
@@ -429,7 +426,9 @@ export function TradeProfileTab() {
                         labelStyle={{ color: '#fff', fontSize: 13, fontWeight: 600 }}
                         itemStyle={{ color: '#fff', fontSize: 13 }}
                         cursor={false}
-                        formatter={(value: number | undefined) => [value != null ? `${formatBalance(value)} UAH` : '', 'Баланс']}
+                        formatter={(value: number | undefined) =>
+                          [value != null ? `${formatBalance(value)} UAH` : '', t('chart_balance_label')]
+                        }
                         labelFormatter={(label) => label}
                       />
                       <Bar
@@ -445,15 +444,15 @@ export function TradeProfileTab() {
             </div>
 
             {/* Распределение по активам */}
-            <div className="rounded-xl sm:rounded-2xl border border-white/[0.08] bg-[#030E28] p-4 sm:p-6">
-              <h2 className="text-base font-semibold text-white mb-4">Распределение по активам</h2>
+            <div className="rounded-2xl border border-white/[0.08] bg-[#030E28] p-6">
+              <h2 className="text-base font-semibold text-white mb-4">{t('by_asset')}</h2>
               {analyticsLoading ? (
                 <div className="h-[260px]">
                   <ChartSkeleton />
                 </div>
               ) : !analytics?.byInstrument?.length ? (
                 <div className="h-[260px] flex items-center justify-center text-white/40 text-sm">
-                  Нет данных за выбранный период
+                  {t('no_data_period')}
                 </div>
               ) : (
                 <div className="h-[260px]">
@@ -487,7 +486,12 @@ export function TradeProfileTab() {
                         labelStyle={{ color: '#fff', fontSize: 13, fontWeight: 600 }}
                         itemStyle={{ color: '#fff', fontSize: 13 }}
                         cursor={false}
-                        formatter={(value: number | undefined) => [value != null ? `${value} сделок` : '', 'Количество']}
+                        formatter={(value: number | undefined) =>
+                          [
+                            value != null ? t('chart_trades_count', { count: value }) : '',
+                            t('chart_count_label'),
+                          ]
+                        }
                       />
                       <Bar
                         dataKey="count"
@@ -503,37 +507,37 @@ export function TradeProfileTab() {
           </div>
 
           {/* История сделок */}
-          <div className="rounded-xl sm:rounded-2xl border border-white/[0.08] bg-[#030E28] p-4 sm:p-6">
-            <h2 className="text-base font-semibold text-white mb-4">История сделок</h2>
+          <div className="rounded-2xl border border-white/[0.08] bg-[#030E28] p-6">
+            <h2 className="text-base font-semibold text-white mb-4">{t('trade_history')}</h2>
             {tradesLoading ? (
               <TradesTableSkeleton />
             ) : filteredTrades.length === 0 ? (
               <div className="h-[120px] flex items-center justify-center text-white/40 text-sm">
-                Нет данных за выбранный период
+                {t('no_data_period')}
               </div>
             ) : (
-              <div className="overflow-x-auto scrollbar-dropdown -mx-4 sm:mx-0 px-4 sm:px-0">
+              <div className="overflow-x-auto scrollbar-dropdown mx-0 px-0">
                 <table className="w-full text-sm min-w-[380px]">
                   <thead>
                     <tr className="border-b border-white/[0.06]">
-                      <th className="text-left py-3 px-3 sm:px-4 text-white/50 font-medium">Дата</th>
-                      <th className="text-left py-3 px-3 sm:px-4 text-white/50 font-medium">Актив</th>
-                      <th className="text-left py-3 px-3 sm:px-4 text-white/50 font-medium">Напр.</th>
-                      <th className="text-left py-3 px-3 sm:px-4 text-white/50 font-medium">Статус</th>
-                      <th className="text-right py-3 px-3 sm:px-4 text-white/50 font-medium">Итог</th>
+                      <th className="text-left py-3 px-4 text-white/50 font-medium">{t('col_date')}</th>
+                      <th className="text-left py-3 px-4 text-white/50 font-medium">{t('col_asset')}</th>
+                      <th className="text-left py-3 px-4 text-white/50 font-medium">{t('col_direction')}</th>
+                      <th className="text-left py-3 px-4 text-white/50 font-medium">{t('col_status')}</th>
+                      <th className="text-right py-3 px-4 text-white/50 font-medium">{t('col_result')}</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredTrades.map((t) => {
-                      const amt = parseFloat(t.amount);
-                      const payout = parseFloat(t.payout);
-                      const isWin = t.status === 'WIN';
-                      const isLoss = t.status === 'LOSS';
+                    {filteredTrades.map((tr) => {
+                      const amt = parseFloat(tr.amount);
+                      const payout = parseFloat(tr.payout);
+                      const isWin = tr.status === 'WIN';
+                      const isLoss = tr.status === 'LOSS';
                       const result = isWin ? amt * payout : isLoss ? -amt : 0;
                       return (
-                        <tr key={t.id} className="border-b border-white/[0.04] last:border-0">
+                        <tr key={tr.id} className="border-b border-white/[0.04] last:border-0">
                           <td className="py-3 px-4 text-white/80">
-                            {new Date(t.closedAt || t.openedAt).toLocaleDateString('ru-RU', {
+                            {new Date(tr.closedAt || tr.openedAt).toLocaleDateString(localeTag, {
                               day: 'numeric',
                               month: 'short',
                               year: 'numeric',
@@ -542,22 +546,22 @@ export function TradeProfileTab() {
                             })}
                           </td>
                           <td className="py-3 px-4 text-white/80">
-                            {instrumentLabel(t.instrument)}
+                            {instrumentLabel(tr.instrument)}
                           </td>
                           <td className="py-3 px-4">
                             <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
-                              t.direction === 'CALL'
+                              tr.direction === 'CALL'
                                 ? 'text-emerald-400'
                                 : 'text-red-400'
                             }`}>
-                              {t.direction === 'CALL' ? 'Купить' : 'Продать'}
+                              {tr.direction === 'CALL' ? t('buy') : t('sell')}
                             </span>
                           </td>
                           <td className="py-3 px-4">
                             <span className={
                               isWin ? 'text-emerald-400' : isLoss ? 'text-red-400' : 'text-amber-400'
                             }>
-                              {isWin ? 'Прибыль' : isLoss ? 'Убыток' : 'Возврат'}
+                              {isWin ? t('profit') : isLoss ? t('loss') : t('refund')}
                             </span>
                           </td>
                           <td className="py-3 px-4 text-right font-medium tabular-nums">

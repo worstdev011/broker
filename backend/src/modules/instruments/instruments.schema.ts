@@ -1,40 +1,12 @@
-export const getInstrumentsSchema = {
-  response: {
-    200: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          id: { type: 'string' },
-          name: { type: 'string' },
-          base: { type: 'string' },
-          quote: { type: 'string' },
-          digits: { type: 'number' },
-          payoutPercent: { type: 'number' },
-        },
-        required: ['id', 'name', 'base', 'quote', 'digits', 'payoutPercent'],
-      },
-    },
-  },
-} as const;
+import { z } from "zod";
 
-export const updatePayoutSchema = {
-  body: {
-    type: 'object',
-    required: ['payoutPercent'],
-    properties: {
-      payoutPercent: {
-        type: 'number',
-        minimum: 60,
-        maximum: 90,
-      },
-    },
-  },
-  params: {
-    type: 'object',
-    required: ['id'],
-    properties: {
-      id: { type: 'string' },
-    },
-  },
-} as const;
+export const updatePayoutBodySchema = z.object({
+  payoutPercent: z.number().int().min(60).max(90),
+});
+
+export const instrumentParamsSchema = z.object({
+  id: z.string().min(1),
+});
+
+export type UpdatePayoutBody = z.infer<typeof updatePayoutBodySchema>;
+export type InstrumentParams = z.infer<typeof instrumentParamsSchema>;

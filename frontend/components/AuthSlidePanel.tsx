@@ -3,6 +3,18 @@
 import { useState } from 'react';
 import { Link } from '@/components/navigation';
 import { useTranslations } from 'next-intl';
+import { useAuthContext } from '@/components/providers/AuthProvider';
+import { trackRefClick } from '@/lib/api/api';
+
+const REF_COOKIE_NAME = 'ref_code';
+
+function readRefCodeCookie(): string | undefined {
+  if (typeof document === 'undefined') return undefined;
+  const match = document.cookie
+    .split('; ')
+    .find((row) => row.startsWith(`${REF_COOKIE_NAME}=`));
+  return match ? decodeURIComponent(match.split('=')[1]) : undefined;
+}
 
 interface AuthSlidePanelProps {
   open: boolean;
@@ -13,8 +25,13 @@ interface AuthSlidePanelProps {
 export function AuthSlidePanel({ open, onClose, initialMode = 'register' }: AuthSlidePanelProps) {
   const ta = useTranslations('auth');
   const tc = useTranslations('common');
+  const { login, register } = useAuthContext();
   const [panelMode, setPanelMode] = useState<'login' | 'register'>(initialMode);
   const [agreeToTerms, setAgreeToTerms] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [formError, setFormError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   return (
     <>
@@ -45,7 +62,7 @@ export function AuthSlidePanel({ open, onClose, initialMode = 'register' }: Auth
           <div className="flex w-full">
             <button
               type="button"
-              onClick={() => setPanelMode('register')}
+              onClick={() => { setPanelMode('register'); setFormError(null); }}
               className={`flex-1 pb-4 text-center text-lg font-medium transition-colors relative ${
                 panelMode === 'register' ? 'text-white' : 'text-gray-400 hover:text-gray-300'
               }`}
@@ -57,7 +74,7 @@ export function AuthSlidePanel({ open, onClose, initialMode = 'register' }: Auth
             </button>
             <button
               type="button"
-              onClick={() => setPanelMode('login')}
+              onClick={() => { setPanelMode('login'); setFormError(null); }}
               className={`flex-1 pb-4 text-center text-lg font-medium transition-colors relative ${
                 panelMode === 'login' ? 'text-white' : 'text-gray-400 hover:text-gray-300'
               }`}
@@ -70,7 +87,37 @@ export function AuthSlidePanel({ open, onClose, initialMode = 'register' }: Auth
           </div>
         </div>
         <div className="flex-1 overflow-y-auto p-6">
-          <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
+          <form
+            className="space-y-4"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              setFormError(null);
+              setIsSubmitting(true);
+              try {
+                if (panelMode === 'register') {
+                  trackRefClick();
+                  const refCode = readRefCodeCookie();
+                  const result = await register(email, password, refCode);
+                  if (result.success) {
+                    onClose();
+                  } else {
+                    setFormError(result.error ?? ta('register_error'));
+                  }
+                } else {
+                  const result = await login(email, password);
+                  if (result.success) {
+                    onClose();
+                  } else if (result.requires2FA) {
+                    // 2FA handled separately if needed
+                  } else {
+                    setFormError(result.error ?? ta('login_error'));
+                  }
+                }
+              } finally {
+                setIsSubmitting(false);
+              }
+            }}
+          >
             <button
               type="button"
               className="w-full flex items-center justify-center gap-2 py-3 rounded-lg bg-white text-gray-800 font-medium hover:bg-gray-100 transition-colors"
@@ -96,6 +143,10 @@ export function AuthSlidePanel({ open, onClose, initialMode = 'register' }: Auth
                 id="panel-email"
                 type="email"
                 placeholder=" "
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                autoComplete="email"
+                required
                 className="peer w-full pt-5 pb-3 px-4 rounded-lg bg-white/10 border border-white/20 text-white focus:outline-none focus:ring-2 focus:ring-[#3347ff]/50 focus:border-[#3347ff]/50 transition-all"
               />
               <label
@@ -113,6 +164,10 @@ export function AuthSlidePanel({ open, onClose, initialMode = 'register' }: Auth
                 id="panel-password"
                 type="password"
                 placeholder=" "
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete={panelMode === 'register' ? 'new-password' : 'current-password'}
+                required
                 className="peer w-full pt-5 pb-3 px-4 rounded-lg bg-white/10 border border-white/20 text-white focus:outline-none focus:ring-2 focus:ring-[#3347ff]/50 focus:border-[#3347ff]/50 transition-all"
               />
               <label
@@ -164,12 +219,17 @@ export function AuthSlidePanel({ open, onClose, initialMode = 'register' }: Auth
                 </span>
               </label>
             )}
+            {formError && (
+              <p className="text-sm text-red-400 text-center">{formError}</p>
+            )}
             <button
               type="submit"
               className="w-full py-3 rounded-lg btn-accent text-white font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={panelMode === 'register' && !agreeToTerms}
+              disabled={isSubmitting || (panelMode === 'register' && !agreeToTerms)}
             >
-              {panelMode === 'login' ? tc('login') : ta('register_btn')}
+              {isSubmitting
+                ? '...'
+                : panelMode === 'login' ? tc('login') : ta('register_btn')}
             </button>
           </form>
         </div>

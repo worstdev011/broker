@@ -1,5 +1,8 @@
+import React from 'react';
 import { render, screen } from '@testing-library/react';
+import { NextIntlClientProvider } from 'next-intl';
 import { AppHeader } from '../AppHeader';
+import enMessages from '../../messages/en.json';
 
 jest.mock('next/image', () => ({
   __esModule: true,
@@ -32,19 +35,27 @@ jest.mock('next/navigation', () => ({
   usePathname: () => '/',
 }));
 
+function wrapper({ children }: { children: React.ReactNode }) {
+  return (
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      {children}
+    </NextIntlClientProvider>
+  );
+}
+
 describe('AppHeader', () => {
   it('renders logo', () => {
-    render(<AppHeader />);
+    render(<AppHeader />, { wrapper });
     expect(screen.getByAltText('Comfortrade')).toBeInTheDocument();
   });
 
   it('renders profile menu trigger', () => {
-    render(<AppHeader />);
-    expect(screen.getByLabelText('Открыть меню профиля')).toBeInTheDocument();
+    render(<AppHeader />, { wrapper });
+    expect(screen.getByLabelText('Open profile menu')).toBeInTheDocument();
   });
 
   it('has notifications button', () => {
-    render(<AppHeader />);
-    expect(screen.getByLabelText('Уведомления')).toBeInTheDocument();
+    render(<AppHeader />, { wrapper });
+    expect(screen.getByLabelText('Notifications')).toBeInTheDocument();
   });
 });

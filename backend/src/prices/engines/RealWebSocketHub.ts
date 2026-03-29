@@ -1,16 +1,11 @@
 /**
  * Single WebSocket connection for ALL real instruments.
- * Subscribes to all pairs at once, routes ticks to per-instrument EventBus.
+ * Subscribes to all pairs at once, routes ticks via callback.
  */
 
-import WebSocket from 'ws';
-import type { PriceEventBus } from '../events/PriceEventBus.js';
-import type { PriceTick, PriceEvent } from '../PriceTypes.js';
-import { logger } from '../../shared/logger.js';
-import {
-  WS_HUB_BASE_RECONNECT_DELAY_MS,
-  WS_HUB_MAX_RECONNECT_DELAY_MS,
-} from '../../config/constants.js';
+import WebSocket from "ws";
+import { logger } from "../../shared/logger.js";
+import type { PriceTick } from "./OtcPriceEngine.js";
 
 interface InitMeta {
   session_uid: string;
@@ -20,9 +15,14 @@ interface InitMeta {
   mapping: Record<string, string>;
 }
 
-interface Subscriber {
+const BASE_RECONNECT_DELAY_MS = 2_000;
+const MAX_RECONNECT_DELAY_MS = 60_000;
+const MAX_PENDING_UPDATES = 1_000;
+
+export type RealTickCallback = (tick: PriceTick) => void;
+
+interface Subscription {
   instrumentId: string;
-  eventBus: PriceEventBus;
 }
 
 export class RealWebSocketHub {
@@ -32,56 +32,49 @@ export class RealWebSocketHub {
   private pendingUpdates: string[] = [];
   private reconnectTimeout: NodeJS.Timeout | null = null;
 
-  private subscribers = new Map<string, Subscriber[]>();
+  private subscriptions = new Map<string, Subscription[]>();
   private allPairs: string[] = [];
+  private onTick: RealTickCallback;
 
-  private timeOffsetMs: number = 0;
-  private offsetCalculated: boolean = false;
+  private timeOffsetMs = 0;
+  private offsetCalculated = false;
 
   private reconnectAttempt = 0;
-  private readonly BASE_RECONNECT_DELAY = WS_HUB_BASE_RECONNECT_DELAY_MS;
-  private readonly MAX_RECONNECT_DELAY = WS_HUB_MAX_RECONNECT_DELAY_MS;
 
-  constructor(private apiKey: string) {}
+  constructor(
+    private apiKey: string,
+    onTick: RealTickCallback,
+  ) {
+    this.onTick = onTick;
+  }
 
-  subscribe(pair: string, instrumentId: string, eventBus: PriceEventBus): void {
-    const existing = this.subscribers.get(pair) ?? [];
-    existing.push({ instrumentId, eventBus });
-    this.subscribers.set(pair, existing);
+  subscribe(pair: string, instrumentId: string): void {
+    const existing = this.subscriptions.get(pair) ?? [];
+    existing.push({ instrumentId });
+    this.subscriptions.set(pair, existing);
 
     if (!this.allPairs.includes(pair)) {
       this.allPairs.push(pair);
     }
 
-    logger.debug({ instrumentId, pair }, 'RealWebSocketHub: subscribed');
-  }
-
-  unsubscribe(pair: string, instrumentId: string): void {
-    const existing = this.subscribers.get(pair) ?? [];
-    const filtered = existing.filter(s => s.instrumentId !== instrumentId);
-
-    if (filtered.length > 0) {
-      this.subscribers.set(pair, filtered);
-    } else {
-      this.subscribers.delete(pair);
-      this.allPairs = this.allPairs.filter(p => p !== pair);
-    }
-
-    logger.debug({ instrumentId, pair }, 'RealWebSocketHub: unsubscribed');
+    logger.debug({ instrumentId, pair }, "RealWebSocketHub: subscribed");
   }
 
   start(): void {
     if (this.isRunning) {
-      logger.warn('RealWebSocketHub already running');
+      logger.warn("RealWebSocketHub already running");
       return;
     }
 
     if (this.allPairs.length === 0) {
-      logger.warn('RealWebSocketHub: no pairs to subscribe, skipping start');
+      logger.warn("RealWebSocketHub: no pairs to subscribe, skipping start");
       return;
     }
 
-    logger.info({ pairCount: this.allPairs.length, pairs: this.allPairs.join(', ') }, 'Starting RealWebSocketHub');
+    logger.info(
+      { pairCount: this.allPairs.length, pairs: this.allPairs.join(", ") },
+      "Starting RealWebSocketHub",
+    );
     this.isRunning = true;
     this.connect();
   }
@@ -90,29 +83,29 @@ export class RealWebSocketHub {
     if (!this.isRunning) return;
 
     try {
-      this.ws = new WebSocket('wss://api.xchangeapi.com/websocket/live', {
-        headers: { 'api-key': this.apiKey },
+      this.ws = new WebSocket("wss://api.xchangeapi.com/websocket/live", {
+        headers: { "api-key": this.apiKey },
       });
 
-      this.ws.on('open', () => {
-        logger.info('RealWebSocketHub: WebSocket connected');
+      this.ws.on("open", () => {
+        logger.info("RealWebSocketHub: WebSocket connected");
         this.reconnectAttempt = 0;
 
         const subscribeMessage = JSON.stringify({ pairs: this.allPairs });
-        logger.info({ pairCount: this.allPairs.length }, 'RealWebSocketHub: subscribing to pairs');
+        logger.info({ pairCount: this.allPairs.length }, "RealWebSocketHub: subscribing to pairs");
         this.ws?.send(subscribeMessage);
       });
 
-      this.ws.on('message', (data: WebSocket.Data) => {
+      this.ws.on("message", (data: WebSocket.Data) => {
         this.handleMessage(data.toString());
       });
 
-      this.ws.on('error', (error: Error) => {
-        logger.error({ err: error }, 'RealWebSocketHub: WebSocket error');
+      this.ws.on("error", (error: Error) => {
+        logger.error({ err: error }, "RealWebSocketHub: WebSocket error");
       });
 
-      this.ws.on('close', (code: number, reason: Buffer) => {
-        logger.warn({ code, reason: reason.toString() }, 'RealWebSocketHub: WebSocket closed');
+      this.ws.on("close", (code: number, reason: Buffer) => {
+        logger.warn({ code, reason: reason.toString() }, "RealWebSocketHub: WebSocket closed");
         this.ws = null;
         this.meta = null;
         this.pendingUpdates = [];
@@ -124,7 +117,7 @@ export class RealWebSocketHub {
         }
       });
     } catch (error) {
-      logger.error({ err: error }, 'RealWebSocketHub: failed to create WebSocket');
+      logger.error({ err: error }, "RealWebSocketHub: failed to create WebSocket");
       if (this.isRunning) {
         this.scheduleReconnect();
       }
@@ -136,14 +129,14 @@ export class RealWebSocketHub {
     this.reconnectAttempt++;
 
     const delay = Math.min(
-      this.BASE_RECONNECT_DELAY * Math.pow(2, this.reconnectAttempt - 1),
-      this.MAX_RECONNECT_DELAY,
+      BASE_RECONNECT_DELAY_MS * Math.pow(2, this.reconnectAttempt - 1),
+      MAX_RECONNECT_DELAY_MS,
     );
 
     const jitter = delay * 0.2 * (Math.random() - 0.5);
     const finalDelay = Math.round(delay + jitter);
 
-    logger.info({ delayMs: finalDelay, attempt: this.reconnectAttempt }, 'RealWebSocketHub: reconnecting');
+    logger.info({ delayMs: finalDelay, attempt: this.reconnectAttempt }, "RealWebSocketHub: reconnecting");
 
     this.reconnectTimeout = setTimeout(() => {
       this.connect();
@@ -156,17 +149,17 @@ export class RealWebSocketHub {
     const code = data[0];
     const payload = data.slice(1);
 
-    if (code === '0') {
+    if (code === "0") {
       this.handleInit(payload);
       return;
     }
 
-    if (code === '1') {
+    if (code === "1") {
       this.handleUpdate(payload);
       return;
     }
 
-    // code === '2' is ping - ignore
+    // code === '2' is ping — ignore
   }
 
   private handleInit(payload: string): void {
@@ -176,7 +169,7 @@ export class RealWebSocketHub {
 
       logger.info(
         { sessionUid: meta.session_uid, pairCount: Object.keys(meta.mapping).length },
-        'RealWebSocketHub: INIT received',
+        "RealWebSocketHub: INIT received",
       );
 
       const marketTimeMs = Math.floor(meta.start_time * 1_000);
@@ -185,19 +178,22 @@ export class RealWebSocketHub {
       this.offsetCalculated = false;
 
       if (this.pendingUpdates.length > 0) {
-        logger.info({ count: this.pendingUpdates.length }, 'Processing pending updates');
+        logger.info({ count: this.pendingUpdates.length }, "Processing pending updates");
         const updates = [...this.pendingUpdates];
         this.pendingUpdates = [];
         for (const u of updates) this.processUpdate(u, meta);
       }
     } catch (error) {
-      logger.error({ err: error }, 'RealWebSocketHub: failed to parse INIT');
+      logger.error({ err: error }, "RealWebSocketHub: failed to parse INIT");
     }
   }
 
   private handleUpdate(payload: string): void {
     if (!this.meta) {
       this.pendingUpdates.push(payload);
+      if (this.pendingUpdates.length > MAX_PENDING_UPDATES) {
+        this.pendingUpdates = this.pendingUpdates.slice(-MAX_PENDING_UPDATES);
+      }
       return;
     }
     this.processUpdate(payload, this.meta);
@@ -205,13 +201,15 @@ export class RealWebSocketHub {
 
   private processUpdate(payload: string, meta: InitMeta): void {
     try {
-      const parts = payload.split('|');
+      const parts = payload.split("|");
       if (parts.length !== meta.order.length) return;
 
       const obj: Record<string, string> = {};
-      meta.order.forEach((key, i) => { obj[key] = parts[i]!; });
+      meta.order.forEach((key, i) => {
+        obj[key] = parts[i]!;
+      });
 
-      const nameIdx = obj['name'];
+      const nameIdx = obj["name"];
       if (!nameIdx) return;
       const pairName = meta.mapping[nameIdx];
       if (!pairName) return;
@@ -232,29 +230,30 @@ export class RealWebSocketHub {
         const serverTimeMs = Date.now();
         this.timeOffsetMs = serverTimeMs - marketTimeMs;
         this.offsetCalculated = true;
-        logger.debug({ offsetMs: this.timeOffsetMs }, 'RealWebSocketHub: time offset calculated');
+        logger.debug({ offsetMs: this.timeOffsetMs }, "RealWebSocketHub: time offset calculated");
       }
 
       const timestampMs = marketTimeMs + this.timeOffsetMs;
 
-      const subs = this.subscribers.get(pairName);
+      const subs = this.subscriptions.get(pairName);
       if (!subs || subs.length === 0) return;
 
-      const tick: PriceTick = { price, timestamp: timestampMs };
-      const event: PriceEvent = { type: 'price_tick', data: tick, timestamp: Date.now() };
-
       for (const sub of subs) {
-        sub.eventBus.emit(event);
+        this.onTick({
+          instrumentId: sub.instrumentId,
+          price,
+          timestamp: timestampMs,
+        });
       }
     } catch (error) {
-      logger.error({ err: error }, 'RealWebSocketHub: failed to process update');
+      logger.error({ err: error }, "RealWebSocketHub: failed to process update");
     }
   }
 
   stop(): void {
     if (!this.isRunning) return;
 
-    logger.info('RealWebSocketHub: stopping');
+    logger.info("RealWebSocketHub: stopping");
     this.isRunning = false;
 
     if (this.reconnectTimeout) {
@@ -273,7 +272,7 @@ export class RealWebSocketHub {
     this.offsetCalculated = false;
     this.reconnectAttempt = 0;
 
-    logger.info('RealWebSocketHub: stopped');
+    logger.info("RealWebSocketHub: stopped");
   }
 
   isConnected(): boolean {

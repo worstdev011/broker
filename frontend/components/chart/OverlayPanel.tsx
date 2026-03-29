@@ -6,6 +6,7 @@
 
 'use client';
 
+import { useTranslations } from 'next-intl';
 import { Eye, EyeSlash, Trash, Gear } from '@phosphor-icons/react';
 import type { Overlay, DrawingOverlay } from './internal/overlay/overlay.types';
 import { isDrawingOverlay } from './internal/overlay/overlay.types';
@@ -25,6 +26,8 @@ export function OverlayPanel({
   onEditIndicator,
   className = '',
 }: OverlayPanelProps) {
+  const t = useTranslations('terminal');
+
   if (overlays.length === 0) {
     return null;
   }
@@ -51,11 +54,15 @@ export function OverlayPanel({
     <div
       className={`bg-[#0d1e3a]/95 backdrop-blur-sm rounded-lg min-w-[180px] max-h-[150px] overflow-y-auto ${className}`}
       role="list"
-      aria-label="Активные объекты на графике"
+      aria-label={t('overlay_panel_aria')}
     >
       <div className="p-1 space-y-0.5">
         {overlays.map((overlay) => {
           const displayName = getDisplayName(overlay);
+          const dotColor =
+            overlay.type === 'indicator'
+              ? (overlay.params?.color as string | undefined)
+              : undefined;
           return (
             <div
               key={overlay.id}
@@ -69,6 +76,15 @@ export function OverlayPanel({
                 }
               }}
             >
+              {dotColor ? (
+                <span
+                  className="w-1.5 h-1.5 rounded-full shrink-0 ring-1 ring-white/15"
+                  style={{ background: dotColor, boxShadow: `0 0 4px ${dotColor}66` }}
+                  aria-hidden
+                />
+              ) : (
+                <span className="w-1.5 shrink-0" aria-hidden />
+              )}
               <span className="flex-1 text-[11px] text-gray-200 truncate" title={displayName}>
                 {displayName}
               </span>
@@ -77,8 +93,8 @@ export function OverlayPanel({
                   type="button"
                   onClick={() => onToggleVisibility(overlay.id)}
                   className="p-0.5 rounded md:hover:bg-white/10 text-gray-400 md:hover:text-white transition-colors"
-                  title={overlay.visible ? 'Скрыть' : 'Показать'}
-                  aria-label={overlay.visible ? 'Скрыть' : 'Показать'}
+                  title={overlay.visible ? t('overlay_hide') : t('overlay_show')}
+                  aria-label={overlay.visible ? t('overlay_hide') : t('overlay_show')}
                 >
                   {overlay.visible ? (
                     <Eye className="w-3.5 h-3.5" weight="bold" />
@@ -91,8 +107,8 @@ export function OverlayPanel({
                     type="button"
                     onClick={() => onEditIndicator(overlay.id)}
                     className="p-0.5 rounded md:hover:bg-white/10 text-gray-400 md:hover:text-white transition-colors"
-                    title="Настройки индикатора"
-                    aria-label="Настройки индикатора"
+                    title={t('overlay_ind_settings')}
+                    aria-label={t('overlay_ind_settings')}
                   >
                     <Gear className="w-3.5 h-3.5" weight="bold" />
                   </button>
@@ -101,8 +117,8 @@ export function OverlayPanel({
                   type="button"
                   onClick={() => onRemove(overlay.id)}
                   className="p-0.5 rounded hover:bg-red-500/20 text-gray-400 md:hover:text-red-400 transition-colors"
-                  title="Удалить"
-                  aria-label="Удалить"
+                  title={t('overlay_remove')}
+                  aria-label={t('overlay_remove')}
                 >
                   <Trash className="w-3.5 h-3.5" weight="bold" />
                 </button>

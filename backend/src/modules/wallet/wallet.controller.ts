@@ -1,254 +1,188 @@
-import type { FastifyRequest, FastifyReply } from 'fastify';
-import { PaymentMethod } from '../../domain/finance/TransactionTypes.js';
-import { TransactionType, TransactionStatus } from '../../domain/finance/TransactionTypes.js';
-import type { DepositService } from '../../domain/finance/DepositService.js';
-import type { WithdrawService } from '../../domain/finance/WithdrawService.js';
-import type { AccountRepository } from '../../ports/repositories/AccountRepository.js';
-import type { TransactionRepository } from '../../ports/repositories/TransactionRepository.js';
-import { getBetaTransferService } from '../../services/BetaTransferService.js';
-import { AppError } from '../../shared/errors/AppError.js';
-import { logger } from '../../shared/logger.js';
+import type { FastifyRequest, FastifyReply } from "fastify";
+import { depositBodySchema, withdrawBodySchema, webhookBodySchema, transactionsQuerySchema } from "./wallet.schema.js";
+import { depositService } from "../../domain/finance/deposit.service.js";
+import { withdrawService } from "../../domain/finance/withdraw.service.js";
+import { transactionRepository } from "../../infrastructure/prisma/transaction.repository.js";
+import { accountRepository } from "../../infrastructure/prisma/account.repository.js";
+import { userRepository } from "../../infrastructure/prisma/user.repository.js";
+import { partnerTrackingRepository } from "../../infrastructure/prisma/partner-tracking.repository.js";
+import { betaTransferService } from "../../services/BetaTransferService.js";
+import { toTransactionDTO } from "../../shared/dto/transaction.dto.js";
+import { toAccountDTO } from "../../shared/dto/account.dto.js";
+import { sendAccountSnapshot } from "../../shared/websocket/ws.events.js";
+import { AppError } from "../../shared/errors/AppError.js";
+import { logger } from "../../shared/logger.js";
 
-export class WalletController {
-  constructor(
-    private depositService: DepositService,
-    private withdrawService: WithdrawService,
-    private accountRepository: AccountRepository,
-    private transactionRepository: TransactionRepository,
-  ) {}
-
-  async deposit(request: FastifyRequest<{ Body: { amount: number } }>, reply: FastifyReply) {
+export const walletController = {
+  async deposit(request: FastifyRequest, reply: FastifyReply) {
+    const body = depositBodySchema.parse(request.body);
     const userId = request.userId!;
-    const { amount } = request.body;
 
-    const result = await this.depositService.deposit({
+    const account = await accountRepository.findByUserIdAndType(userId, "REAL");
+    if (!account) throw AppError.notFound("REAL account not found");
+
+    const result = await depositService.initiateDeposit({
       userId,
-      amount,
-      paymentMethod: PaymentMethod.CARD,
+      accountId: body.accountId ?? account.id,
+      amount: body.amount,
+      currency: account.currency,
     });
 
-    return reply.status(201).send(result);
-  }
+    return reply.status(201).send({
+      transactionId: result.transaction.id,
+      paymentUrl: result.paymentUrl,
+      status: result.transaction.status,
+      amount: result.transaction.amount,
+      currency: result.transaction.currency,
+    });
+  },
 
-  async withdraw(
-    request: FastifyRequest<{
-      Body: { amount: number; cardNumber: string; twoFactorCode?: string };
-    }>,
-    reply: FastifyReply,
-  ) {
+  async withdraw(request: FastifyRequest, reply: FastifyReply) {
+    const body = withdrawBodySchema.parse(request.body);
     const userId = request.userId!;
-    const { amount, cardNumber, twoFactorCode } = request.body;
 
-    const transaction = await this.withdrawService.withdraw({
+    const account = await accountRepository.findByUserIdAndType(userId, "REAL");
+    if (!account) throw AppError.notFound("REAL account not found");
+
+    const result = await withdrawService.initiateWithdrawal({
       userId,
-      amount,
-      cardNumber,
-      paymentMethod: PaymentMethod.CARD,
-      twoFactorCode,
+      accountId: body.accountId ?? account.id,
+      amount: body.amount,
+      currency: account.currency,
+      cardNumber: body.cardNumber,
+      twoFactorCode: body.twoFactorCode,
     });
 
-    return reply.send({
-      transactionId: transaction.id,
-      status: transaction.status,
-      amount: transaction.amount,
-      currency: transaction.currency,
+    return reply.status(201).send({
+      transactionId: result.transaction.id,
+      status: result.transaction.status,
+      amount: result.transaction.amount,
+      currency: result.transaction.currency,
     });
-  }
+  },
 
-  async getBalance(request: FastifyRequest, reply: FastifyReply) {
-    const userId = request.userId!;
+  async webhook(request: FastifyRequest, reply: FastifyReply) {
+    const body = webhookBodySchema.parse(request.body);
+    const signature = body.sign ?? "";
 
-    const account = await this.accountRepository.getRealAccount(userId);
-
-    return reply.send({ currency: account.currency, balance: account.balance });
-  }
-
-  async getTransactions(request: FastifyRequest, reply: FastifyReply) {
-    const userId = request.userId!;
-
-    const account = await this.accountRepository.getRealAccount(userId);
-    const all = await this.transactionRepository.findByAccountId(account.id);
-
-    const transactions = all
-      .filter((t) => t.type === TransactionType.DEPOSIT || t.type === TransactionType.WITHDRAW)
-      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-      .slice(0, 50)
-      .map((t) => ({
-        id: t.id,
-        type: t.type,
-        date: t.createdAt,
-        method: t.paymentMethod,
-        status: t.status,
-        amount: Math.abs(Number(t.amount)),
-        currency: t.currency,
-      }));
-
-    return reply.send({ transactions });
-  }
-
-  /**
-   * BetaTransfer callback (CSRF skipped). Provider sends form-urlencoded payload.
-   */
-  async betaTransferWebhook(request: FastifyRequest, reply: FastifyReply) {
-    const body = request.body as Record<string, unknown>;
-    const rawBodyForLog = {
-      ...body,
-      // Do not leak provider signature in logs.
-      sign: typeof body.sign === 'string' ? '***' : body.sign,
-    };
-    logger.info({ body: rawBodyForLog }, 'BetaTransfer webhook raw body');
-
-    let beta;
-    try {
-      beta = getBetaTransferService();
-    } catch (e) {
-      if (e instanceof AppError && e.code === 'PAYMENT_NOT_CONFIGURED') {
-        logger.error({ code: e.code }, 'BetaTransfer webhook rejected: payment provider not configured');
-        return reply.status(503).send({ error: e.code, message: e.message });
-      }
-      throw e;
+    if (signature.length === 0) {
+      logger.warn({ ip: request.ip }, "Webhook: missing signature");
+      throw AppError.unauthorized("Invalid signature");
     }
 
-    const amount = body.amount != null ? String(body.amount) : '';
-    const orderId = body.orderId != null ? String(body.orderId) : '';
-    const sign = body.sign != null ? String(body.sign) : '';
-    const orderAmountRaw = body.orderAmount != null ? String(body.orderAmount) : '';
-    const paidAmountRaw = body.paidAmount != null ? String(body.paidAmount) : '';
-    const statusRaw = body.status != null ? String(body.status) : '';
-    const externalId = body.id != null ? String(body.id) : null;
-
-    if (!amount || !orderId || !sign) {
-      logger.warn({ amount, orderId, hasSign: Boolean(sign), orderAmountRaw, externalId }, 'BetaTransfer webhook invalid params');
-      return reply.status(400).send({ error: 'INVALID_PARAMS', message: 'amount, orderId and sign are required' });
+    if (!betaTransferService.verifySignature(String(body.amount), body.order_id, signature)) {
+      logger.warn({ ip: request.ip }, "Webhook: invalid HMAC signature");
+      throw AppError.unauthorized("Invalid signature");
     }
 
-    if (!beta.verifyWebhook(amount, orderId, sign)) {
-      logger.warn({ orderId, amount, orderAmountRaw, externalId }, 'BetaTransfer webhook invalid signature');
-      return reply.status(403).send({ error: 'INVALID_SIGNATURE', message: 'Invalid signature' });
+    logger.info(
+      { orderId: body.order_id, status: body.status },
+      "Webhook received",
+    );
+
+    const tx = await transactionRepository.findById(body.order_id);
+    if (!tx) {
+      logger.warn({ orderId: body.order_id }, "Webhook: transaction not found");
+      return reply.send({ ok: true });
     }
 
-    const transaction = await this.transactionRepository.findById(orderId);
-    if (!transaction) {
-      logger.warn({ orderId, amount, orderAmountRaw, externalId }, 'BetaTransfer webhook transaction not found');
-      return reply.status(404).send({ error: 'TRANSACTION_NOT_FOUND', message: 'Transaction not found' });
-    }
-
-    const webhookAmount = Number(amount);
-    if (Number.isNaN(webhookAmount)) {
-      logger.warn({ orderId, amount, orderAmountRaw, externalId }, 'BetaTransfer webhook invalid amount format');
-      return reply.status(400).send({ error: 'INVALID_AMOUNT', message: 'Invalid amount' });
-    }
-
-    const orderAmount = Number(orderAmountRaw);
-    if (Number.isNaN(orderAmount)) {
-      logger.error(
-        { orderId, orderAmountRaw, externalId },
-        'BetaTransfer webhook invalid orderAmount format',
+    const webhookAmount = Number(body.amount);
+    const txAmount = Number(tx.amount);
+    if (Math.abs(webhookAmount - txAmount) > 0.01) {
+      logger.warn(
+        { orderId: body.order_id, expected: txAmount, received: webhookAmount },
+        "Webhook: amount mismatch — rejecting",
       );
-      return reply.status(400).send({ error: 'INVALID_ORDER_AMOUNT', message: 'Invalid orderAmount' });
+      throw AppError.badRequest("Amount mismatch");
     }
 
-    if (transaction.type !== TransactionType.DEPOSIT && transaction.type !== TransactionType.WITHDRAW) {
-      logger.warn({ orderId, txType: transaction.type, orderAmountRaw, externalId }, 'BetaTransfer webhook unsupported transaction type');
-      return reply.status(400).send({ error: 'INVALID_TYPE', message: 'Unsupported transaction type' });
-    }
-
-    // Idempotency: if already processed, do nothing.
-    if (transaction.status === TransactionStatus.CONFIRMED || transaction.status === TransactionStatus.FAILED) {
+    if (tx.status !== "PENDING") {
+      logger.info(
+        { orderId: body.order_id, currentStatus: tx.status },
+        "Webhook: already processed (idempotent no-op)",
+      );
       return reply.send({ ok: true });
     }
 
-    if (transaction.status !== TransactionStatus.PENDING) {
-      return reply.send({ ok: true });
-    }
+    const externalStatus = body.status;
 
-    const status = statusRaw.trim().toLowerCase();
-    const externalStatusPatch = externalId
-      ? { externalId, externalStatus: status }
-      : { externalStatus: status };
-
-    const safePaidAmount = () => {
-      const v = Number(paidAmountRaw);
-      if (Number.isNaN(v)) return null;
-      return v;
-    };
-
-    // If status is missing/unknown: do nothing (provider can omit it on some callbacks).
-    if (!status) {
-      return reply.send({ ok: true });
-    }
-
-    if (transaction.type === TransactionType.DEPOSIT) {
-      if (status === 'success') {
-        await this.transactionRepository.update(transaction.id, externalStatusPatch);
-        await this.transactionRepository.confirm(transaction.id);
-        await this.accountRepository.updateBalance(transaction.accountId, orderAmount);
-        logger.info({ orderId, type: transaction.type, status, orderAmount, webhookAmount }, 'BetaTransfer webhook: deposit confirmed');
-        return reply.send({ ok: true });
-      }
-
-      if (status === 'partial_payment') {
-        const paidAmount = safePaidAmount();
-        if (paidAmount == null) {
-          return reply.status(400).send({ error: 'INVALID_PAID_AMOUNT', message: 'Invalid paidAmount' });
+    if (externalStatus === "confirmed" || externalStatus === "success") {
+      if (tx.type === "DEPOSIT") {
+        const account = await transactionRepository.confirmDeposit(tx.id, externalStatus);
+        if (account) {
+          sendAccountSnapshot(tx.userId, toAccountDTO(account));
         }
-        await this.transactionRepository.update(transaction.id, externalStatusPatch);
-        await this.transactionRepository.confirm(transaction.id);
-        await this.accountRepository.updateBalance(transaction.accountId, paidAmount);
-        logger.info({ orderId, type: transaction.type, status, paidAmount, orderAmount, webhookAmount }, 'BetaTransfer webhook: deposit partial confirmed');
-        return reply.send({ ok: true });
-      }
 
-      const failedDepositStatuses = new Set(['cancel', 'not_paid', 'not_paid_timeout', 'error', 'blocked', 'fail', 'failed', 'cancelled']);
-      if (failedDepositStatuses.has(status)) {
-        await this.transactionRepository.update(transaction.id, {
-          ...externalStatusPatch,
-          status: TransactionStatus.FAILED,
-          confirmedAt: null,
+        // Fire and forget: record FTD if this is the partner referral's first deposit
+        setImmediate(async () => {
+          try {
+            const user = await userRepository.findById(tx.userId);
+            if (user?.partnerId) {
+              const alreadyFtd = await partnerTrackingRepository.hasEvent({
+                userId: tx.userId,
+                type: "FTD",
+              });
+              if (!alreadyFtd) {
+                await partnerTrackingRepository.recordEvent({
+                  partnerId: user.partnerId,
+                  userId: tx.userId,
+                  type: "FTD",
+                  amount: Number(tx.amount),
+                });
+              }
+            }
+          } catch (err) {
+            logger.warn({ err, txId: tx.id, userId: tx.userId }, "webhook: failed to record FTD event");
+          }
         });
-        logger.info({ orderId, type: transaction.type, status }, 'BetaTransfer webhook: deposit failed');
-        return reply.send({ ok: true });
-      }
-
-      // Unknown status for deposit: idempotent no-op.
-      return reply.send({ ok: true });
-    }
-
-    // WITHDRAW
-    if (transaction.type === TransactionType.WITHDRAW) {
-      if (status === 'success') {
-        await this.transactionRepository.update(transaction.id, externalStatusPatch);
-        await this.transactionRepository.confirm(transaction.id);
-        logger.info({ orderId, type: transaction.type, status }, 'BetaTransfer webhook: withdraw confirmed');
-        return reply.send({ ok: true });
-      }
-
-      if (status === 'partial_withdraw') {
-        const paidAmount = safePaidAmount();
-        if (paidAmount == null) {
-          return reply.status(400).send({ error: 'INVALID_PAID_AMOUNT', message: 'Invalid paidAmount' });
+      } else if (tx.type === "WITHDRAWAL") {
+        const account = await transactionRepository.confirmWithdrawal(tx.id, externalStatus);
+        if (account) {
+          sendAccountSnapshot(tx.userId, toAccountDTO(account));
         }
-        await this.transactionRepository.update(transaction.id, externalStatusPatch);
-        await this.transactionRepository.confirm(transaction.id);
-        const refund = orderAmount - paidAmount;
-        if (refund !== 0) {
-          await this.accountRepository.updateBalance(transaction.accountId, refund);
-        }
-        logger.info({ orderId, type: transaction.type, status, refund }, 'BetaTransfer webhook: withdraw partial confirmed');
-        return reply.send({ ok: true });
+      } else {
+        logger.error(
+          { orderId: body.order_id, txType: tx.type },
+          "Webhook: unexpected transaction type for confirmation",
+        );
       }
-
-      // Any non-success withdraw status => FAILED + refund orderAmount back to balance.
-      await this.transactionRepository.update(transaction.id, {
-        ...externalStatusPatch,
-        status: TransactionStatus.FAILED,
-        confirmedAt: null,
-      });
-      await this.accountRepository.updateBalance(transaction.accountId, orderAmount);
-      logger.info({ orderId, type: transaction.type, status, orderAmount }, 'BetaTransfer webhook: withdraw failed (refund)');
-      return reply.send({ ok: true });
+    } else if (externalStatus === "failed" || externalStatus === "rejected") {
+      const account = await transactionRepository.failTransaction(
+        tx.id,
+        externalStatus,
+        body.failure_reason,
+      );
+      if (account) {
+        sendAccountSnapshot(tx.userId, toAccountDTO(account));
+      }
     }
 
     return reply.send({ ok: true });
-  }
-}
+  },
+
+  async balance(request: FastifyRequest, reply: FastifyReply) {
+    const userId = request.userId!;
+    const account = await accountRepository.findByUserIdAndType(userId, "REAL");
+    if (!account) throw AppError.notFound("REAL account not found");
+
+    reply.header('Cache-Control', 'no-store');
+    return reply.send({
+      currency: account.currency,
+      balance: account.balance.toString(),
+    });
+  },
+
+  async transactions(request: FastifyRequest, reply: FastifyReply) {
+    const userId = request.userId!;
+    const query = transactionsQuerySchema.parse(request.query);
+
+    const txs = await transactionRepository.findByUserId(
+      userId,
+      query.limit,
+      query.offset,
+    );
+
+    reply.header('Cache-Control', 'no-store');
+    return reply.send({ transactions: txs.map(toTransactionDTO) });
+  },
+};

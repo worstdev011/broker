@@ -1,62 +1,66 @@
-export const getProfileSchema = {} as const;
+import { z } from "zod";
 
-export const updateProfileSchema = {
-  body: {
-    type: 'object',
-    properties: {
-      firstName: { type: 'string', minLength: 1, maxLength: 50 },
-      lastName: { type: 'string', minLength: 1, maxLength: 50 },
-      nickname: {
-        type: 'string',
-        pattern: '^@[a-zA-Z0-9_]{3,30}$',
-      },
-      phone: {
-        type: 'string',
-        pattern: '^\\+[1-9]\\d{1,14}$',
-      },
-      country: { type: 'string', maxLength: 100 },
-      currency: { type: 'string', maxLength: 10 },
-      dateOfBirth: {
-        type: ['string', 'null'],
-        format: 'date',
-        nullable: true,
-      },
-      avatarUrl: { type: 'string', format: 'uri' },
-    },
-  },
-} as const;
+export const updateProfileSchema = z.object({
+  firstName: z.string().max(100).optional(),
+  lastName: z.string().max(100).optional(),
+  nickname: z.string().min(2).max(30).optional(),
+  phone: z.string().min(7).max(20).optional(),
+  country: z.string().max(100).optional(),
+  dateOfBirth: z.string().datetime().optional().refine((val) => {
+    if (!val) return true;
+    const dob = new Date(val);
+    return dob < new Date();
+  }, { message: "Date of birth cannot be in the future" }).refine((val) => {
+    if (!val) return true;
+    const dob = new Date(val);
+    const now = new Date();
+    const age = now.getFullYear() - dob.getFullYear();
+    const monthDiff = now.getMonth() - dob.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && now.getDate() < dob.getDate())) {
+      return age - 1 >= 18;
+    }
+    return age >= 18;
+  }, { message: "User must be at least 18 years old" }),
+  currency: z.string().length(3).optional(),
+});
 
-export const uploadAvatarSchema = {
-  consumes: ['multipart/form-data'],
-} as const;
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(8).max(128),
+});
 
-export const deleteProfileSchema = {
-  body: {
-    type: 'object',
-    properties: {
-      password: { type: 'string', minLength: 6, maxLength: 128 },
-      reason: { type: 'string', maxLength: 500 },
-    },
-  },
-} as const;
+export const setPasswordSchema = z.object({
+  newPassword: z.string().min(8).max(128),
+});
 
-export const setPasswordSchema = {
-  body: {
-    type: 'object',
-    required: ['newPassword'],
-    properties: {
-      newPassword: { type: 'string', minLength: 6, maxLength: 128 },
-    },
-  },
-} as const;
+export const deleteProfileSchema = z.object({
+  password: z.string().optional(),
+});
 
-export const changePasswordSchema = {
-  body: {
-    type: 'object',
-    required: ['currentPassword', 'newPassword'],
-    properties: {
-      currentPassword: { type: 'string', minLength: 6 },
-      newPassword: { type: 'string', minLength: 6 },
-    },
-  },
-} as const;
+export const enable2FASchema = z.object({});
+
+export const verify2FASchema = z.object({
+  code: z.string().length(6),
+});
+
+export const disable2FASchema = z.object({
+  password: z.string().min(1),
+  code: z.string().length(6),
+});
+
+export const drawingBodySchema = z.object({
+  instrument: z.string().min(1),
+  type: z.string().min(1),
+  data: z.record(z.string(), z.unknown()),
+});
+
+export const updateDrawingSchema = z.object({
+  data: z.record(z.string(), z.unknown()),
+});
+
+export const chartSettingsSchema = z.object({
+  instrument: z.string().optional(),
+  timeframe: z.string().optional(),
+  chartType: z.string().optional(),
+  indicators: z.record(z.string(), z.unknown()).optional(),
+});

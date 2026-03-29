@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { api } from '@/lib/api/api';
 
 interface UserProfile {
@@ -15,7 +16,7 @@ interface SecuritySectionProps {
 }
 
 export function SecuritySection({ profile, onProfileUpdate }: SecuritySectionProps) {
-  // Смена пароля
+  const t = useTranslations('security');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -40,11 +41,11 @@ export function SecuritySection({ profile, onProfileUpdate }: SecuritySectionPro
     setPasswordError(null);
     setPasswordSuccess(false);
     if (newPassword !== confirmPassword) {
-      setPasswordError('Пароли не совпадают');
+      setPasswordError(t('passwords_mismatch'));
       return;
     }
     if (newPassword.length < 8) {
-      setPasswordError('Новый пароль должен быть не менее 8 символов');
+      setPasswordError(t('new_password_min'));
       return;
     }
     setPasswordSaving(true);
@@ -63,7 +64,7 @@ export function SecuritySection({ profile, onProfileUpdate }: SecuritySectionPro
       setTimeout(() => setPasswordSuccess(false), 3000);
     } catch (err: unknown) {
       const e = err as { message?: string; response?: { data?: { message?: string } } };
-      setPasswordError(e.response?.data?.message || e.message || 'Ошибка смены пароля');
+      setPasswordError(e.response?.data?.message || e.message || t('change_password_error'));
     } finally {
       setPasswordSaving(false);
     }
@@ -74,11 +75,11 @@ export function SecuritySection({ profile, onProfileUpdate }: SecuritySectionPro
     setPasswordError(null);
     setPasswordSuccess(false);
     if (newPassword !== confirmPassword) {
-      setPasswordError('Пароли не совпадают');
+      setPasswordError(t('passwords_mismatch'));
       return;
     }
     if (newPassword.length < 8) {
-      setPasswordError('Пароль должен быть не менее 8 символов');
+      setPasswordError(t('password_min'));
       return;
     }
     setPasswordSaving(true);
@@ -96,7 +97,7 @@ export function SecuritySection({ profile, onProfileUpdate }: SecuritySectionPro
       setTimeout(() => setPasswordSuccess(false), 3000);
     } catch (err: unknown) {
       const er = err as { message?: string; response?: { data?: { message?: string } } };
-      setPasswordError(er.response?.data?.message || er.message || 'Не удалось установить пароль');
+      setPasswordError(er.response?.data?.message || er.message || t('set_password_error'));
     } finally {
       setPasswordSaving(false);
     }
@@ -113,7 +114,7 @@ export function SecuritySection({ profile, onProfileUpdate }: SecuritySectionPro
       setStep2FA('show_qr');
     } catch (err: unknown) {
       const e = err as { message?: string };
-      setTwoFAError(e.message || 'Ошибка включения 2FA');
+      setTwoFAError(e.message || t('enable_2fa_error'));
     } finally {
       setEnable2FALoading(false);
     }
@@ -128,7 +129,7 @@ export function SecuritySection({ profile, onProfileUpdate }: SecuritySectionPro
         method: 'POST',
         body: JSON.stringify({ code: verifyCode }),
       });
-      setTwoFASuccess('Двухфакторная аутентификация подключена');
+      setTwoFASuccess(t('two_fa_connected_ok'));
       setStep2FA('idle');
       setVerifyCode('');
       setQrCode(null);
@@ -138,7 +139,7 @@ export function SecuritySection({ profile, onProfileUpdate }: SecuritySectionPro
       setTimeout(() => setTwoFASuccess(null), 3000);
     } catch (err: unknown) {
       const e = err as { message?: string };
-      setTwoFAError(e.message || 'Неверный код. Попробуйте снова.');
+      setTwoFAError(e.message || t('invalid_2fa_code'));
     } finally {
       setVerify2FALoading(false);
     }
@@ -149,7 +150,7 @@ export function SecuritySection({ profile, onProfileUpdate }: SecuritySectionPro
     setTwoFAError(null);
     setTwoFASuccess(null);
     if (!disable2FAPassword || !disable2FACode) {
-      setTwoFAError('Введите пароль и код из приложения');
+      setTwoFAError(t('need_password_and_code'));
       return;
     }
     setDisable2FALoading(true);
@@ -158,7 +159,7 @@ export function SecuritySection({ profile, onProfileUpdate }: SecuritySectionPro
         method: 'POST',
         body: JSON.stringify({ password: disable2FAPassword, code: disable2FACode }),
       });
-      setTwoFASuccess('2FA отключена');
+      setTwoFASuccess(t('two_fa_disabled_ok'));
       setDisable2FAPassword('');
       setDisable2FACode('');
       const updated = { ...profile, twoFactorEnabled: false };
@@ -167,7 +168,7 @@ export function SecuritySection({ profile, onProfileUpdate }: SecuritySectionPro
       setTimeout(() => setTwoFASuccess(null), 3000);
     } catch (err: unknown) {
       const e = err as { message?: string; response?: { data?: { message?: string } } };
-      setTwoFAError(e.response?.data?.message || e.message || 'Ошибка отключения 2FA');
+      setTwoFAError(e.response?.data?.message || e.message || t('disable_2fa_error'));
     } finally {
       setDisable2FALoading(false);
     }
@@ -180,28 +181,26 @@ export function SecuritySection({ profile, onProfileUpdate }: SecuritySectionPro
     setTwoFAError(null);
   };
 
-  const inputClass = 'w-full px-3 py-2 sm:px-4 sm:py-3 rounded-lg sm:rounded-xl bg-white/5 border border-white/10 text-sm sm:text-base text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-[#3347ff]/50 focus:border-[#3347ff]/50';
-  const labelClass = 'block text-xs sm:text-sm font-medium text-white/70 mb-1.5 sm:mb-2';
+  const inputClass = 'w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-base text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-[#3347ff]/50 focus:border-[#3347ff]/50';
+  const labelClass = 'block text-sm font-medium text-white/70 mb-2';
 
   return (
     <>
       {/* Смена пароля */}
-      <div className="mt-6 p-6 sm:p-8 rounded-xl bg-[#030E28]">
-        <h2 className="text-base sm:text-lg font-semibold text-white mb-1">Смена пароля</h2>
+      <div className="mt-6 p-8 rounded-xl bg-[#030E28]">
+        <h2 className="text-lg font-semibold text-white mb-1">{t('change_password_title')}</h2>
         {profile?.hasPassword === false ? (
           <>
-            <p className="text-sm text-white/50 mb-4">
-              Вход через Google. Можно задать пароль для входа по email и для операций, где нужен пароль.
-            </p>
+            <p className="text-sm text-white/50 mb-4">{t('google_password_intro')}</p>
             <form onSubmit={handleSetInitialPassword} className="w-full">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 max-w-2xl">
+              <div className="grid grid-cols-2 gap-6 max-w-2xl">
                 <div>
-                  <label className={labelClass}>Новый пароль</label>
+                  <label className={labelClass}>{t('new_password')}</label>
                   <input
                     type="password"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="Минимум 8 символов"
+                    placeholder={t('placeholder_min8')}
                     className={inputClass}
                     minLength={8}
                     maxLength={128}
@@ -210,12 +209,12 @@ export function SecuritySection({ profile, onProfileUpdate }: SecuritySectionPro
                   />
                 </div>
                 <div>
-                  <label className={labelClass}>Подтвердите пароль</label>
+                  <label className={labelClass}>{t('confirm_password_field')}</label>
                   <input
                     type="password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="••••••••"
+                    placeholder={t('placeholder_masked')}
                     className={inputClass}
                     maxLength={128}
                     autoComplete="new-password"
@@ -223,43 +222,43 @@ export function SecuritySection({ profile, onProfileUpdate }: SecuritySectionPro
                   />
                 </div>
               </div>
-              <div className="mt-4 sm:mt-6 flex flex-col sm:flex-row flex-wrap items-start sm:items-center gap-3 sm:gap-4">
+              <div className="mt-6 flex flex-row flex-wrap items-center gap-4">
                 <button
                   type="submit"
                   disabled={passwordSaving}
-                  className="w-full sm:w-auto px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg sm:rounded-xl bg-[#3347ff] hover:bg-[#3347ff]/90 text-white text-xs sm:text-sm font-medium uppercase tracking-wider transition-colors disabled:opacity-50"
+                  className="w-auto px-6 py-3 rounded-xl bg-[#3347ff] hover:bg-[#3347ff]/90 text-white text-sm font-medium uppercase tracking-wider transition-colors disabled:opacity-50"
                 >
-                  {passwordSaving ? 'Сохранение...' : 'Установить пароль'}
+                  {passwordSaving ? t('saving') : t('set_password_btn')}
                 </button>
                 {passwordError && <p className="text-sm text-red-400">{passwordError}</p>}
-                {passwordSuccess && <p className="text-sm text-emerald-400">Пароль установлен — теперь доступна смена пароля и отключение 2FA по паролю</p>}
+                {passwordSuccess && <p className="text-sm text-emerald-400">{t('set_password_success')}</p>}
               </div>
             </form>
           </>
         ) : (
           <>
-            <p className="text-sm text-white/50 mb-6">Обновите пароль для защиты аккаунта</p>
+            <p className="text-sm text-white/50 mb-6">{t('update_password_hint')}</p>
             <form onSubmit={handleChangePassword} className="w-full">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+              <div className="grid grid-cols-3 gap-6">
                 <div>
-                  <label className={labelClass}>Текущий пароль</label>
+                  <label className={labelClass}>{t('current_password')}</label>
                   <input
                     type="password"
                     value={currentPassword}
                     onChange={(e) => setCurrentPassword(e.target.value)}
-                    placeholder="••••••••"
+                    placeholder={t('placeholder_masked')}
                     className={inputClass}
                     maxLength={128}
                     required
                   />
                 </div>
                 <div>
-                  <label className={labelClass}>Новый пароль</label>
+                  <label className={labelClass}>{t('new_password')}</label>
                   <input
                     type="password"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="Минимум 8 символов"
+                    placeholder={t('placeholder_min8')}
                     className={inputClass}
                     minLength={8}
                     maxLength={128}
@@ -267,28 +266,28 @@ export function SecuritySection({ profile, onProfileUpdate }: SecuritySectionPro
                   />
                 </div>
                 <div>
-                  <label className={labelClass}>Подтвердите новый пароль</label>
+                  <label className={labelClass}>{t('confirm_new_password')}</label>
                   <input
                     type="password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="••••••••"
+                    placeholder={t('placeholder_masked')}
                     className={inputClass}
                     maxLength={128}
                     required
                   />
                 </div>
               </div>
-              <div className="mt-4 sm:mt-6 flex flex-col sm:flex-row flex-wrap items-start sm:items-center gap-3 sm:gap-4">
+              <div className="mt-6 flex flex-row flex-wrap items-center gap-4">
                 <button
                   type="submit"
                   disabled={passwordSaving}
-                  className="w-full sm:w-auto px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg sm:rounded-xl bg-[#3347ff] hover:bg-[#3347ff]/90 text-white text-xs sm:text-sm font-medium uppercase tracking-wider transition-colors disabled:opacity-50"
+                  className="w-auto px-6 py-3 rounded-xl bg-[#3347ff] hover:bg-[#3347ff]/90 text-white text-sm font-medium uppercase tracking-wider transition-colors disabled:opacity-50"
                 >
-                  {passwordSaving ? 'Сохранение...' : 'Изменить пароль'}
+                  {passwordSaving ? t('saving') : t('change_password_btn')}
                 </button>
                 {passwordError && <p className="text-sm text-red-400">{passwordError}</p>}
-                {passwordSuccess && <p className="text-sm text-emerald-400">Пароль успешно изменён</p>}
+                {passwordSuccess && <p className="text-sm text-emerald-400">{t('password_changed_ok')}</p>}
               </div>
             </form>
           </>
@@ -296,9 +295,9 @@ export function SecuritySection({ profile, onProfileUpdate }: SecuritySectionPro
       </div>
 
       {/* 2FA */}
-      <div className="mt-6 p-6 sm:p-8 rounded-xl bg-[#030E28]">
-        <h2 className="text-base sm:text-lg font-semibold text-white mb-1">Двухфакторная аутентификация (2FA)</h2>
-        <p className="text-sm text-white/50 mb-6">Дополнительный уровень защиты при входе и выводе средств</p>
+      <div className="mt-6 p-8 rounded-xl bg-[#030E28]">
+        <h2 className="text-lg font-semibold text-white mb-1">{t('two_fa_title')}</h2>
+        <p className="text-sm text-white/50 mb-6">{t('two_fa_subtitle')}</p>
 
         {twoFAError && (
           <div className="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
@@ -315,29 +314,27 @@ export function SecuritySection({ profile, onProfileUpdate }: SecuritySectionPro
           <div className="space-y-6">
             <p className="text-sm text-emerald-400 flex items-center gap-2">
               <span className="text-lg" aria-hidden>✓</span>
-              Двухфакторная аутентификация подключена
+              {t('two_fa_enabled_line')}
             </p>
             {profile?.hasPassword === false ? (
-              <p className="text-sm text-amber-400/90 max-w-xl">
-                Аккаунт без пароля (вход через Google). Отключение 2FA с паролем недоступно - обратитесь в поддержку при необходимости.
-              </p>
+              <p className="text-sm text-amber-400/90 max-w-xl">{t('google_no_disable')}</p>
             ) : (
               <form onSubmit={handleDisable2FA} className="w-full">
-                <p className="text-sm text-white/60 mb-4">Для отключения введите пароль и текущий код из Google Authenticator.</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-2xl">
+                <p className="text-sm text-white/60 mb-4">{t('disable_2fa_hint')}</p>
+                <div className="grid grid-cols-2 gap-6 max-w-2xl">
                   <div>
-                    <label className={labelClass}>Пароль</label>
+                    <label className={labelClass}>{t('password_field')}</label>
                     <input
                       type="password"
                       value={disable2FAPassword}
                       onChange={(e) => setDisable2FAPassword(e.target.value)}
-                      placeholder="••••••••"
+                      placeholder={t('placeholder_masked')}
                       className={inputClass}
                       required
                     />
                   </div>
                   <div>
-                    <label className={labelClass}>Код из Google Authenticator</label>
+                    <label className={labelClass}>{t('code_from_authenticator')}</label>
                     <input
                       type="text"
                       value={disable2FACode}
@@ -352,28 +349,26 @@ export function SecuritySection({ profile, onProfileUpdate }: SecuritySectionPro
                 <button
                   type="submit"
                   disabled={disable2FALoading}
-                  className="mt-6 w-full sm:w-auto px-6 py-3 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-red-400 text-sm font-medium uppercase tracking-wider transition-colors disabled:opacity-50 border border-red-500/30"
+                  className="mt-6 w-auto px-6 py-3 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-red-400 text-sm font-medium uppercase tracking-wider transition-colors disabled:opacity-50 border border-red-500/30"
                 >
-                  {disable2FALoading ? 'Отключение...' : 'Отключить 2FA'}
+                  {disable2FALoading ? t('disabling') : t('disable_2fa_btn')}
                 </button>
               </form>
             )}
           </div>
         ) : step2FA === 'show_qr' ? (
           <div className="w-full space-y-6">
-            <p className="text-sm text-white/70">
-              Отсканируйте QR-код в приложении Google Authenticator (или Authy, Microsoft Authenticator):
-            </p>
-            <div className="flex flex-col sm:flex-row gap-6 sm:gap-8 items-center sm:items-start">
+            <p className="text-sm text-white/70">{t('scan_qr_hint')}</p>
+            <div className="flex flex-row gap-8 items-start">
               {qrCode && (
-                <div className="p-4 rounded-xl bg-white mx-auto sm:mx-0 shrink-0">
-                  <img src={qrCode} alt="QR для Google Authenticator" className="w-44 h-44 sm:w-48 sm:h-48 block" />
+                <div className="p-4 rounded-xl bg-white mx-0 shrink-0">
+                  <img src={qrCode} alt={t('qr_alt')} className="w-48 h-48 block" />
                 </div>
               )}
               <div className="flex-1 min-w-0 space-y-6">
                 <form onSubmit={handleVerify2FA} className="space-y-4">
                   <div>
-                    <label className={labelClass}>Введите 6-значный код из приложения</label>
+                    <label className={labelClass}>{t('enter_code_label')}</label>
                     <input
                       type="text"
                       value={verifyCode}
@@ -384,20 +379,20 @@ export function SecuritySection({ profile, onProfileUpdate }: SecuritySectionPro
                       required
                     />
                   </div>
-                  <div className="flex flex-col sm:flex-row gap-3">
+                  <div className="flex flex-row gap-3">
                     <button
                       type="submit"
                       disabled={verify2FALoading}
-                      className="w-full sm:w-auto px-6 py-3 rounded-xl bg-[#3347ff] hover:bg-[#3347ff]/90 text-white text-sm font-medium uppercase tracking-wider transition-colors disabled:opacity-50"
+                      className="w-auto px-6 py-3 rounded-xl bg-[#3347ff] hover:bg-[#3347ff]/90 text-white text-sm font-medium uppercase tracking-wider transition-colors disabled:opacity-50"
                     >
-                      {verify2FALoading ? 'Проверка...' : 'Подтвердить'}
+                      {verify2FALoading ? t('verifying') : t('confirm_btn')}
                     </button>
                     <button
                       type="button"
                       onClick={cancel2FASetup}
-                      className="w-full sm:w-auto px-6 py-3 rounded-xl bg-white/10 hover:bg-white/15 text-white text-sm font-medium uppercase tracking-wider transition-colors"
+                      className="w-auto px-6 py-3 rounded-xl bg-white/10 hover:bg-white/15 text-white text-sm font-medium uppercase tracking-wider transition-colors"
                     >
-                      Отмена
+                      {t('cancel_btn')}
                     </button>
                   </div>
                 </form>
@@ -406,17 +401,15 @@ export function SecuritySection({ profile, onProfileUpdate }: SecuritySectionPro
           </div>
         ) : (
           <div className="flex flex-col gap-4">
-            <p className="text-sm text-white/60">
-              При входе и выводе средств потребуется код из приложения Google Authenticator.
-            </p>
-            <div className="flex sm:justify-start">
+            <p className="text-sm text-white/60">{t('two_fa_login_hint')}</p>
+            <div className="flex justify-start">
               <button
                 type="button"
                 onClick={handleEnable2FA}
                 disabled={enable2FALoading}
-                className="w-full sm:w-auto px-6 py-3 rounded-xl bg-[#3347ff] hover:bg-[#3347ff]/90 text-white text-sm font-medium uppercase tracking-wider transition-colors disabled:opacity-50"
+                className="w-auto px-6 py-3 rounded-xl bg-[#3347ff] hover:bg-[#3347ff]/90 text-white text-sm font-medium uppercase tracking-wider transition-colors disabled:opacity-50"
               >
-                {enable2FALoading ? 'Загрузка...' : 'Подключить аутентификатор'}
+                {enable2FALoading ? t('loading') : t('connect_authenticator')}
               </button>
             </div>
           </div>

@@ -130,13 +130,17 @@ function renderBatchClassic(
       for (let i = 0; i < geoms.length; i++) {
         const g = geoms[i];
         if (g.isGreen !== isGreenPass) continue;
-        const bodyTop = Math.min(g.openY, g.closeY);
-        const bodyHeight = Math.abs(g.closeY - g.openY) || 1;
+        const bodyHeight = Math.abs(g.closeY - g.openY);
+        const MIN_BODY_HEIGHT = 2;
+        const renderBodyHeight = Math.max(bodyHeight, MIN_BODY_HEIGHT);
+        const bodyY = bodyHeight < MIN_BODY_HEIGHT
+          ? (g.openY + g.closeY) / 2 - MIN_BODY_HEIGHT / 2
+          : Math.min(g.openY, g.closeY);
         ctx.fillRect(
           Math.round(g.centerX - halfBody),
-          bodyTop,
+          bodyY,
           bodyWidth,
-          bodyHeight,
+          renderBodyHeight,
         );
       }
     }

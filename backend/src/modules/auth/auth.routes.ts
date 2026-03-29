@@ -1,71 +1,45 @@
-import type { FastifyInstance } from 'fastify';
-import { getAuthService } from '../../shared/serviceFactory.js';
-import { AuthController } from './auth.controller.js';
-import { registerSchema, loginSchema, logoutSchema, meSchema } from './auth.schema.js';
-import { registerSchema as registerZodSchema, loginSchema as loginZodSchema, verify2FASchema } from './auth.validation.js';
-import type { RegisterInput, LoginInput, Verify2FAInput } from './auth.validation.js';
-import { validateBody } from '../../shared/validation/validateBody.js';
-import {
-  RATE_LIMIT_AUTH_LOGIN_MAX,
-  RATE_LIMIT_AUTH_LOGIN_WINDOW,
-  RATE_LIMIT_AUTH_REGISTER_MAX,
-  RATE_LIMIT_AUTH_REGISTER_WINDOW,
-  RATE_LIMIT_AUTH_2FA_MAX,
-  RATE_LIMIT_AUTH_2FA_WINDOW,
-} from '../../config/constants.js';
+import type { FastifyInstance } from "fastify";
+import { authController } from "./auth.controller.js";
+import { requireAuth } from "../../middleware/auth.middleware.js";
 
-export async function registerAuthRoutes(app: FastifyInstance) {
-  const authService = getAuthService();
-  const authController = new AuthController(authService);
+export async function authRoutes(app: FastifyInstance): Promise<void> {
+  app.get("/csrf", authController.handleCsrf);
 
-  app.get('/api/auth/csrf', async (_request, reply) => {
-    const token = reply.generateCsrf();
-    return { csrfToken: token };
-  });
-
-  app.get('/api/auth/google', (request, reply) => authController.googleOAuthStart(request, reply));
-
-  app.get('/api/auth/google/callback', (request, reply) =>
-    authController.googleOAuthCallback(request, reply),
+  app.post(
+    "/register",
+    {
+      config: {
+        rateLimit: { max: 5, timeWindow: "1 hour" },
+      },
+    },
+    authController.handleRegister,
   );
 
-  app.post<{ Body: RegisterInput }>('/api/auth/register', {
-    schema: registerSchema,
-    preHandler: [validateBody(registerZodSchema)],
-    config: {
-      rateLimit: {
-        max: RATE_LIMIT_AUTH_REGISTER_MAX,
-        timeWindow: RATE_LIMIT_AUTH_REGISTER_WINDOW,
+  app.post(
+    "/login",
+    {
+      config: {
+        rateLimit: { max: 10, timeWindow: "15 minutes" },
       },
     },
-  }, (request, reply) => authController.register(request, reply));
+    authController.handleLogin,
+  );
 
-  app.post<{ Body: LoginInput }>('/api/auth/login', {
-    schema: loginSchema,
-    preHandler: [validateBody(loginZodSchema)],
-    config: {
-      rateLimit: {
-        max: RATE_LIMIT_AUTH_LOGIN_MAX,
-        timeWindow: RATE_LIMIT_AUTH_LOGIN_WINDOW,
+  app.post(
+    "/2fa",
+    {
+      config: {
+        rateLimit: { max: 5, timeWindow: "5 minutes" },
       },
     },
-  }, (request, reply) => authController.login(request, reply));
+    authController.handle2FA,
+  );
 
-  app.post('/api/auth/logout', {
-    schema: logoutSchema,
-  }, (request, reply) => authController.logout(request, reply));
+  app.post("/logout", authController.handleLogout);
 
-  app.get('/api/auth/me', {
-    schema: meSchema,
-  }, (request, reply) => authController.me(request, reply));
-
-  app.post<{ Body: Verify2FAInput }>('/api/auth/2fa', {
-    preHandler: [validateBody(verify2FASchema)],
-    config: {
-      rateLimit: {
-        max: RATE_LIMIT_AUTH_2FA_MAX,
-        timeWindow: RATE_LIMIT_AUTH_2FA_WINDOW,
-      },
-    },
-  }, (request, reply) => authController.verifyLogin2FA(request, reply));
+  app.get(
+    "/me",
+    { preHandler: [requireAuth] },
+    authController.handleMe,
+  );
 }

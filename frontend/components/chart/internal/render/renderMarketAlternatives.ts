@@ -25,6 +25,7 @@ interface RenderMarketAlternativesParams {
   alternatives: MarketAlternative[];
   hoveredIndex: number | null; // FLOW C-MARKET-ALTERNATIVES: индекс наведенной строки
   hitboxesRef: { current: AlternativeHitbox[] }; // Ref для хранения hitboxes
+  header?: string;
 }
 
 /**
@@ -37,6 +38,7 @@ export function renderMarketAlternatives({
   alternatives,
   hoveredIndex,
   hitboxesRef,
+  header,
 }: RenderMarketAlternativesParams): void {
   if (alternatives.length === 0) {
     hitboxesRef.current = [];
@@ -52,7 +54,7 @@ export function renderMarketAlternatives({
   ctx.textBaseline = 'top';
   
   const headerY = startY - 24;
-  ctx.fillText('Самые прибыльные рынки', width / 2, headerY);
+  ctx.fillText(header ?? 'Highest payout markets', width / 2, headerY);
 
   // Разделительная линия
   ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';

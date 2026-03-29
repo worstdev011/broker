@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { useTranslations } from 'next-intl';
 import { api } from '@/lib/api/api';
 
 const STORAGE_KEY = 'profile-display-name';
@@ -35,10 +36,10 @@ export function computeDisplayName(
       isGuest: false,
     };
   }
-  return { displayName: 'Гость', avatarInitial: 'Г', isGuest: true };
+  return { displayName: 'Guest', avatarInitial: 'G', isGuest: true };
 }
 
-const GUEST_DEFAULT: DisplayNameData = { displayName: 'Гость', avatarInitial: 'Г', isGuest: true };
+const GUEST_DEFAULT: DisplayNameData = { displayName: 'Guest', avatarInitial: 'G', isGuest: true };
 
 function readFromStorage(): DisplayNameData {
   if (typeof window === 'undefined') return GUEST_DEFAULT;
@@ -58,7 +59,15 @@ function readFromStorage(): DisplayNameData {
  * Listens to `profile-updated` custom event dispatched by the profile page on save.
  */
 export function useDisplayName(): DisplayNameData {
+  const t = useTranslations('common');
   const [data, setData] = useState<DisplayNameData>(readFromStorage);
+
+  const localized = useMemo((): DisplayNameData => {
+    if (!data.isGuest) return data;
+    const label = t('guest');
+    const initial = label.trim().charAt(0).toUpperCase() || 'G';
+    return { ...data, displayName: label, avatarInitial: initial };
+  }, [data, t]);
 
   useEffect(() => {
     let cancelled = false;
@@ -87,5 +96,5 @@ export function useDisplayName(): DisplayNameData {
     };
   }, []);
 
-  return data;
+  return localized;
 }

@@ -1,44 +1,32 @@
-import type { FastifyRequest, FastifyReply } from 'fastify';
-import { INSTRUMENTS } from '../../config/instruments.js';
-import { getInstrumentRepository } from '../../shared/serviceFactory.js';
-import { InstrumentNotFoundError } from '../../domain/trades/TradeErrors.js';
+import type { FastifyRequest, FastifyReply } from "fastify";
+import { instrumentService } from "../../domain/instruments/instrument.service.js";
+import { updatePayoutBodySchema, instrumentParamsSchema } from "./instruments.schema.js";
 
-export class InstrumentsController {
-  private get instrumentRepository() {
-    return getInstrumentRepository();
-  }
-
-  async getInstruments(_request: FastifyRequest, reply: FastifyReply) {
-    const instruments = await this.instrumentRepository.findAll();
-
-    const response = instruments.map((inst) => ({
-      id: inst.id,
-      name: `${inst.base} / ${inst.quote}`,
-      base: inst.base,
-      quote: inst.quote,
-      digits: inst.digits,
-      payoutPercent: inst.payoutPercent ?? 75,
-    }));
-
-    return reply.send(response);
-  }
-
-  async updatePayout(
-    request: FastifyRequest<{
-      Params: { id: string };
-      Body: { payoutPercent: number };
-    }>,
+export const instrumentsController = {
+  async handleList(
+    _request: FastifyRequest,
     reply: FastifyReply,
-  ) {
-    const { id } = request.params;
-    const { payoutPercent } = request.body;
+  ): Promise<void> {
+    const instruments = await instrumentService.listActive();
+    reply.send(instruments);
+  },
 
-    if (!INSTRUMENTS[id]) {
-      throw new InstrumentNotFoundError(id);
-    }
+  async handleUpdatePayout(
+    request: FastifyRequest,
+    reply: FastifyReply,
+  ): Promise<void> {
+    const { id } = instrumentParamsSchema.parse(request.params);
+    const body = updatePayoutBodySchema.parse(request.body);
+    const instrument = await instrumentService.updatePayout(id, body.payoutPercent);
+    reply.send(instrument);
+  },
 
-    await this.instrumentRepository.updatePayout(id, payoutPercent);
-
-    return reply.send({ success: true });
-  }
-}
+  async handleToggle(
+    request: FastifyRequest,
+    reply: FastifyReply,
+  ): Promise<void> {
+    const { id } = instrumentParamsSchema.parse(request.params);
+    const instrument = await instrumentService.toggleActive(id);
+    reply.send(instrument);
+  },
+};

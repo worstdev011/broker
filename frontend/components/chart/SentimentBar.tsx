@@ -28,7 +28,7 @@ export function SentimentBar({ height = 600, width = 12, orientation = 'vertical
   const [sellPercentage, setSellPercentage] = useState(100 - Math.round(externalBuyRatio * 100));
   const lastBuyPctRef = useRef<number>(Math.round(externalBuyRatio * 100));
   const targetBuyRef = useRef(externalBuyRatio);
-  const [actualWidth, setActualWidth] = useState(orientation === 'horizontal' ? 400 : width);
+  const [actualWidth, setActualWidth] = useState(orientation === 'horizontal' ? 0 : width);
   const [actualHeight, setActualHeight] = useState(orientation === 'horizontal' ? 12 : height);
 
   useEffect(() => {

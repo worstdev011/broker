@@ -5,43 +5,64 @@
 
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo } from 'react';
+import { useTranslations } from 'next-intl';
 import { Star, PencilSimple } from '@phosphor-icons/react';
 import { useClickOutside } from '@/lib/hooks/useClickOutside';
 import { useLocalStorageSet } from '@/lib/hooks/useLocalStorageSet';
 
 export type DrawingModeOption = 'horizontal' | 'vertical' | 'trend' | 'rectangle' | 'fibonacci' | 'parallel-channel' | 'ray' | 'arrow';
 
+const DRAWING_IDS: DrawingModeOption[] = [
+  'horizontal',
+  'vertical',
+  'trend',
+  'rectangle',
+  'fibonacci',
+  'parallel-channel',
+  'ray',
+  'arrow',
+];
+
+const DRAW_LABEL_KEYS: Record<DrawingModeOption, string> = {
+  horizontal: 'draw_horizontal',
+  vertical: 'draw_vertical',
+  trend: 'draw_trend',
+  rectangle: 'draw_rectangle',
+  fibonacci: 'draw_fibonacci',
+  'parallel-channel': 'draw_parallel',
+  ray: 'draw_ray',
+  arrow: 'draw_arrow',
+};
+
 interface DrawingMenuProps {
   drawingMode: DrawingModeOption | null;
   onDrawingModeChange: (mode: DrawingModeOption | null) => void;
 }
 
-const DRAWING_OPTIONS: { id: DrawingModeOption; label: string }[] = [
-  { id: 'horizontal', label: 'Горизонтальная линия' },
-  { id: 'vertical', label: 'Вертикальная линия' },
-  { id: 'trend', label: 'Трендовая линия' },
-  { id: 'rectangle', label: 'Область (прямоугольник)' },
-  { id: 'fibonacci', label: 'Фибоначчи' },
-  { id: 'parallel-channel', label: 'Параллельный канал' },
-  { id: 'ray', label: 'Луч' },
-  { id: 'arrow', label: 'Стрелка' },
-];
-
-
 export function DrawingMenu({ drawingMode, onDrawingModeChange }: DrawingMenuProps) {
+  const t = useTranslations('terminal');
   const [isOpen, setIsOpen] = useState(false);
   const [favorites, toggleFavorite] = useLocalStorageSet('drawing-menu-favorites');
   const menuRef = useRef<HTMLDivElement>(null);
   useClickOutside(menuRef, () => setIsOpen(false), isOpen);
+
+  const options = useMemo(
+    () =>
+      DRAWING_IDS.map((id) => ({
+        id,
+        label: t(DRAW_LABEL_KEYS[id] as 'draw_horizontal'),
+      })),
+    [t],
+  );
 
   const handleSelect = (id: DrawingModeOption) => {
     const next = drawingMode === id ? null : id;
     onDrawingModeChange(next);
   };
 
-  const favoriteOptions = DRAWING_OPTIONS.filter((opt) => favorites.has(opt.id));
-  const otherOptions = DRAWING_OPTIONS.filter((opt) => !favorites.has(opt.id));
+  const favoriteOptions = options.filter((opt) => favorites.has(opt.id));
+  const otherOptions = options.filter((opt) => !favorites.has(opt.id));
 
   const renderItem = (opt: { id: DrawingModeOption; label: string }) => {
     const isActive = drawingMode === opt.id;
@@ -64,7 +85,7 @@ export function DrawingMenu({ drawingMode, onDrawingModeChange }: DrawingMenuPro
             toggleFavorite(opt.id);
           }}
           className="flex-shrink-0 p-0.5 md:hover:bg-white/10 rounded transition-colors duration-300 ease-in-out"
-          title={favorites.has(opt.id) ? 'Убрать из избранного' : 'Добавить в избранное'}
+          title={favorites.has(opt.id) ? t('fav_remove') : t('fav_add')}
         >
           <Star
             className={`w-3.5 h-3.5 transition-colors duration-300 ease-in-out ${
@@ -84,7 +105,7 @@ export function DrawingMenu({ drawingMode, onDrawingModeChange }: DrawingMenuPro
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="px-3.5 py-2 rounded-md text-sm font-semibold transition-colors duration-300 ease-in-out flex items-center justify-center text-white md:hover:bg-white/10"
-        title="Рисование"
+        title={t('menu_drawing')}
         style={{ width: '44px', height: '36px', minWidth: '44px', maxWidth: '44px' }}
       >
         <PencilSimple className="w-4 h-4" weight="bold" />
@@ -96,7 +117,7 @@ export function DrawingMenu({ drawingMode, onDrawingModeChange }: DrawingMenuPro
             {favoriteOptions.length > 0 && (
               <>
                 <div className="px-2.5 py-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wide rounded-lg mb-1.5">
-                  Избранное
+                  {t('favorites_section')}
                 </div>
                 <div className="space-y-0.5 mb-2 rounded-lg p-1">
                   {favoriteOptions.map((opt) => renderItem(opt))}

@@ -1,20 +1,19 @@
-import type { FastifyInstance } from 'fastify';
-import { InstrumentsController } from './instruments.controller.js';
-import { getInstrumentsSchema, updatePayoutSchema } from './instruments.schema.js';
-import { requireAuth, requireAdmin } from '../auth/auth.middleware.js';
+import type { FastifyInstance } from "fastify";
+import { instrumentsController } from "./instruments.controller.js";
+import { requireAdmin } from "../../middleware/admin.middleware.js";
 
-export async function registerInstrumentsRoutes(app: FastifyInstance) {
-  const controller = new InstrumentsController();
+export async function instrumentsRoutes(app: FastifyInstance): Promise<void> {
+  app.get("/", instrumentsController.handleList);
 
-  app.get(
-    '/api/instruments',
-    { schema: getInstrumentsSchema },
-    (request, reply) => controller.getInstruments(request, reply),
+  app.patch(
+    "/:id/payout",
+    { preHandler: [requireAdmin] },
+    instrumentsController.handleUpdatePayout,
   );
 
-  app.patch<{ Params: { id: string }; Body: { payoutPercent: number } }>(
-    '/api/instruments/:id/payout',
-    { schema: updatePayoutSchema, preHandler: [requireAuth, requireAdmin] },
-    (request, reply) => controller.updatePayout(request, reply),
+  app.patch(
+    "/:id/toggle",
+    { preHandler: [requireAdmin] },
+    instrumentsController.handleToggle,
   );
 }

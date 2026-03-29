@@ -29,6 +29,7 @@ interface UseChartDataReturn {
     nextCandleStartTime: number,
     actualTimeframeMs?: number
   ) => void;
+  advanceLiveCandle: (serverTimeMs: number) => boolean;
   applyActiveCandleSnapshot: (candle: { open: number; high: number; low: number; close: number; timestamp: number }) => void;
   prependCandles: (newCandles: SnapshotCandle[], timeframeMs: number) => void;
   reset: () => void;
@@ -415,6 +416,51 @@ export function useChartData({ onDataChange, timeframeMs: defaultTimeframeMs = 5
   };
 
   /**
+   * Auto-advance the live candle when a full timeframe has elapsed without ticks.
+   * Closes the current live candle as-is and creates a new flat candle
+   * (open = close = high = low = previous close) at the next slot.
+   * Returns true if a new candle was created.
+   */
+  const advanceLiveCandle = (serverTimeMs: number): boolean => {
+    if (!initializedRef.current) return false;
+    if (marketStatusRef.current !== 'OPEN') return false;
+
+    const liveCandle = liveCandleRef.current;
+    if (!liveCandle) return false;
+
+    const tfMs = defaultTimeframeMs;
+    const slotEnd = liveCandle.startTime + tfMs;
+
+    // Grace period to let server send candle:close first
+    const GRACE_MS = Math.max(500, Math.min(2000, tfMs * 0.2));
+    if (serverTimeMs < slotEnd + GRACE_MS) return false;
+
+    const closedCandle = normalizeCandle({
+      ...liveCandle,
+      endTime: slotEnd,
+      isClosed: true,
+    });
+
+    candlesRef.current = [...candlesRef.current, closedCandle];
+    if (candlesRef.current.length > MAX_CANDLES) {
+      candlesRef.current = candlesRef.current.slice(candlesRef.current.length - MAX_CANDLES);
+    }
+
+    liveCandleRef.current = normalizeCandle({
+      open: closedCandle.close,
+      high: closedCandle.close,
+      low: closedCandle.close,
+      close: closedCandle.close,
+      startTime: slotEnd,
+      endTime: serverTimeMs,
+      isClosed: false,
+    });
+
+    onDataChange?.();
+    return true;
+  };
+
+  /**
    * Merges a server-side active candle snapshot into the current live candle.
    * Uses max(high), min(low), and server close if no local ticks received yet.
    */
@@ -600,6 +646,7 @@ export function useChartData({ onDataChange, timeframeMs: defaultTimeframeMs = 5
     initializeFromSnapshot,
     handlePriceUpdate,
     handleCandleClose,
+    advanceLiveCandle,
     applyActiveCandleSnapshot,
     prependCandles,
     reset,

@@ -1,82 +1,43 @@
 generator client {
-  provider = "prisma-client-js"
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
 }
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
-model User {
-  id        String   @id // 8-digit numeric ID, assigned at registration
-  email     String   @unique
-  password  String? // null for Google-only accounts
-  googleId  String?  @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+// ─── Enums ───────────────────────────────────────────────────────────────────
 
-  firstName   String?
-  lastName    String?
-  nickname    String?   @unique
-  phone       String?   @unique
-  country     String?
-  currency    String? // Account currency, set once
-  dateOfBirth DateTime?
-  avatarUrl   String?
-
-  twoFactorSecret      String?
-  twoFactorEnabled     Boolean  @default(false)
-  twoFactorBackupCodes String[] // Hashed backup codes
-
-  kycStatus      String? // 'pending' | 'verified' | 'rejected'
-  kycApplicantId String?
-
-  sessions     Session[]
-  accounts     Account[]
-  trades       Trade[]
-  transactions Transaction[]
-
-  @@map("users")
+enum Role {
+  USER
+  ADMIN
 }
 
-model Session {
-  id        String   @id @default(cuid())
-  userId    String
-  tokenHash String   @unique
-  expiresAt DateTime
-  createdAt DateTime @default(now())
-
-  userAgent String?
-  ipAddress String?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@map("sessions")
+enum KycStatus {
+  PENDING
+  VERIFIED
+  REJECTED
 }
 
 enum AccountType {
-  demo
-  real
+  DEMO
+  REAL
 }
 
-model Account {
-  id        String      @id @default(cuid())
-  userId    String
-  type      AccountType
-  balance   Decimal     @default(0) @db.Decimal(18, 2)
-  currency  String      @default("UAH")
-  isActive  Boolean     @default(true) // Currently selected account (not enabled/disabled)
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
+enum LedgerEntryType {
+  TRADE_DEBIT
+  TRADE_CREDIT
+  DEPOSIT
+  WITHDRAWAL
+  BONUS
+  REFUND
+  DEMO_RESET
+}
 
-  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  trades       Trade[]
-  transactions Transaction[]
-
-  @@unique([userId, type])
-  @@index([userId])
-  @@map("accounts")
+enum LedgerDirection {
+  CREDIT
+  DEBIT
 }
 
 enum TradeDirection {
@@ -88,39 +49,213 @@ enum TradeStatus {
   OPEN
   WIN
   LOSS
-  TIE // exitPrice === entryPrice → stake returned
+  TIE
+}
+
+enum TransactionType {
+  DEPOSIT
+  WITHDRAWAL
+}
+
+enum TransactionStatus {
+  PENDING
+  CONFIRMED
+  FAILED
+}
+
+enum InstrumentType {
+  REAL
+  OTC
+}
+
+enum PartnerStatus {
+  ACTIVE
+  SUSPENDED
+  PENDING
+}
+
+enum PartnerEventType {
+  REGISTRATION
+  FTD
+  DEPOSIT
+}
+
+enum PartnerWithdrawalStatus {
+  PENDING
+  PAID
+  REJECTED
+}
+
+// ─── Models ──────────────────────────────────────────────────────────────────
+
+model User {
+  id                   String    @id @default(cuid())
+  displayId            Int       @unique @map("display_id")
+  email                String    @unique
+  password             String?
+  googleId             String?   @unique
+  firstName            String?
+  lastName             String?
+  nickname             String?   @unique
+  phone                String?   @unique
+  country              String?
+  dateOfBirth          DateTime?
+  avatarUrl            String?
+  currency             String    @default("UAH")
+  role                 Role      @default(USER)
+  twoFactorSecret      String?
+  twoFactorEnabled     Boolean   @default(false)
+  twoFactorBackupCodes String[]
+  kycStatus            KycStatus?
+  kycApplicantId       String?
+  isActive             Boolean   @default(true)
+  partnerId            String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  sessions          Session[]
+  accounts          Account[]
+  trades            Trade[]
+  transactions      Transaction[]
+  drawings          Drawing[]
+  chartSettings     UserChartSettings?
+  partner           Partner?   @relation(fields: [partnerId], references: [id])
+  partnerEvents     PartnerEvent[]
+  partnerEarnings   PartnerEarning[]
+
+  @@index([partnerId])
+  @@map("users")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  userAgent String?
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model Account {
+  id        String      @id @default(cuid())
+  userId    String
+  type      AccountType
+  balance   Decimal     @default(0) @db.Decimal(18, 2)
+  currency  String      @default("UAH")
+  isActive  Boolean     @default(true)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ledgerEntries LedgerEntry[]
+  trades        Trade[]
+  transactions  Transaction[]
+
+  @@unique([userId, type])
+  @@index([userId])
+  @@map("accounts")
+}
+
+model LedgerEntry {
+  id            String          @id @default(uuid())
+  accountId     String
+  type          LedgerEntryType
+  amount        Decimal         @db.Decimal(18, 2)
+  direction     LedgerDirection
+  balanceAfter  Decimal         @db.Decimal(18, 2)
+  referenceId   String?
+  referenceType String?
+  description   String?
+  createdAt     DateTime        @default(now())
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId, createdAt])
+  @@index([referenceId])
+  @@map("ledger_entries")
 }
 
 model Trade {
-  id         String         @id @default(uuid())
-  userId     String
-  accountId  String
-  direction  TradeDirection
-  instrument String
-  amount     Decimal        @db.Decimal(18, 2)
-  entryPrice Decimal        @db.Decimal(18, 8)
-  exitPrice  Decimal?       @db.Decimal(18, 8)
-  payout     Decimal        @db.Decimal(18, 2)
-  status     TradeStatus
-  openedAt   DateTime       @default(now())
-  expiresAt  DateTime
-  closedAt   DateTime?
+  id             String         @id @default(uuid())
+  userId         String
+  accountId      String
+  instrumentId   String
+  direction      TradeDirection
+  amount         Decimal        @db.Decimal(18, 2)
+  entryPrice     Decimal        @db.Decimal(18, 8)
+  exitPrice      Decimal?       @db.Decimal(18, 8)
+  payoutPercent  Int
+  payoutAmount   Decimal?       @db.Decimal(18, 2)
+  status         TradeStatus    @default(OPEN)
+  openedAt       DateTime       @default(now())
+  expiresAt      DateTime
+  closedAt       DateTime?
+  idempotencyKey String?        @unique
 
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account    Account    @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  instrument Instrument @relation(fields: [instrumentId], references: [id])
 
   @@index([status, expiresAt])
   @@index([userId])
   @@index([accountId])
-  @@index([instrument])
+  @@index([instrumentId])
   @@map("trades")
+}
+
+model Transaction {
+  id             String            @id @default(uuid())
+  userId         String
+  accountId      String
+  type           TransactionType
+  status         TransactionStatus @default(PENDING)
+  amount         Decimal           @db.Decimal(18, 2)
+  currency       String
+  paymentMethod  String
+  externalId     String?           @unique
+  externalStatus String?
+  cardLastFour   String?
+  failureReason  String?
+  createdAt      DateTime          @default(now())
+  confirmedAt    DateTime?
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([externalId])
+  @@index([status])
+  @@map("transactions")
+}
+
+model Instrument {
+  id            String         @id
+  name          String
+  base          String
+  quote         String
+  type          InstrumentType
+  isActive      Boolean        @default(true)
+  payoutPercent Int            @default(75)
+  sortOrder     Int            @default(0)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  trades Trade[]
+
+  @@map("instruments")
 }
 
 model Candle {
   id        String  @id @default(cuid())
   symbol    String
   timeframe String
-  timestamp BigInt // Candle start, ms
+  timestamp BigInt
   open      Decimal @db.Decimal(18, 8)
   high      Decimal @db.Decimal(18, 8)
   low       Decimal @db.Decimal(18, 8)
@@ -134,7 +269,7 @@ model Candle {
 model PricePoint {
   id        String  @id @default(cuid())
   symbol    String
-  timestamp BigInt // tick timestamp (ms)
+  timestamp BigInt
   price     Decimal @db.Decimal(18, 8)
 
   @@unique([symbol, timestamp])
@@ -142,76 +277,135 @@ model PricePoint {
   @@map("price_points")
 }
 
-enum TransactionType {
-  DEPOSIT
-  WITHDRAW
-  TRADE_RESULT
-  BONUS
+model Drawing {
+  id         String   @id @default(cuid())
+  userId     String
+  instrument String
+  type       String
+  data       Json
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, instrument])
+  @@map("drawings")
 }
 
-enum TransactionStatus {
-  PENDING
-  CONFIRMED
-  FAILED
+model UserChartSettings {
+  id         String   @id @default(cuid())
+  userId     String   @unique
+  instrument String?
+  timeframe  String?
+  chartType  String?
+  indicators Json?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_chart_settings")
 }
 
-enum PaymentMethod {
-  CARD
-  CRYPTO
-  BANK
-  APPLE_PAY
-  GOOGLE_PAY
-  PAYPAL
-  QIWI
-  YOOMONEY
-  WEBMONEY
-  SKRILL
-  NETELLER
-  ADVANCED_CASH
-  SBP
+// ─── Partners ─────────────────────────────────────────────────────────────────
+
+model Partner {
+  id              String        @id @default(cuid())
+  email           String        @unique
+  password        String
+  firstName       String?
+  lastName        String?
+  telegramHandle  String?
+  refCode         String        @unique
+  status          PartnerStatus @default(ACTIVE)
+  revsharePercent Int           @default(50)
+  balance         Decimal       @default(0) @db.Decimal(18, 2)
+  totalEarned     Decimal       @default(0) @db.Decimal(18, 2)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  referrals    User[]
+  clicks       PartnerClick[]
+  events       PartnerEvent[]
+  earnings     PartnerEarning[]
+  withdrawals  PartnerWithdrawal[]
+  sessions     PartnerSession[]
+
+  @@map("partners")
 }
 
-model Transaction {
-  id        String @id @default(uuid())
+model PartnerClick {
+  id        String   @id @default(cuid())
+  partnerId String
+  ip        String?
+  userAgent String?
+  referer   String?
+  createdAt DateTime @default(now())
+
+  partner Partner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+
+  @@index([partnerId, createdAt])
+  @@map("partner_clicks")
+}
+
+model PartnerEvent {
+  id        String           @id @default(cuid())
+  partnerId String
   userId    String
-  accountId String
+  type      PartnerEventType
+  amount    Decimal?         @db.Decimal(18, 2)
+  createdAt DateTime         @default(now())
 
-  type   TransactionType
-  status TransactionStatus
-
-  amount   Decimal @db.Decimal(18, 2)
-  currency String
-
-  paymentMethod PaymentMethod
-  provider      String?
-
-  /// ID операции на стороне BetaTransfer (и др. провайдеров)
-  externalId     String?
-  externalStatus String?
-  /// Только маска / последние 4 цифры карты вывода (полный PAN не храним)
-  cardLastFour   String?
-
-  createdAt   DateTime  @default(now())
-  confirmedAt DateTime?
-
+  partner Partner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
+  @@index([partnerId, type, createdAt])
   @@index([userId])
-  @@index([accountId])
-  @@index([status])
-  @@map("transactions")
+  @@map("partner_events")
 }
 
-model Instrument {
-  id            String   @id // e.g. 'EURUSD_OTC', 'GBPUSD_REAL'
-  name          String
-  base          String
-  quote         String
-  isActive      Boolean  @default(true)
-  payoutPercent Int      @default(75) // 60–90%
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+model PartnerEarning {
+  id        String   @id @default(cuid())
+  partnerId String
+  userId    String
+  tradeId   String   @unique
+  amount    Decimal  @db.Decimal(18, 2)
+  createdAt DateTime @default(now())
 
-  @@map("instruments")
+  partner Partner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([partnerId, createdAt])
+  @@map("partner_earnings")
+}
+
+model PartnerWithdrawal {
+  id            String                 @id @default(cuid())
+  partnerId     String
+  amount        Decimal                @db.Decimal(18, 2)
+  status        PartnerWithdrawalStatus @default(PENDING)
+  paymentMethod String?
+  note          String?
+  createdAt     DateTime               @default(now())
+  paidAt        DateTime?
+
+  partner Partner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+
+  @@index([partnerId, status])
+  @@map("partner_withdrawals")
+}
+
+model PartnerSession {
+  id        String   @id @default(cuid())
+  partnerId String
+  tokenHash String   @unique
+  expiresAt DateTime
+  userAgent String?
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  partner Partner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+
+  @@index([partnerId])
+  @@map("partner_sessions")
 }

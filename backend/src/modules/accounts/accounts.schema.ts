@@ -1,25 +1,12 @@
-export const getAccountsSchema = {} as const;
+import { z } from "zod";
 
-export const createAccountSchema = {
-  body: {
-    type: 'object',
-    required: ['type'],
-    properties: {
-      type: { type: 'string', enum: ['demo', 'real'] },
-    },
-  },
-} as const;
+export const switchBodySchema = z.object({
+  accountId: z.string().min(1),
+});
 
-export const switchAccountSchema = {
-  body: {
-    type: 'object',
-    required: ['accountId'],
-    properties: {
-      accountId: { type: 'string' },
-    },
-  },
-} as const;
+export const snapshotQuerySchema = z.object({
+  type: z.enum(["DEMO", "REAL"]).optional(),
+});
 
-export const resetDemoAccountSchema = {} as const;
-
-export const getAccountSnapshotSchema = {} as const;
+export type SwitchBody = z.infer<typeof switchBodySchema>;
+export type SnapshotQuery = z.infer<typeof snapshotQuerySchema>;

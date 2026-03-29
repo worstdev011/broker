@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useTranslations } from 'next-intl';
 import Link from 'next/link';
-import { ChartBar, X } from '@phosphor-icons/react';
+import { ChartBar } from '@phosphor-icons/react';
 import { api } from '@/lib/api/api';
 import { logger } from '@/lib/logger';
 import { useAccountStore } from '@/stores/account.store';
@@ -11,7 +12,8 @@ import type { TradeHistoryItem } from '@/types/trade';
 
 const TRADES_PAGE_SIZE = 25;
 
-export function TradesHistoryModal({ onClose, refreshTrigger }: { onClose: () => void; refreshTrigger?: number }) {
+export function TradesHistoryModal({ onClose, refreshTrigger, accountType }: { onClose: () => void; refreshTrigger?: number; accountType?: 'DEMO' | 'REAL' }) {
+  const t = useTranslations('terminal');
   const [filter, setFilter] = useState<'active' | 'closed'>('closed');
   const [expandedTradeId, setExpandedTradeId] = useState<string | null>(null);
   const [trades, setTrades] = useState<TradeHistoryItem[]>([]);
@@ -27,7 +29,8 @@ export function TradesHistoryModal({ onClose, refreshTrigger }: { onClose: () =>
   const displayCurrency = snapshot?.currency ?? 'USD';
 
   const loadTrades = useCallback(async (offset: number, append: boolean) => {
-    const status = filter === 'active' ? 'open' : 'closed';
+    const status = filter === 'active' ? 'OPEN' : 'CLOSED';
+    const accountTypeParam = accountType ? `&accountType=${accountType}` : '';
     try {
       if (offset === 0) {
         setLoading(true);
@@ -35,7 +38,7 @@ export function TradesHistoryModal({ onClose, refreshTrigger }: { onClose: () =>
         setLoadingMore(true);
       }
       const response = await api<{ trades: TradeHistoryItem[]; hasMore: boolean }>(
-        `/api/trades?limit=${TRADES_PAGE_SIZE}&offset=${offset}&status=${status}`
+        `/api/trades?limit=${TRADES_PAGE_SIZE}&offset=${offset}&status=${status}${accountTypeParam}`
       );
       const newTrades = response.trades || [];
       setTrades((prev) => (append ? [...prev, ...newTrades] : newTrades));
@@ -48,7 +51,7 @@ export function TradesHistoryModal({ onClose, refreshTrigger }: { onClose: () =>
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [filter]);
+  }, [filter, accountType]);
 
   useEffect(() => {
     setTrades([]);
@@ -74,7 +77,7 @@ export function TradesHistoryModal({ onClose, refreshTrigger }: { onClose: () =>
         if (hasExpired) {
           setTimeout(() => loadTrades(0, false), 1200);
         }
-      }, 1000);
+      }, 5000);
       return () => clearInterval(interval);
     }
   }, [filter, trades, loadTrades]);
@@ -130,49 +133,41 @@ export function TradesHistoryModal({ onClose, refreshTrigger }: { onClose: () =>
   const dateKeys = Object.keys(groupedByDate).sort((a, b) => b.localeCompare(a));
 
   return (
-    <div className="fixed left-0 top-[53px] sm:top-[69px] bottom-[max(4.5rem,calc(4.5rem+env(safe-area-inset-bottom)))] z-50 w-full md:static md:h-full md:w-[330px] md:z-auto md:bottom-auto md:top-auto bg-[#0a1635] border-r border-white/10 shadow-2xl flex flex-col">
+    <div className="static h-full w-[330px] z-auto bg-[#0a1635] border-r border-white/10 shadow-2xl flex flex-col">
       <div className="px-5 pt-4 shrink-0 border-b border-white/10">
         <div className="relative">
-          <div className="flex pr-11 md:pr-0">
+          <div className="flex pr-0">
             <button
               type="button"
               onClick={() => setFilter('active')}
               className={`flex-1 pb-3 text-sm font-medium transition-colors border-b-2 -mb-px ${
-                filter === 'active' ? 'text-white border-[#3347ff]' : 'text-gray-400 border-transparent md:hover:text-white'
+                filter === 'active' ? 'text-white border-[#3347ff]' : 'text-gray-400 border-transparent hover:text-white'
               }`}
             >
-              Активные
+              {t('history_active')}
             </button>
             <button
               type="button"
               onClick={() => setFilter('closed')}
               className={`flex-1 pb-3 text-sm font-medium transition-colors border-b-2 -mb-px ${
-                filter === 'closed' ? 'text-white border-[#3347ff]' : 'text-gray-400 border-transparent md:hover:text-white'
+                filter === 'closed' ? 'text-white border-[#3347ff]' : 'text-gray-400 border-transparent hover:text-white'
               }`}
             >
-              Закрытые
+              {t('history_closed')}
             </button>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="md:hidden absolute top-0 right-0 w-10 h-10 flex items-center justify-center rounded-lg text-gray-400 active:bg-white/10 -mt-0.5 -mr-1"
-            aria-label="Закрыть"
-          >
-            <X className="w-5 h-5" weight="bold" />
-          </button>
         </div>
       </div>
 
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-5 scrollbar-hide-on-idle">
         {loading ? (
           <div className="flex items-center justify-center h-full">
-            <div className="text-gray-400">Загрузка...</div>
+            <div className="text-gray-400">{t('history_loading')}</div>
           </div>
         ) : trades.length === 0 ? (
           <div className="flex items-center justify-center h-full">
             <div className="text-gray-400 text-sm">
-              {filter === 'active' ? 'Нет активных сделок' : 'Нет закрытых сделок'}
+              {filter === 'active' ? t('history_empty_active') : t('history_empty_closed')}
             </div>
           </div>
         ) : (
@@ -198,7 +193,7 @@ export function TradesHistoryModal({ onClose, refreshTrigger }: { onClose: () =>
             ))}
             {loadingMore && (
               <div className="flex justify-center py-3">
-                <div className="text-xs text-gray-400">Загрузка...</div>
+                <div className="text-xs text-gray-400">{t('history_loading')}</div>
               </div>
             )}
           </div>
@@ -209,10 +204,10 @@ export function TradesHistoryModal({ onClose, refreshTrigger }: { onClose: () =>
       <div className="shrink-0 px-4 py-3 border-t border-white/10">
         <Link
           href="/profile?tab=trade"
-          className="flex items-center justify-center gap-2 w-full h-9 rounded-lg bg-gradient-to-r from-[#3347ff] to-[#1e2fcc] text-white text-sm font-semibold transition-all md:hover:from-[#3347ff]/90 md:hover:to-[#1e2fcc]/90 shadow-md shadow-[#3347ff]/20"
+          className="flex items-center justify-center gap-2 w-full h-9 rounded-lg bg-gradient-to-r from-[#3347ff] to-[#1e2fcc] text-white text-sm font-semibold transition-all hover:from-[#3347ff]/90 hover:to-[#1e2fcc]/90 shadow-md shadow-[#3347ff]/20"
         >
           <ChartBar className="w-4 h-4 shrink-0" weight="fill" />
-          Показать статистику
+          {t('history_show_stats')}
         </Link>
       </div>
     </div>

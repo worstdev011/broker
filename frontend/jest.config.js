@@ -37,4 +37,15 @@ const config = {
   },
 };
 
-module.exports = createJestConfig(config);
+// Replace Next's default "/node_modules/" ignore so ESM deps of next-intl are transpiled.
+// https://next-intl.dev/docs/environments/testing
+module.exports = async () => {
+  const base = await createJestConfig(config)();
+  return {
+    ...base,
+    transformIgnorePatterns: [
+      '/node_modules/(?!(next-intl|use-intl|intl-messageformat|@formatjs)/)',
+      '^.+\\.module\\.(css|sass|scss)$',
+    ],
+  };
+};

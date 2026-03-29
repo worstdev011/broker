@@ -1,35 +1,44 @@
-import { PriceEngineManager } from '../prices/PriceEngineManager.js';
-import { bootstrapWebSocketEvents } from './websocket.bootstrap.js';
-import { logger } from '../shared/logger.js';
+import { instrumentRepository } from "../infrastructure/prisma/instrument.repository.js";
+import { PriceEngineManager } from "../prices/PriceEngineManager.js";
+import { CandleAggregator } from "../prices/CandleAggregator.js";
+import { initPriceProvider } from "../prices/PriceProvider.js";
+import { logger } from "../shared/logger.js";
 
-let priceEngineManager: PriceEngineManager | null = null;
+let manager: PriceEngineManager | null = null;
+let aggregator: CandleAggregator | null = null;
 
-export async function bootstrapPrices(): Promise<PriceEngineManager> {
-  if (priceEngineManager) {
-    logger.warn('Price engine manager already initialized');
-    return priceEngineManager;
+export async function bootstrapPrices(): Promise<void> {
+  const instruments = await instrumentRepository.findAllActive();
+  if (instruments.length === 0) {
+    logger.warn("No active instruments found — price engines not started");
+    return;
   }
 
-  priceEngineManager = new PriceEngineManager();
-  priceEngineManager.start();
+  manager = new PriceEngineManager();
+  aggregator = new CandleAggregator(manager);
 
-  await bootstrapWebSocketEvents(priceEngineManager);
+  initPriceProvider(manager, aggregator);
 
-  logger.info('PriceEngineManager bootstrapped');
-  return priceEngineManager;
+  manager.start(
+    instruments.map((i) => ({ id: i.id, type: i.type })),
+  );
+
+  logger.info(
+    { instruments: instruments.map((i) => i.id) },
+    "Price engines bootstrapped",
+  );
 }
 
-export async function shutdownPrices(): Promise<void> {
-  if (priceEngineManager) {
-    priceEngineManager.stop();
-    priceEngineManager = null;
-    logger.info('PriceEngineManager shut down');
-  }
+export function getPriceEngineManager(): PriceEngineManager | null {
+  return manager;
 }
 
-export function getPriceEngineManager(): PriceEngineManager {
-  if (!priceEngineManager) {
-    throw new Error('PriceEngineManager not initialized. Call bootstrapPrices() first.');
-  }
-  return priceEngineManager;
+export function getCandleAggregator(): CandleAggregator | null {
+  return aggregator;
+}
+
+export function shutdownPrices(): void {
+  manager?.stop();
+  manager = null;
+  aggregator = null;
 }

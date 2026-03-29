@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useTranslations } from 'next-intl';
 import { useModalA11y } from '@/lib/hooks/useModalA11y';
 import { loadChartSettings, saveChartSettings, type ChartSettings } from '@/lib/chartSettings';
 import { toast as showToast } from '@/stores/toast.store';
@@ -128,6 +129,7 @@ export function ChartSettingsModal({
   showTraderTip?: boolean;
   onToggleTraderTip?: () => void;
 }) {
+  const t = useTranslations('terminal');
   const modalRef = useModalA11y(true, onClose, { focusFirstSelector: '[data-cset-close]' });
   const [settings, setSettings] = useState<ChartSettings>(() => loadChartSettings());
   const [bgPreview, setBgPreview] = useState<string | null>(settings.backgroundImage);
@@ -138,7 +140,10 @@ export function ChartSettingsModal({
   const fileRef    = useRef<HTMLInputElement>(null);
 
   const applyFile = (file: File) => {
-    if (!file.type.startsWith('image/')) { showToast('Пожалуйста, выберите файл изображения', 'warning'); return; }
+    if (!file.type.startsWith('image/')) {
+      showToast(t('chart_set_image_only'), 'warning');
+      return;
+    }
     const reader = new FileReader();
     reader.onload = (e) => {
       const url = e.target?.result as string;
@@ -174,25 +179,31 @@ export function ChartSettingsModal({
     return () => document.removeEventListener('mousedown', close);
   }, [tzOpen]);
 
-  const TZ_OPTIONS: { offset: number; label: string }[] = [
-    { offset: -12, label: 'UTC-12' },
-    { offset: -11, label: 'UTC-11' },
-    { offset: -10, label: 'UTC-10' },
-    { offset: -9,  label: 'UTC-9' },
-    { offset: -8,  label: 'UTC-8 — Лос-Анджелес' },
-    { offset: -5,  label: 'UTC-5 — Нью-Йорк' },
-    { offset: 0,   label: 'UTC+0 — Лондон' },
-    { offset: 1,   label: 'UTC+1 — Париж' },
-    { offset: 2,   label: 'UTC+2 — Киев' },
-    { offset: 3,   label: 'UTC+3 — Москва' },
-    { offset: 4,   label: 'UTC+4 — Дубай' },
-    { offset: 5.5, label: 'UTC+5:30 — Мумбаи' },
-    { offset: 7,   label: 'UTC+7 — Бангкок' },
-    { offset: 8,   label: 'UTC+8 — Пекин' },
-    { offset: 9,   label: 'UTC+9 — Токио' },
-    { offset: 10,  label: 'UTC+10 — Сидней' },
-    { offset: 12,  label: 'UTC+12 — Окленд' },
-  ];
+  const TZ_SPEC = [
+    { offset: -12, key: 'tz_neg12' },
+    { offset: -11, key: 'tz_neg11' },
+    { offset: -10, key: 'tz_neg10' },
+    { offset: -9, key: 'tz_neg9' },
+    { offset: -8, key: 'tz_neg8_la' },
+    { offset: -5, key: 'tz_neg5_ny' },
+    { offset: 0, key: 'tz_0_ldn' },
+    { offset: 1, key: 'tz_1_paris' },
+    { offset: 2, key: 'tz_2_kyiv' },
+    { offset: 3, key: 'tz_3_moscow' },
+    { offset: 4, key: 'tz_4_dubai' },
+    { offset: 5.5, key: 'tz_5p5_mumbai' },
+    { offset: 7, key: 'tz_7_bangkok' },
+    { offset: 8, key: 'tz_8_beijing' },
+    { offset: 9, key: 'tz_9_tokyo' },
+    { offset: 10, key: 'tz_10_sydney' },
+    { offset: 12, key: 'tz_12_auckland' },
+  ] as const;
+
+  const TZ_OPTIONS = useMemo(
+    () => TZ_SPEC.map((o) => ({ offset: o.offset, label: t(o.key) })),
+    [t],
+  );
+
   const activeTz = TZ_OPTIONS.find((o) => o.offset === settings.timezoneOffset) ?? TZ_OPTIONS[8]!;
 
   return (
@@ -211,12 +222,12 @@ export function ChartSettingsModal({
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.07]">
-          <h2 id="cset-title" className="text-[15px] font-semibold text-white">Настройки графика</h2>
+          <h2 id="cset-title" className="text-[15px] font-semibold text-white">{t('chart_set_title')}</h2>
           <button
             type="button"
             data-cset-close
             onClick={onClose}
-            aria-label="Закрыть"
+            aria-label={t('chart_set_close')}
             className="w-7 h-7 flex items-center justify-center rounded-lg text-white/35 hover:text-white hover:bg-white/[0.08] transition-colors"
           >
             <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -230,14 +241,14 @@ export function ChartSettingsModal({
 
           {/* Цвета свечей */}
           <div>
-            <SectionLabel>Цвета свечей</SectionLabel>
+            <SectionLabel>{t('chart_set_candle_colors')}</SectionLabel>
             <div className="grid grid-cols-2 gap-2.5">
               <ColorTile
-                label="Бычья" color={settings.bullishColor} bullish={true} inputRef={bullishRef}
+                label={t('chart_set_bullish')} color={settings.bullishColor} bullish={true} inputRef={bullishRef}
                 onChange={(c) => setSettings((p) => ({ ...p, bullishColor: c }))}
               />
               <ColorTile
-                label="Медвежья" color={settings.bearishColor} bullish={false} inputRef={bearishRef}
+                label={t('chart_set_bearish')} color={settings.bearishColor} bullish={false} inputRef={bearishRef}
                 onChange={(c) => setSettings((p) => ({ ...p, bearishColor: c }))}
               />
             </div>
@@ -245,7 +256,7 @@ export function ChartSettingsModal({
 
           {/* Часовой пояс */}
           <div>
-            <SectionLabel>Часовой пояс</SectionLabel>
+            <SectionLabel>{t('chart_set_timezone')}</SectionLabel>
             <div className="relative">
               <button
                 ref={tzBtnRef}
@@ -293,7 +304,7 @@ export function ChartSettingsModal({
 
           {/* Фоновое изображение */}
           <div>
-            <SectionLabel>Фоновое изображение</SectionLabel>
+            <SectionLabel>{t('chart_set_bg_image')}</SectionLabel>
             <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) applyFile(f); }} />
             {bgPreview ? (
               <div className="relative rounded-xl overflow-hidden">
@@ -301,7 +312,7 @@ export function ChartSettingsModal({
                 <button
                   type="button"
                   onClick={() => { setBgPreview(null); setSettings((p) => ({ ...p, backgroundImage: null })); if (fileRef.current) fileRef.current.value = ''; }}
-                  aria-label="Удалить фон"
+                  aria-label={t('chart_set_remove_bg')}
                   className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-black/60 border border-white/10 flex items-center justify-center text-white/70 hover:text-white transition-colors"
                 >
                   <svg width="9" height="9" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -310,7 +321,7 @@ export function ChartSettingsModal({
                 </button>
                 <div className="mt-2.5">
                   <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-[11px] text-white/35">Прозрачность</span>
+                    <span className="text-[11px] text-white/35">{t('chart_set_opacity')}</span>
                     <span className="text-[11px] text-white/50 tabular-nums">{Math.round(settings.backgroundOpacity * 100)}%</span>
                   </div>
                   <input
@@ -333,33 +344,33 @@ export function ChartSettingsModal({
                 <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" className="mx-auto mb-1.5 text-white/25">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                 </svg>
-                <span className="text-[12px] text-white/30">Перетащите или нажмите для выбора</span>
+                <span className="text-[12px] text-white/30">{t('chart_set_drop_hint')}</span>
               </button>
             )}
           </div>
 
           {/* Отображение */}
           <div>
-            <SectionLabel>Отображение</SectionLabel>
+            <SectionLabel>{t('chart_set_display')}</SectionLabel>
             <div className="rounded-xl bg-white/[0.03] border border-white/[0.06] px-3 divide-y divide-white/[0.05]">
               <ToggleRow
-                label="Таймер до закрытия свечи"
+                label={t('chart_set_candle_timer')}
                 checked={settings.showCountdown}
                 onChange={() => setSettings((p) => ({ ...p, showCountdown: !p.showCountdown }))}
               />
               <ToggleRow
-                label="Сетка на графике"
+                label={t('chart_set_grid')}
                 checked={settings.showGrid}
                 onChange={() => setSettings((p) => ({ ...p, showGrid: !p.showGrid }))}
               />
               <ToggleRow
-                label="Название пары на фоне"
+                label={t('chart_set_pair_watermark')}
                 checked={settings.showWatermark}
                 onChange={() => setSettings((p) => ({ ...p, showWatermark: !p.showWatermark }))}
               />
               {onToggleTraderTip !== undefined && (
                 <ToggleRow
-                  label="Совет от Trady AI"
+                  label={t('chart_set_trady_tip')}
                   checked={showTraderTip ?? false}
                   onChange={onToggleTraderTip}
                   last
@@ -377,7 +388,7 @@ export function ChartSettingsModal({
             onClick={handleReset}
             className="text-[13px] text-white/30 hover:text-[#ff4655] transition-colors px-1 h-9"
           >
-            Сбросить
+            {t('chart_set_reset')}
           </button>
           <div className="flex items-center gap-2">
             <button
@@ -385,14 +396,14 @@ export function ChartSettingsModal({
               onClick={onClose}
               className="h-9 px-5 rounded-lg border border-white/[0.1] text-[13px] text-white/55 hover:text-white hover:border-white/[0.2] transition-colors"
             >
-              Отмена
+              {t('chart_set_cancel')}
             </button>
             <button
               type="button"
               onClick={handleSave}
               className="h-9 px-5 rounded-lg bg-[#3347ff] hover:bg-[#2a3de0] text-[13px] font-semibold text-white transition-colors shadow-lg shadow-[#3347ff]/25"
             >
-              Сохранить
+              {t('chart_set_save')}
             </button>
           </div>
         </div>

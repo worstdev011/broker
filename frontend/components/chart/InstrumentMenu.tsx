@@ -4,7 +4,8 @@
 
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
+import { useTranslations } from 'next-intl';
 import { useClickOutside } from '@/lib/hooks/useClickOutside';
 import { useLocalStorageSet } from '@/lib/hooks/useLocalStorageSet';
 import { CaretDown, CaretUp, MagnifyingGlass, Star } from '@phosphor-icons/react';
@@ -68,6 +69,7 @@ function isInstrumentClosed(inst: { id: string }): boolean {
 }
 
 export function InstrumentMenu({ instrument, onInstrumentChange }: InstrumentMenuProps) {
+  const t = useTranslations('terminal');
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<Category>('all');
@@ -97,21 +99,24 @@ export function InstrumentMenu({ instrument, onInstrumentChange }: InstrumentMen
     loadInstruments();
   }, []);
 
-  const TEXT_TABS: { key: Category; label: string }[] = [
-    { key: 'all', label: 'Все' },
-    { key: 'forex', label: 'Форекс' },
-    { key: 'crypto', label: 'Крипто' },
-    { key: 'otc', label: 'OTC' },
-  ];
+  const TEXT_TABS = useMemo(
+    () =>
+      [
+        { key: 'all' as const, label: t('instr_tab_all') },
+        { key: 'forex' as const, label: t('instr_tab_forex') },
+        { key: 'crypto' as const, label: t('instr_tab_crypto') },
+        { key: 'otc' as const, label: t('instr_tab_otc') },
+      ],
+    [t],
+  );
 
   useEffect(() => {
-    const idx = TEXT_TABS.findIndex(t => t.key === selectedCategory);
+    const idx = TEXT_TABS.findIndex((tab) => tab.key === selectedCategory);
     if (idx === -1) return;
     const btn = tabButtonRefs.current[idx];
     if (!btn) return;
     setTabIndicator({ left: btn.offsetLeft, width: btn.offsetWidth });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedCategory]);
+  }, [selectedCategory, TEXT_TABS]);
 
   useClickOutside(menuRef, () => { setIsOpen(false); setSearchQuery(''); }, isOpen);
 
@@ -269,7 +274,7 @@ export function InstrumentMenu({ instrument, onInstrumentChange }: InstrumentMen
               onClick={() => setSelectedCategory('favorites')}
               className="flex items-center py-2.5 shrink-0"
               style={{ color: selectedCategory === 'favorites' ? '#fbbf24' : 'rgba(255,255,255,0.4)', transition: 'color 150ms ease' }}
-              title="Избранные"
+              title={t('instr_favorites_star')}
             >
               <Star className={`w-4 h-4 shrink-0 ${favorites.size > 0 || selectedCategory === 'favorites' ? 'fill-yellow-400 text-yellow-400' : ''}`} />
             </button>
@@ -322,14 +327,14 @@ export function InstrumentMenu({ instrument, onInstrumentChange }: InstrumentMen
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Поиск..."
+                placeholder={t('instr_search')}
                 className="w-full pl-10 pr-4 py-1.5 text-sm bg-white/10 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-0 focus:border-white/10 md:hover:border-white/15 transition-colors duration-300 ease-in-out"
               />
             </div>
           </div>
           {/* Заголовок модалки */}
           <div className="border-b border-white/10 px-4 py-2 flex items-center justify-between">
-            <span className="text-gray-300 font-semibold text-sm">Актив</span>
+            <span className="text-gray-300 font-semibold text-sm">{t('instr_column_asset')}</span>
             <button
               type="button"
               onClick={() => {
@@ -343,7 +348,7 @@ export function InstrumentMenu({ instrument, onInstrumentChange }: InstrumentMen
               }}
               className="flex items-center gap-1 md:hover:opacity-80 transition-opacity duration-200 ease-in-out"
             >
-              <span className="text-gray-300 font-semibold text-sm">Выплата</span>
+              <span className="text-gray-300 font-semibold text-sm">{t('instr_column_payout')}</span>
               {sortOrder === 'desc' ? (
                 <CaretDown className="w-3.5 h-3.5 text-gray-300" weight="bold" />
               ) : sortOrder === 'asc' ? (
@@ -360,9 +365,7 @@ export function InstrumentMenu({ instrument, onInstrumentChange }: InstrumentMen
           >
             {filteredInstruments.length === 0 ? (
               <div className="text-center text-gray-400 text-xs py-4">
-                {selectedCategory === 'favorites'
-                  ? 'Нет избранных пар.'
-                  : 'Ничего не найдено'}
+                {selectedCategory === 'favorites' ? t('instr_no_favorites') : t('instr_no_results')}
               </div>
             ) : (
               filteredInstruments.map((inst) => {
@@ -395,7 +398,7 @@ export function InstrumentMenu({ instrument, onInstrumentChange }: InstrumentMen
                     paddingLeft: '9px',
                     paddingRight: '12px',
                   } : { paddingLeft: '12px', paddingRight: '12px' }}
-                  title={isDisabled ? `${inst.label} - закрыто на выходных` : inst.label}
+                  title={isDisabled ? t('instr_closed_weekend', { label: inst.label }) : inst.label}
                 >
                   <div className="flex items-center gap-2.5">
                     {/* Иконка избранного */}
@@ -414,7 +417,7 @@ export function InstrumentMenu({ instrument, onInstrumentChange }: InstrumentMen
                         }
                       }}
                       className="flex-shrink-0 p-0.5 md:hover:bg-white/10 rounded transition-colors duration-300 ease-in-out cursor-pointer"
-                      title={favorites.has(inst.id) ? 'Убрать из избранного' : 'Добавить в избранное'}
+                      title={favorites.has(inst.id) ? t('fav_remove') : t('fav_add')}
                     >
                       <Star
                         className={`w-3.5 h-3.5 transition-colors duration-300 ease-in-out ${

@@ -1,6 +1,7 @@
 'use client';
 
 import { Link } from '@/components/navigation';
+import { useTranslations } from 'next-intl';
 import { PlusCircle } from '@phosphor-icons/react';
 import { formatCurrencySymbol } from '@/lib/formatCurrency';
 
@@ -31,11 +32,16 @@ export function AccountSwitchModal({
   snapshotType,
   onSwitchAccount,
   onClose,
-  demoLabel = 'Демо-счёт',
-  realLabel = 'Реальный счёт',
-  topupLabel = 'Пополнить',
-  hideBalanceLabel = 'Скрыть баланс',
+  demoLabel: demoLabelProp,
+  realLabel: realLabelProp,
+  topupLabel: topupLabelProp,
+  hideBalanceLabel: hideBalanceLabelProp,
 }: AccountSwitchModalProps) {
+  const tc = useTranslations('common');
+  const demoLabel = demoLabelProp ?? tc('demo_account');
+  const realLabel = realLabelProp ?? tc('real_account');
+  const topupLabel = topupLabelProp ?? tc('topup');
+  const hideBalanceLabel = hideBalanceLabelProp ?? tc('hide_balance');
   const realBalanceDisplay = hideBalance
     ? '••••••'
     : modalBalances.real

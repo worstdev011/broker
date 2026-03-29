@@ -1,31 +1,21 @@
-export const registerSchema = {
-  body: {
-    type: 'object',
-    required: ['email', 'password'],
-    properties: {
-      email: { type: 'string', format: 'email' },
-      password: { type: 'string', minLength: 6 },
-    },
-  },
-} as const;
+import { z } from "zod";
 
-export const loginSchema = {
-  body: {
-    type: 'object',
-    required: ['email', 'password'],
-    properties: {
-      email: { type: 'string', format: 'email' },
-      password: { type: 'string' },
-    },
-  },
-} as const;
+export const registerBodySchema = z.object({
+  email: z.string().email().max(255).trim().toLowerCase(),
+  password: z.string().min(8).max(128),
+  refCode: z.string().max(20).optional(),
+});
 
-export const logoutSchema = {
-  body: {
-    type: 'object',
-    properties: {},
-    additionalProperties: false,
-  },
-} as const;
+export const loginBodySchema = z.object({
+  email: z.string().email().max(255).trim().toLowerCase(),
+  password: z.string().min(1).max(128),
+});
 
-export const meSchema = {} as const;
+export const twoFactorBodySchema = z.object({
+  tempToken: z.string().min(1),
+  code: z.string().length(6).regex(/^\d{6}$/),
+});
+
+export type RegisterBody = z.infer<typeof registerBodySchema>;
+export type LoginBody = z.infer<typeof loginBodySchema>;
+export type TwoFactorBody = z.infer<typeof twoFactorBodySchema>;
