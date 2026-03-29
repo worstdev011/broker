@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, forwardRef, useCallback } from 'react';
 import { useTranslations } from 'next-intl';
 import { Clock, SlidersHorizontal } from '@phosphor-icons/react';
 import { formatCurrencySymbol, formatGroupedBalanceAmount, getCurrencyIcon } from '@/lib/formatCurrency';
@@ -32,20 +32,23 @@ function formatTimeDisplay(seconds: number): string {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
-export function MobileTradeBar({
-  sentimentBuyRatio = 0.5,
-  time,
-  amount,
-  payoutPercent,
-  currency,
-  isTrading,
-  onTrade,
-  onTimeClick,
-  onAmountClick,
-  onSettingsClick,
-  onHeightChange,
-  bottomOffset = 0,
-}: MobileTradeBarProps) {
+export const MobileTradeBar = forwardRef<HTMLDivElement, MobileTradeBarProps>(function MobileTradeBar(
+  {
+    sentimentBuyRatio = 0.5,
+    time,
+    amount,
+    payoutPercent,
+    currency,
+    isTrading,
+    onTrade,
+    onTimeClick,
+    onAmountClick,
+    onSettingsClick,
+    onHeightChange,
+    bottomOffset = 0,
+  },
+  forwardedRef,
+) {
   const t = useTranslations('terminal');
   const timeSeconds = Number.parseInt(time || '60', 10);
   const amountNum = parseFloat(amount || '100');
@@ -56,6 +59,14 @@ export function MobileTradeBar({
   const [sellPct, setSellPct] = useState(50);
 
   const panelRef = useRef<HTMLDivElement>(null);
+  const setPanelRef = useCallback(
+    (el: HTMLDivElement | null) => {
+      panelRef.current = el;
+      if (typeof forwardedRef === 'function') forwardedRef(el);
+      else if (forwardedRef) forwardedRef.current = el;
+    },
+    [forwardedRef],
+  );
 
   // Report panel height + bottomOffset to parent so the chart canvas reserves enough space
   useEffect(() => {
@@ -72,7 +83,7 @@ export function MobileTradeBar({
 
   return (
     <div
-      ref={panelRef}
+      ref={setPanelRef}
       className="absolute left-0 right-0 z-10 pointer-events-auto mx-3 rounded-2xl"
       style={{
         bottom: bottomOffset,
@@ -206,4 +217,4 @@ export function MobileTradeBar({
       </div>
     </div>
   );
-}
+});

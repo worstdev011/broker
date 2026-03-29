@@ -2,7 +2,7 @@
 
 import Image from 'next/image';
 import { Link } from '@/components/navigation';
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react';
 import { useRouter, usePathname, useParams, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
@@ -333,6 +333,59 @@ export function TerminalPageContent({ defaultAccount = 'real' }: TerminalPagePro
   const [tradeBarHeight, setTradeBarHeight] = useState(0);
   const mobileBottomNavWrapRef = useRef<HTMLDivElement>(null);
   const [mobileBottomNavHeight, setMobileBottomNavHeight] = useState(0);
+  const mobileTradeBarRef = useRef<HTMLDivElement>(null);
+  const [mobileDrawerBottomPx, setMobileDrawerBottomPx] = useState<number | null>(null);
+
+  /** Позиция drawer времени/суммы от низа layout viewport по верху панели сделок (iPhone / Safari). */
+  const measureMobileDrawerBottom = useCallback(() => {
+    const el = mobileTradeBarRef.current;
+    if (!el) return;
+    const top = el.getBoundingClientRect().top;
+    const h = window.innerHeight;
+    setMobileDrawerBottomPx(Math.max(56, Math.round(h - top + 8)));
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!mobileDrawer) {
+      setMobileDrawerBottomPx(null);
+      return;
+    }
+    measureMobileDrawerBottom();
+    const raf = requestAnimationFrame(measureMobileDrawerBottom);
+    const vv = window.visualViewport;
+    const onMove = () => measureMobileDrawerBottom();
+    window.addEventListener('resize', onMove);
+    vv?.addEventListener('resize', onMove);
+    vv?.addEventListener('scroll', onMove);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('resize', onMove);
+      vv?.removeEventListener('resize', onMove);
+      vv?.removeEventListener('scroll', onMove);
+    };
+  }, [mobileDrawer, measureMobileDrawerBottom]);
+
+  useEffect(() => {
+    if (!isMobile) return;
+    const html = document.documentElement;
+    const body = document.body;
+    const prev = {
+      oH: html.style.overflow,
+      oB: body.style.overflow,
+      mH: html.style.maxHeight,
+      mB: body.style.maxHeight,
+    };
+    html.style.overflow = 'hidden';
+    body.style.overflow = 'hidden';
+    html.style.maxHeight = '100dvh';
+    body.style.maxHeight = '100dvh';
+    return () => {
+      html.style.overflow = prev.oH;
+      body.style.overflow = prev.oB;
+      html.style.maxHeight = prev.mH;
+      body.style.maxHeight = prev.mB;
+    };
+  }, [isMobile]);
 
   useEffect(() => {
     if (!isMobile) return;
@@ -1036,7 +1089,7 @@ export function TerminalPageContent({ defaultAccount = 'real' }: TerminalPagePro
           }}
         />
       )}
-      <div ref={fullscreenContainerRef} className="terminal-page h-screen max-h-screen bg-[#061230] flex flex-col overflow-hidden">
+      <div ref={fullscreenContainerRef} className="terminal-page h-dvh max-h-dvh min-h-0 bg-[#061230] flex flex-col overflow-hidden overscroll-none">
 
       {/* ── MOBILE LAYOUT ─────────────────────────────────── */}
       {isMobile ? (
@@ -1228,6 +1281,7 @@ export function TerminalPageContent({ defaultAccount = 'real' }: TerminalPagePro
 
               {/* ── Trade bar FLOATING over the chart (absolute bottom) ── */}
               <MobileTradeBar
+                ref={mobileTradeBarRef}
                 sentimentBuyRatio={sentimentBuyRatio}
                 time={time}
                 amount={amount}
@@ -1276,6 +1330,7 @@ export function TerminalPageContent({ defaultAccount = 'real' }: TerminalPagePro
             onClose={() => setMobileDrawer(null)}
             bottomNavHeightPx={mobileBottomNavHeight}
             tradeBarStackPx={Math.max(tradeBarHeight, 168)}
+            bottomFromViewportPx={mobileDrawerBottomPx}
             timeSeconds={Number.parseInt(time || '60', 10)}
             onTimeSelect={(s) => {
               setTime(String(s));

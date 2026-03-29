@@ -29,6 +29,11 @@ interface MobileTradeDrawerProps {
    * offsetHeight панели сделок + bottomOffset (28): расстояние от низа main до верха панели.
    */
   tradeBarStackPx: number;
+  /**
+   * Если задано (>0) — `bottom` считается от getBoundingClientRect панели сделок (норм для iOS / visual viewport).
+   * Иначе fallback: navH + tradeBarStackPx.
+   */
+  bottomFromViewportPx?: number | null;
 }
 
 export function MobileTradeDrawer({
@@ -42,6 +47,7 @@ export function MobileTradeDrawer({
   currency,
   bottomNavHeightPx,
   tradeBarStackPx,
+  bottomFromViewportPx = null,
 }: MobileTradeDrawerProps) {
   const t = useTranslations('terminal');
   const modalRef = useRef<HTMLDivElement>(null);
@@ -54,8 +60,11 @@ export function MobileTradeDrawer({
   const dialogLabel = mode === 'time' ? t('mobile_drawer_expiry') : t('mobile_drawer_amount');
 
   const navH = bottomNavHeightPx > 0 ? bottomNavHeightPx : FALLBACK_BOTTOM_NAV_PX;
-  /** Низ модалки = верх торговой панели + небольшой зазор (без второго safe-area — он уже в высоте nav). */
-  const modalBottomPx = navH + tradeBarStackPx + 8;
+  const fallbackBottomPx = navH + tradeBarStackPx + 8;
+  const modalBottomPx =
+    bottomFromViewportPx != null && bottomFromViewportPx > 0
+      ? bottomFromViewportPx
+      : fallbackBottomPx;
   const modalBottom = `${modalBottomPx}px`;
 
   const widthClass =
