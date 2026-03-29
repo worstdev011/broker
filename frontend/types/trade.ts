@@ -7,7 +7,9 @@ export interface TradeHistoryItem {
   openedAt: string;
   closedAt: string | null;
   expiresAt: string;
-  payout: string;
+  /** Процент выплаты; API отдаёт `payoutPercent`, legacy — строка `payout` */
+  payout?: string;
+  payoutPercent?: number;
   entryPrice: string;
   exitPrice: string | null;
 }

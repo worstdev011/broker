@@ -331,7 +331,23 @@ export function useWebSocket({ activeInstrumentRef, activeTimeframeRef, onPriceU
           }
 
           if (message.type === 'trade:close') {
-            if (message.data?.id != null) onTradeCloseRef.current?.(message.data);
+            if (message.data?.id != null) {
+              const raw = message.data as TradeClosePayload & {
+                payoutPercent?: number;
+                status?: string;
+              };
+              const d: TradeClosePayload = { ...raw };
+              if (d.result == null && (raw.status === 'WIN' || raw.status === 'LOSS' || raw.status === 'TIE')) {
+                d.result = raw.status;
+              }
+              if ((d.payout == null || d.payout === '') && raw.payoutPercent != null) {
+                d.payout = String(raw.payoutPercent);
+              }
+              if (d.status == null && raw.status != null) {
+                d.status = raw.status;
+              }
+              onTradeCloseRef.current?.(d);
+            }
             return;
           }
 

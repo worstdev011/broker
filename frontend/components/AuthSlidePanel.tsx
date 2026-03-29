@@ -4,17 +4,7 @@ import { useState } from 'react';
 import { Link } from '@/components/navigation';
 import { useTranslations } from 'next-intl';
 import { useAuthContext } from '@/components/providers/AuthProvider';
-import { trackRefClick } from '@/lib/api/api';
-
-const REF_COOKIE_NAME = 'ref_code';
-
-function readRefCodeCookie(): string | undefined {
-  if (typeof document === 'undefined') return undefined;
-  const match = document.cookie
-    .split('; ')
-    .find((row) => row.startsWith(`${REF_COOKIE_NAME}=`));
-  return match ? decodeURIComponent(match.split('=')[1]) : undefined;
-}
+import { getRefCodeCookie, trackRefClick } from '@/lib/api/api';
 
 interface AuthSlidePanelProps {
   open: boolean;
@@ -96,7 +86,7 @@ export function AuthSlidePanel({ open, onClose, initialMode = 'register' }: Auth
               try {
                 if (panelMode === 'register') {
                   trackRefClick();
-                  const refCode = readRefCodeCookie();
+                  const refCode = getRefCodeCookie() ?? undefined;
                   const result = await register(email, password, refCode);
                   if (result.success) {
                     onClose();
@@ -121,6 +111,17 @@ export function AuthSlidePanel({ open, onClose, initialMode = 'register' }: Auth
             <button
               type="button"
               className="w-full flex items-center justify-center gap-2 py-3 rounded-lg bg-white text-gray-800 font-medium hover:bg-gray-100 transition-colors"
+              onClick={() => {
+                const api = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '');
+                const ref = getRefCodeCookie();
+                const qs =
+                  ref && /^[A-Z0-9]{1,20}$/.test(ref)
+                    ? `?ref=${encodeURIComponent(ref)}`
+                    : '';
+                window.location.href = api
+                  ? `${api}/api/auth/google${qs}`
+                  : `/api/auth/google${qs}`;
+              }}
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>

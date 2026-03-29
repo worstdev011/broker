@@ -1,9 +1,30 @@
 import type { FastifyInstance } from "fastify";
 import { authController } from "./auth.controller.js";
+import { googleOAuthStart, googleOAuthCallback } from "./google.controller.js";
 import { requireAuth } from "../../middleware/auth.middleware.js";
 
 export async function authRoutes(app: FastifyInstance): Promise<void> {
   app.get("/csrf", authController.handleCsrf);
+
+  app.get(
+    "/google",
+    {
+      config: {
+        rateLimit: { max: 30, timeWindow: "15 minutes" },
+      },
+    },
+    (request, reply) => googleOAuthStart(request.server, request, reply),
+  );
+
+  app.get(
+    "/google/callback",
+    {
+      config: {
+        rateLimit: { max: 30, timeWindow: "15 minutes" },
+      },
+    },
+    (request, reply) => googleOAuthCallback(request.server, request, reply),
+  );
 
   app.post(
     "/register",

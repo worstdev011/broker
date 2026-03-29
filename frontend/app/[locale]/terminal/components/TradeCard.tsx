@@ -2,10 +2,12 @@
 
 import { ArrowUp, ArrowDown, CaretDown } from '@phosphor-icons/react';
 import ReactCountryFlag from 'react-country-flag';
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
 import { getInstrumentOrDefault } from '@/lib/instruments';
+import { formatCurrencySymbol } from '@/lib/formatCurrency';
 import type { TradeHistoryItem } from '@/types/trade';
+import { useTerminalPriceStore } from '@/stores/terminalPrice.store';
 
 const CURRENCY_TO_COUNTRY: Record<string, string> = {
   EUR: 'EU',
@@ -40,6 +42,21 @@ function getInstrumentDisplay(instrumentId: string) {
   return { displayName, isOTC };
 }
 
+/** Для открытой сделки: по текущей цене относительно входа (как на графике). */
+type OpenFloatHint = 'favorable' | 'unfavorable' | 'neutral' | 'unknown';
+
+function openTradeFloatHint(
+  direction: 'CALL' | 'PUT',
+  entryPrice: number,
+  livePrice: number,
+): OpenFloatHint {
+  const diff = livePrice - entryPrice;
+  const eps = Math.max(1e-10, 1e-9 * Math.abs(entryPrice));
+  if (Math.abs(diff) <= eps) return 'neutral';
+  if (direction === 'CALL') return diff > 0 ? 'favorable' : 'unfavorable';
+  return diff < 0 ? 'favorable' : 'unfavorable';
+}
+
 interface TradeCardProps {
   trade: TradeHistoryItem;
   currentTime?: Date;
@@ -50,16 +67,29 @@ interface TradeCardProps {
 
 export function TradeCard({ trade, currentTime, isExpanded, onToggle, currency = 'USD' }: TradeCardProps) {
   const t = useTranslations('terminal');
+  const currencyLabel = formatCurrencySymbol(currency);
   const locale = useLocale();
   const localeTag = locale === 'ua' ? 'uk-UA' : locale === 'ru' ? 'ru-RU' : 'en-US';
   const { displayName, isOTC } = getInstrumentDisplay(trade.instrument);
   const amount = parseFloat(trade.amount);
-  const payout = parseFloat(trade.payout);
-  const payoutAmount = amount * payout / 100;
+  const payout =
+    trade.payoutPercent != null && Number.isFinite(trade.payoutPercent)
+      ? trade.payoutPercent
+      : parseFloat(trade.payout ?? '');
+  const payoutAmount = Number.isFinite(amount) && Number.isFinite(payout) ? (amount * payout) / 100 : 0;
   const isWin = trade.status === 'WIN';
+  const isTie = trade.status === 'TIE';
   const isOpen = trade.status === 'OPEN';
   const entryPrice = trade.entryPrice ? parseFloat(trade.entryPrice) : null;
   const exitPrice = trade.exitPrice ? parseFloat(trade.exitPrice) : null;
+
+  const livePrice = useTerminalPriceStore((s) => s.byInstrument[trade.instrument]);
+
+  const openFloat = useMemo(() => {
+    if (!isOpen || entryPrice == null || !Number.isFinite(entryPrice)) return null;
+    if (livePrice == null || !Number.isFinite(livePrice)) return null;
+    return openTradeFloatHint(trade.direction, entryPrice, livePrice);
+  }, [isOpen, entryPrice, livePrice, trade.direction]);
 
   const progressBarRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<HTMLSpanElement>(null);
@@ -148,7 +178,7 @@ export function TradeCard({ trade, currentTime, isExpanded, onToggle, currency =
       onClick={onToggle}
       onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onToggle?.()}
       className={`bg-[#1f2a45] rounded-lg p-2.5 flex flex-col gap-1.5 cursor-pointer transition-all hover:bg-[#1f2a45]/90 border-l-[3px] ${
-        isOpen ? 'border-[#2478ff]' : isWin ? 'border-green-500' : 'border-red-500'
+        isOpen ? 'border-[#2478ff]' : isWin ? 'border-green-500' : isTie ? 'border-gray-500' : 'border-red-500'
       }`}
     >
       {/* Instrument + time */}
@@ -178,9 +208,11 @@ export function TradeCard({ trade, currentTime, isExpanded, onToggle, currency =
 
       {/* Payout % + amount */}
       <div className="flex items-center justify-between">
-        <span className="text-sm text-gray-300">{Math.round(payout)}%</span>
+        <span className="text-sm text-gray-300">
+          {Number.isFinite(payout) ? `${Math.round(payout)}%` : '—'}
+        </span>
         <div className="flex items-center gap-1.5">
-          <span className="text-xs text-gray-500">{currency}</span>
+          <span className="text-xs text-gray-500">{currencyLabel}</span>
           <span className="text-sm text-white">{fmtAmount(amount)}</span>
         </div>
       </div>
@@ -203,8 +235,37 @@ export function TradeCard({ trade, currentTime, isExpanded, onToggle, currency =
       {/* Result + direction */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">
-          <span className={`text-sm font-medium ${isOpen ? 'text-blue-400' : isWin ? 'text-green-400' : 'text-red-400'}`}>
-            {isOpen ? `+${fmtAmount(payoutAmount)}` : isWin ? `+${fmtAmount(payoutAmount)}` : `-${fmtAmount(amount)}`} {currency}
+          <span
+            className={`text-sm font-medium ${
+              isOpen
+                ? openFloat === 'favorable'
+                  ? 'text-green-400'
+                  : openFloat === 'unfavorable'
+                    ? 'text-red-400'
+                    : openFloat === 'neutral'
+                      ? 'text-gray-300'
+                      : 'text-blue-400'
+                : isWin
+                  ? 'text-green-400'
+                  : isTie
+                    ? 'text-gray-300'
+                    : 'text-red-400'
+            }`}
+          >
+            {isOpen
+              ? openFloat === 'favorable'
+                ? `+${fmtAmount(payoutAmount)}`
+                : openFloat === 'unfavorable'
+                  ? `-${fmtAmount(amount)}`
+                  : openFloat === 'neutral'
+                    ? fmtAmount(0)
+                    : `+${fmtAmount(payoutAmount)}`
+              : isWin
+                ? `+${fmtAmount(payoutAmount)}`
+                : isTie
+                  ? fmtAmount(0)
+                  : `-${fmtAmount(amount)}`}{' '}
+            {currencyLabel}
           </span>
         </div>
         <div className="flex items-center gap-1">
@@ -242,7 +303,7 @@ export function TradeCard({ trade, currentTime, isExpanded, onToggle, currency =
           )}
           <div className="flex justify-between text-xs">
             <span className="text-gray-400">{t('trade_card_yield')}</span>
-            <span className="text-white">{Math.round(payout)}%</span>
+            <span className="text-white">{Number.isFinite(payout) ? `${Math.round(payout)}%` : '—'}</span>
           </div>
           <div className="flex justify-between text-xs">
             <span className="text-gray-400">{t('trade_card_amount')}</span>

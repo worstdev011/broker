@@ -32,6 +32,7 @@ interface CandleChartProps {
   extraBottomPadding?: number;
   extraTopPadding?: number;
   showMinMaxLabels?: boolean;
+  accountCurrency?: string;
 }
 
 export interface CandleChartRef {
@@ -72,9 +73,9 @@ export interface CandleChartRef {
 }
 
 export const CandleChart = forwardRef<CandleChartRef, CandleChartProps>(
-  ({ className, style, timeframe = '5s', instrument, payoutPercent = 75, digits, activeInstrumentRef, indicatorConfigs = [], drawingMode = null, overlayRegistry, onInstrumentChange, candleMode = 'classic', onReady, extraBottomPadding = 0, extraTopPadding = 0, showMinMaxLabels = true }, ref) => {
+  ({ className, style, timeframe = '5s', instrument, payoutPercent = 75, digits, activeInstrumentRef, indicatorConfigs = [], drawingMode = null, overlayRegistry, onInstrumentChange, candleMode = 'classic', onReady, extraBottomPadding = 0, extraTopPadding = 0, showMinMaxLabels = true, accountCurrency }, ref) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
-    const chartApi = useChart({ canvasRef, timeframe, instrument, payoutPercent, digits, activeInstrumentRef, indicatorConfigs, drawingMode, overlayRegistry, onInstrumentChange, candleMode, onReady, extraBottomPadding, extraTopPadding, showMinMaxLabels });
+    const chartApi = useChart({ canvasRef, timeframe, instrument, payoutPercent, digits, activeInstrumentRef, indicatorConfigs, drawingMode, overlayRegistry, onInstrumentChange, candleMode, onReady, extraBottomPadding, extraTopPadding, showMinMaxLabels, accountCurrency });
 
     // Canvas infrastructure
     useCanvasInfrastructure({ canvasRef });

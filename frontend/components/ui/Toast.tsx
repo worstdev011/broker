@@ -8,6 +8,7 @@
 import { X, WarningCircle, CheckCircle, Info, Warning, TrendDown, TrendUp } from '@phosphor-icons/react';
 import { useTranslations } from 'next-intl';
 import { useToastStore, type ToastType } from '@/stores/toast.store';
+import { formatTradeAmountLabel } from '@/lib/formatCurrency';
 import { useIsMobile } from '@/lib/hooks/useIsMobile';
 
 const typeConfig: Record<ToastType, { icon: typeof WarningCircle; leftBorder: string }> = {
@@ -74,9 +75,11 @@ function ToastItem({
   const isTradeOpen = toast.type === 'trade-open' && toast.tradeOpen;
 
   if (isTradeOpen && toast.tradeOpen) {
-    const { instrument, direction, amount } = toast.tradeOpen;
+    const { instrument, direction, amount, currency } = toast.tradeOpen;
     const DirIcon = direction === 'CALL' ? TrendUp : TrendDown;
-    const amountStr = amount ? `$${amount}` : '';
+    const amountStr = amount
+      ? formatTradeAmountLabel(amount, currency ?? 'USD')
+      : '';
     const isCall = direction === 'CALL';
     const leftBorder = isCall ? 'border-l-[#45b833]' : 'border-l-[#ff3d1f]';
     const accentColor = isCall ? '#45b833' : '#ff3d1f';

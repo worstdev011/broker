@@ -1,6 +1,7 @@
 import { randomBytes, createHash } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { verify as verifyTotp } from "otplib";
+import type { User } from "../../generated/prisma/client.js";
 import { userRepository } from "../../infrastructure/prisma/user.repository.js";
 import { sessionRepository } from "../../infrastructure/prisma/session.repository.js";
 import { partnerRepository } from "../../infrastructure/prisma/partner.repository.js";
@@ -75,6 +76,138 @@ export const authService = {
     );
 
     return { user: toUserPublicDTO(user), rawToken };
+  },
+
+  /**
+   * Google OAuth: find/link/create user, then session or 2FA temp token.
+   */
+  async completeGoogleOAuth(data: {
+    googleId: string;
+    email: string;
+    emailVerified: boolean;
+    givenName?: string | null;
+    familyName?: string | null;
+    name?: string | null;
+    refCode?: string;
+    userAgent?: string;
+    ipAddress?: string;
+  }): Promise<
+    | { outcome: "session"; rawToken: string }
+    | { outcome: "2fa"; tempToken: string }
+  > {
+    if (!data.emailVerified) {
+      throw AppError.badRequest("Google email is not verified");
+    }
+
+    const email = data.email.trim().toLowerCase();
+    let firstName =
+      data.givenName?.trim() ||
+      (data.name?.trim()
+        ? data.name.trim().split(/\s+/)[0] || null
+        : null);
+    let lastName =
+      data.familyName?.trim() ||
+      (data.name?.trim()
+        ? data.name.trim().split(/\s+/).slice(1).join(" ") || null
+        : null);
+    if (firstName === "") firstName = null;
+    if (lastName === "") lastName = null;
+
+    const byGoogle = await userRepository.findByGoogleId(data.googleId);
+    if (byGoogle) {
+      return this.finishOAuthLogin(byGoogle, data.userAgent, data.ipAddress);
+    }
+
+    const byEmail = await userRepository.findByEmail(email);
+    if (byEmail) {
+      if (byEmail.googleId && byEmail.googleId !== data.googleId) {
+        throw AppError.conflict("This email is linked to another Google account");
+      }
+      const linked = await userRepository.linkGoogleAccount(byEmail.id, {
+        googleId: data.googleId,
+        firstName,
+        lastName,
+      });
+      return this.finishOAuthLogin(linked, data.userAgent, data.ipAddress);
+    }
+
+    let partnerId: string | undefined;
+    if (data.refCode) {
+      try {
+        const partner = await partnerRepository.findByRefCode(data.refCode);
+        if (partner && partner.status === "ACTIVE") {
+          partnerId = partner.id;
+        }
+      } catch (err) {
+        logger.warn(
+          { err, refCode: data.refCode },
+          "completeGoogleOAuth: failed to resolve refCode",
+        );
+      }
+    }
+
+    const user = await userRepository.createWithAccounts({
+      email,
+      password: null,
+      googleId: data.googleId,
+      firstName,
+      lastName,
+      partnerId,
+    });
+
+    if (partnerId) {
+      try {
+        await partnerTrackingRepository.recordEvent({
+          partnerId,
+          userId: user.id,
+          type: "REGISTRATION",
+        });
+      } catch (err) {
+        logger.warn(
+          { err, partnerId, userId: user.id },
+          "completeGoogleOAuth: failed to record REGISTRATION event",
+        );
+      }
+    }
+
+    const rawToken = await this.createSession(
+      user.id,
+      data.userAgent,
+      data.ipAddress,
+    );
+    return { outcome: "session", rawToken };
+  },
+
+  async finishOAuthLogin(
+    user: User,
+    userAgent?: string,
+    ipAddress?: string,
+  ): Promise<
+    | { outcome: "session"; rawToken: string }
+    | { outcome: "2fa"; tempToken: string }
+  > {
+    if (!user.isActive) {
+      throw AppError.unauthorized("Invalid credentials");
+    }
+
+    if (user.twoFactorEnabled && user.twoFactorSecret) {
+      const tempToken = generateToken();
+      const redis = getRedis();
+      await redis.set(
+        `${TEMP_TOKEN_PREFIX}${tempToken}`,
+        user.id,
+        "EX",
+        TEMP_TOKEN_TTL,
+      );
+      return { outcome: "2fa", tempToken };
+    }
+
+    const rawToken = await this.createSession(
+      user.id,
+      userAgent,
+      ipAddress,
+    );
+    return { outcome: "session", rawToken };
   },
 
   async login(data: {

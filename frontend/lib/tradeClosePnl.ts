@@ -6,15 +6,23 @@ import type { TradeClosePayload } from '@/lib/hooks/useWebSocket';
  * итоговый P&L = amount * payout / 100.
  */
 export function netPnlFromTradeClose(
-  payload: Pick<TradeClosePayload, 'result' | 'amount' | 'payout'>,
+  payload: Pick<TradeClosePayload, 'result' | 'amount' | 'payout' | 'pnl' | 'status'>,
 ): number {
+  if (payload.pnl != null && Number.isFinite(payload.pnl)) {
+    return payload.pnl;
+  }
   const amount = parseFloat(payload.amount);
   const mult = parseFloat(payload.payout);
   if (!Number.isFinite(amount)) return 0;
-  if (payload.result === 'WIN') {
+  const result =
+    payload.result ??
+    (payload.status === 'WIN' || payload.status === 'LOSS' || payload.status === 'TIE'
+      ? payload.status
+      : undefined);
+  if (result === 'WIN') {
     return Number.isFinite(mult) ? amount * mult / 100 : 0;
   }
-  if (payload.result === 'LOSS') {
+  if (result === 'LOSS') {
     return -Math.abs(amount);
   }
   return 0;

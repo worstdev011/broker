@@ -4,6 +4,7 @@
  */
 
 import { create } from 'zustand';
+import { formatPayoutTotalLabel, formatTradeAmountLabel } from '@/lib/formatCurrency';
 
 export type ToastType = 'error' | 'success' | 'info' | 'warning' | 'trade-open';
 
@@ -11,6 +12,8 @@ export interface TradeOpenPayload {
   instrument: string;
   direction: 'CALL' | 'PUT';
   amount: string;
+  /** Account currency for display (optional; UI defaults if missing) */
+  currency?: string;
 }
 
 export interface Toast {
@@ -90,7 +93,12 @@ export function showTradeOpenToast(data: TradeOpenPayload & { id: string }, summ
   useToastStore.getState().toast(summaryMessage, 'trade-open', {
     key: data.id,
     duration: 3000,
-    tradeOpen: { instrument: data.instrument, direction: data.direction, amount: data.amount },
+    tradeOpen: {
+      instrument: data.instrument,
+      direction: data.direction,
+      amount: data.amount,
+      currency: data.currency,
+    },
   });
 }
 
@@ -104,14 +112,26 @@ export function showTradeCloseToast(
     instrument: string;
   },
   formatTie: (amountFormatted: string) => string,
+  accountCurrency = 'USD',
 ): void {
   const amt = parseFloat(data.amount);
   const pay = parseFloat(data.payout);
   if (data.result === 'WIN') {
-    const profit = amt * pay;
-    useToastStore.getState().toast(`+${profit.toFixed(2)} USD`, 'success', { duration: 4000 });
+    const profit = Number.isFinite(amt) && Number.isFinite(pay) ? (amt * pay) / 100 : NaN;
+    const label = Number.isFinite(profit) ? profit : 0;
+    useToastStore.getState().toast(
+      formatPayoutTotalLabel(label, accountCurrency),
+      'success',
+      { duration: 4000 },
+    );
   } else if (data.result === 'LOSS') {
-    useToastStore.getState().toast(`-${amt.toFixed(2)} USD`, 'error', { duration: 4000 });
+    const loss = Number.isFinite(amt) ? amt : 0;
+    const symPart = formatTradeAmountLabel(loss, accountCurrency);
+    useToastStore.getState().toast(
+      symPart.startsWith('-') ? symPart : `-${symPart}`,
+      'error',
+      { duration: 4000 },
+    );
   } else {
     useToastStore.getState().toast(formatTie(amt.toFixed(2)), 'info', { duration: 4000 });
   }

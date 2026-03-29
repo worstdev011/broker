@@ -21,6 +21,10 @@ export const userRepository = {
     return prisma.user.findUnique({ where: { email } });
   },
 
+  async findByGoogleId(googleId: string): Promise<User | null> {
+    return prisma.user.findUnique({ where: { googleId } });
+  },
+
   async findById(id: string): Promise<User | null> {
     return prisma.user.findUnique({ where: { id } });
   },
@@ -32,7 +36,10 @@ export const userRepository = {
 
   async createWithAccounts(data: {
     email: string;
-    password: string;
+    password: string | null;
+    googleId?: string | null;
+    firstName?: string | null;
+    lastName?: string | null;
     partnerId?: string;
   }): Promise<User> {
     const displayId = await generateUniqueDisplayId();
@@ -42,6 +49,9 @@ export const userRepository = {
         data: {
           email: data.email,
           password: data.password,
+          googleId: data.googleId ?? null,
+          firstName: data.firstName ?? null,
+          lastName: data.lastName ?? null,
           displayId,
           partnerId: data.partnerId ?? null,
           accounts: {
@@ -71,6 +81,30 @@ export const userRepository = {
       }
 
       return user;
+    });
+  },
+
+  async linkGoogleAccount(
+    userId: string,
+    data: { googleId: string; firstName?: string | null; lastName?: string | null },
+  ): Promise<User> {
+    const existing = await prisma.user.findUnique({ where: { id: userId } });
+    if (!existing) {
+      throw new Error("User not found");
+    }
+    return prisma.user.update({
+      where: { id: userId },
+      data: {
+        googleId: data.googleId,
+        firstName:
+          existing.firstName == null && data.firstName
+            ? data.firstName
+            : undefined,
+        lastName:
+          existing.lastName == null && data.lastName
+            ? data.lastName
+            : undefined,
+      },
     });
   },
 };

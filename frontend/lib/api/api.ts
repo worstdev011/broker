@@ -4,7 +4,7 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? '';
 const REQUEST_TIMEOUT_MS = 15_000;
 const REF_COOKIE_NAME = 'ref_code';
 
-function getRefCodeCookie(): string | null {
+export function getRefCodeCookie(): string | null {
   if (typeof document === 'undefined') return null;
   const match = document.cookie
     .split('; ')

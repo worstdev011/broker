@@ -12,6 +12,11 @@
 import type { Viewport } from '../viewport.types';
 import type { Candle } from '../chart.types';
 import { timeToX, priceToY } from '../utils/coords';
+import {
+  formatPayoutMissingLabel,
+  formatPayoutTotalLabel,
+  formatSignedTradeAmount,
+} from '@/lib/formatCurrency';
 
 interface RenderTradesParams {
   ctx: CanvasRenderingContext2D;
@@ -44,6 +49,8 @@ interface RenderTradesParams {
   liveCandle: Candle | null;
   timeframeMs: number;
   payoutPercent?: number;
+  /** Account / display currency (user-selected), not instrument quote */
+  accountCurrency?: string;
 }
 
 /**
@@ -114,6 +121,7 @@ export function renderTrades({
   liveCandle,
   timeframeMs,
   payoutPercent = 75,
+  accountCurrency = 'USD',
 }: RenderTradesParams): void {
   if (trades.length === 0 && recentClosedTrades.length === 0) return;
 
@@ -177,12 +185,14 @@ export function renderTrades({
       ctx.arc(drawStartX, drawY, 2.5, 0, Math.PI * 2);
       ctx.fill();
 
-      // Справа вместо точки - метка: таймер + выплата (ставка + прибыль)
+      // Справа вместо точки - метка: таймер + потенциальная прибыль (без тела ставки)
       const countdownText = formatCountdown(trade.expiresAt);
-      const totalPayout = trade.amount != null
-        ? trade.amount + (trade.amount * payoutPercent) / 100
-        : 0;
-      const payoutText = trade.amount != null ? `+${totalPayout.toFixed(2)} USD` : '- USD';
+      const profitOnly =
+        trade.amount != null ? (trade.amount * payoutPercent) / 100 : 0;
+      const payoutText =
+        trade.amount != null
+          ? formatPayoutTotalLabel(profitOnly, accountCurrency)
+          : formatPayoutMissingLabel(accountCurrency);
       ctx.font = '10px system-ui, -apple-system, "Segoe UI", sans-serif';
       const line1W = ctx.measureText(countdownText).width;
       const line2W = ctx.measureText(payoutText).width;
@@ -229,8 +239,7 @@ export function renderTrades({
       const isLoss = t.result === 'LOSS';
       const bgColor = isWin ? '#45b833' : isLoss ? '#ff3d1f' : '#4b5563';
 
-      const sign = t.pnl > 0 ? '+$' : t.pnl < 0 ? '-$' : '$';
-      const amountText = `${sign}${Math.abs(t.pnl).toFixed(2)}`;
+      const amountText = formatSignedTradeAmount(t.pnl, accountCurrency);
 
       ctx.save();
 

@@ -16,6 +16,11 @@ import { clampToDataBounds } from '../internal/interactions/math';
 import { useDrawings } from '../internal/drawings/useDrawings';
 import { useDrawingInteractions } from '../internal/drawings/useDrawingInteractions';
 import { renderDrawings } from '../internal/drawings/renderDrawings';
+import {
+  formatPayoutMissingLabel,
+  formatPayoutTotalLabel,
+  formatSignedTradeAmount,
+} from '@/lib/formatCurrency';
 
 // ═══════════════════════════════════════════════════════════════════════
 // Committed Trail Line Chart
@@ -51,6 +56,8 @@ const TRAIL_MARGIN_MS = 10_000;
 const TRAIL_SAFETY = 30_000;
 const Y_MS = 200;
 const ZOOM_DAMP = 5;
+/** Pinch: amplify distance ratio so small finger moves change zoom more (touch only). */
+const PINCH_ZOOM_SENSITIVITY = 2.35;
 const PULSE = 1500;
 const DOT_R = 4;
 const GLOW_R = 20;
@@ -191,6 +198,17 @@ function mkVp() {
     setAf(v: boolean) { af = v; if (!v) { followTarget = null; returnTarget = null; } },
     zoom(f: number) { const w = te - ts, nw = clampZoomWidth(w / f); const m = (ts + te) / 2; zts = m - nw / 2; zte = m + nw / 2; af = false; followTarget = null; returnTarget = null; },
     zoomAt(f: number, a: number) { const w = te - ts, nw = clampZoomWidth(w / f); const pv = ts + w * a; zts = pv - nw * a; zte = pv + nw * (1 - a); af = false; followTarget = null; returnTarget = null; },
+    /** Same as zoomAt but applies immediately (no ZOOM_DAMP lerp) — better for touch pinch. */
+    zoomAtImmediate(f: number, a: number) {
+      const w = te - ts, nw = clampZoomWidth(w / f), pv = ts + w * a;
+      ts = pv - nw * a;
+      te = pv + nw * (1 - a);
+      zts = null;
+      zte = null;
+      af = false;
+      followTarget = null;
+      returnTarget = null;
+    },
     pan(ms: number) { ts += ms; te += ms; af = false; followTarget = null; returnTarget = null; zts = null; zte = null; },
   };
 }
@@ -428,6 +446,7 @@ function drawChart(
   payoutPct: number,
   expirationRenderTime: number | null,
   expirationTopInset: number,
+  accountCurrency: string,
 ) {
   const ch = h - TIME_H;
   const tr = e - s; if (tr <= 0) return; const inv = 1 / tr;
@@ -506,10 +525,13 @@ function drawChart(
     // entry dot
     ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(openX, ey, 5, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(openX, ey, 2.5, 0, Math.PI * 2); ctx.fill();
-    // expiry label: countdown + payout
+    // expiry label: countdown + потенциальная прибыль (без тела ставки)
     const cdTxt = fmtCountdown(t.expiresAt);
-    const totalPay = t.amount != null ? t.amount + (t.amount * payoutPct) / 100 : 0;
-    const payTxt = t.amount != null ? `+${totalPay.toFixed(2)} USD` : '- USD';
+    const profitOnly = t.amount != null ? (t.amount * payoutPct) / 100 : 0;
+    const payTxt =
+      t.amount != null
+        ? formatPayoutTotalLabel(profitOnly, accountCurrency)
+        : formatPayoutMissingLabel(accountCurrency);
     ctx.font = '10px system-ui,-apple-system,"Segoe UI",sans-serif';
     const l1w = ctx.measureText(cdTxt).width, l2w = ctx.measureText(payTxt).width;
     const lbW = Math.max(l1w, l2w) + 10, lbH = 26, pad = 4, maxLx = w - PRICE_W;
@@ -532,8 +554,7 @@ function drawChart(
     const isLoss = t.result === 'LOSS';
     const bg = isWin ? '#45b833' : isLoss ? '#ff3d1f' : '#4b5563';
     const pnl = t.pnl ?? 0;
-    const sign = pnl > 0 ? '+$' : pnl < 0 ? '-$' : '$';
-    const amtTxt = `${sign}${Math.abs(pnl).toFixed(2)}`;
+    const amtTxt = formatSignedTradeAmount(pnl, accountCurrency);
     ctx.save();
     const BH = 28, BR = BH / 2, IS = 16, IP = 6, TPR = 10;
     ctx.font = 'bold 14px system-ui,-apple-system,"Segoe UI",sans-serif';
@@ -598,6 +619,8 @@ interface LineChartProps {
   onServerTimeRef?: React.MutableRefObject<((timestamp: number) => void) | null>;
   /** External trade close handler from parent's WS connection */
   onTradeCloseRef?: React.MutableRefObject<((data: TradeClosePayload) => void) | null>;
+  /** Balance / account currency for trade overlay labels */
+  accountCurrency?: string;
 }
 
 export interface LineChartRef {
@@ -627,7 +650,7 @@ export interface LineChartRef {
 // ═══════════════════════════════════════════════════════════════════════
 
 export const LineChart = forwardRef<LineChartRef, LineChartProps>(
-  ({ className, style, instrument, payoutPercent: payoutPctProp, activeInstrumentRef, drawingMode = null, indicatorConfigs = [], overlayRegistry, onReady, extraBottomPadding = 0, extraTopPadding = 0, onPriceUpdateRef: extPriceRef, onServerTimeRef: extServerTimeRef, onTradeCloseRef: extTradeCloseRef }, ref) => {
+  ({ className, style, instrument, payoutPercent: payoutPctProp, activeInstrumentRef, drawingMode = null, indicatorConfigs = [], overlayRegistry, onReady, extraBottomPadding = 0, extraTopPadding = 0, onPriceUpdateRef: extPriceRef, onServerTimeRef: extServerTimeRef, onTradeCloseRef: extTradeCloseRef, accountCurrency: accountCurrencyProp }, ref) => {
 
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const indicatorConfigsRef = useRef(indicatorConfigs);
@@ -655,6 +678,8 @@ export const LineChart = forwardRef<LineChartRef, LineChartProps>(
     const mouseRef = useRef<{ x: number; y: number } | null>(null);
     const canvasSizeRef = useRef<{ w: number; h: number }>({ w: 0, h: 0 });
     const payoutRef = useRef(payoutPctProp ?? 75);
+    const accountCurrencyRef = useRef(accountCurrencyProp ?? 'USD');
+    accountCurrencyRef.current = accountCurrencyProp ?? 'USD';
 
     // ── Drawings ──
     const drawings = useDrawings();
@@ -1013,7 +1038,7 @@ export const LineChart = forwardRef<LineChartRef, LineChartProps>(
 
         if (combined.length > 0 || live) {
           grid(ctx, cw, layoutMainH, vp.ts, vp.te, yMn.current.cur, yMx.current.cur);
-          drawChart(ctx, combined, live, vp.ts, vp.te, cw, layoutMainH, yMn.current.cur, yMx.current.cur, now, tradesRef.current, payoutRef.current, expirationDraw, Math.max(0, extraTopPaddingRef.current));
+          drawChart(ctx, combined, live, vp.ts, vp.te, cw, layoutMainH, yMn.current.cur, yMx.current.cur, now, tradesRef.current, payoutRef.current, expirationDraw, Math.max(0, extraTopPaddingRef.current), accountCurrencyRef.current);
         }
 
         const indSeries = getIndicatorSeriesRef.current();
@@ -1104,9 +1129,11 @@ export const LineChart = forwardRef<LineChartRef, LineChartProps>(
           const nd = dist(e.touches[0], e.touches[1]);
           const raw = nd / pinchDist;
           const g = pinchZoomGainRef.current;
-          const f = g === 1 ? raw : 1 + (raw - 1) * g;
+          const biased = g === 1 ? 1 + (raw - 1) * PINCH_ZOOM_SENSITIVITY : 1 + (raw - 1) * g;
+          const f = Math.max(0.88, Math.min(1.18, biased));
           const rect = cvs.getBoundingClientRect(); const cx = ((e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left) / rect.width;
-          vpRef.current.zoomAt(f, Math.max(0, Math.min(1, cx))); pinchDist = nd;
+          vpRef.current.zoomAtImmediate(f, Math.max(0, Math.min(1, cx)));
+          pinchDist = nd;
         }
       };
       const onTE = () => { if (touchMode === 'pan') finishPan(); else if (touchMode === 'pinch') scheduleFollow(); touchMode = 'none'; };

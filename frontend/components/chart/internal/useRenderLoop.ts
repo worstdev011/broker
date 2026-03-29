@@ -80,6 +80,8 @@ interface UseRenderLoopParams {
     pnl: number;
   }>;
   getPayoutPercent?: () => number;
+  /** User/account currency for trade overlay money labels */
+  getAccountCurrency?: () => string;
   getTimeframeLabel?: () => string;
   getFormattedCountdown?: () => string;
   getHoverAction?: () => HoverAction;
@@ -142,6 +144,7 @@ export function useRenderLoop({
   getTrades,
   getRecentClosedTrades,
   getPayoutPercent,
+  getAccountCurrency,
   getTimeframeLabel,
   getFormattedCountdown,
     getHoverAction,
@@ -198,6 +201,7 @@ export function useRenderLoop({
     getTrades,
     getRecentClosedTrades,
     getPayoutPercent,
+    getAccountCurrency,
     getTimeframeLabel,
     getFormattedCountdown,
     getHoverAction,
@@ -706,6 +710,7 @@ export function useRenderLoop({
             liveCandle,
             timeframeMs,
             payoutPercent: p.getPayoutPercent?.() ?? 75,
+            accountCurrency: p.getAccountCurrency?.() ?? 'USD',
           });
         }
       }

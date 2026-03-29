@@ -90,12 +90,12 @@ export function ChartSettingsMenu({
 
       {isOpen && (
         <div
-          className="absolute top-full left-1/2 -translate-x-[calc(50%+10px)] md:-translate-x-1/2 mt-2 rounded-xl shadow-2xl z-50 bg-[#1e2a40] border border-white/[0.07] w-[min(100vw-1.5rem,404px)] shrink-0"
+          className="absolute top-full left-1/2 -translate-x-[calc(50%+10px)] md:-translate-x-1/2 mt-2 rounded-xl shadow-2xl z-50 bg-[#1e2a40] border border-white/[0.07] w-[min(100vw-1.75rem,384px)] md:w-[min(100vw-1.5rem,404px)] shrink-0"
           onClick={(e) => e.stopPropagation()}
         >
           {/* ── Chart type row (без заголовка) ── */}
-          <div className="px-3 pt-3 pb-2.5">
-            <div className="grid grid-cols-4 gap-2 w-full">
+          <div className="px-2.5 pt-2.5 pb-2 md:px-3 md:pt-3 md:pb-2.5">
+            <div className="grid grid-cols-4 gap-1.5 md:gap-2 w-full">
               {chartOptions.map((option) => {
                 const isActive =
                   option.chartType === chartType &&
@@ -113,13 +113,13 @@ export function ChartSettingsMenu({
                       }
                     }}
                     title={option.label}
-                    className={`flex flex-col items-center justify-center gap-1.5 py-2 px-1 min-h-0 rounded-lg transition-colors duration-200 ${
+                    className={`flex flex-col items-center justify-center gap-1 md:gap-1.5 py-1.5 md:py-2 px-0.5 md:px-1 min-h-0 rounded-lg transition-colors duration-200 ${
                       isActive
                         ? 'bg-[#3347ff] text-white'
                         : 'bg-white/[0.07] text-gray-300 md:hover:bg-white/[0.13] md:hover:text-white'
                     }`}
                   >
-                    <span className="flex items-center justify-center w-full h-7 shrink-0">
+                    <span className="flex items-center justify-center w-full h-6 md:h-7 shrink-0">
                       <img src={option.iconSrc} alt="" className="max-w-full max-h-full object-contain" />
                     </span>
                     <span className="text-[10px] font-medium text-center leading-tight px-0.5">{option.label}</span>
@@ -131,14 +131,14 @@ export function ChartSettingsMenu({
 
           {chartType !== 'line' && (
           <>
-          <div className="mx-3 border-t border-white/[0.07]" />
+          <div className="mx-2.5 md:mx-3 border-t border-white/[0.07]" />
 
           {/* ── Timeframe section ── */}
-          <div className="px-3 pt-2.5 pb-3">
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-white/30 mb-2 select-none">
+          <div className="px-2.5 pt-2 pb-2.5 md:px-3 md:pt-2.5 md:pb-3">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-white/30 mb-1.5 md:mb-2 select-none">
               {t('menu_timeframe')}
             </p>
-            <div className="grid grid-cols-7 gap-1">
+            <div className="grid grid-cols-7 gap-0.5 md:gap-1">
               {timeframes.map((tf) => {
                 const isActive = timeframe === tf.id;
                 return (
@@ -149,7 +149,7 @@ export function ChartSettingsMenu({
                       onTimeframeChange(tf.id);
                       setIsOpen(false);
                     }}
-                    className={`flex items-center justify-center py-1.5 rounded-lg text-[11px] font-medium transition-colors duration-200 ${
+                    className={`flex items-center justify-center py-1 md:py-1.5 rounded-md md:rounded-lg text-[11px] font-medium transition-colors duration-200 ${
                       isActive
                         ? 'bg-[#3347ff] text-white'
                         : 'bg-white/[0.07] text-gray-300 md:hover:bg-white/[0.13] md:hover:text-white'

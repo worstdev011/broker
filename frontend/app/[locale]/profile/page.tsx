@@ -451,7 +451,7 @@ function PersonalProfileTab({ onProfileUpdate }: { onProfileUpdate?: (p: UserPro
               <div className="flex flex-col md:flex-row gap-5 md:gap-8">
                 {/* Avatar skeleton */}
                 <div className="flex flex-row md:flex-col items-center md:items-stretch gap-3 md:shrink-0 md:w-56">
-                  <div className="w-20 h-20 md:w-full md:aspect-square rounded-2xl bg-white/10 animate-pulse shrink-0" />
+                  <div className="w-20 h-20 md:w-full md:h-auto md:aspect-square rounded-2xl bg-white/10 animate-pulse shrink-0" />
                   <div className="flex-1 md:flex-none">
                     <div className="h-2.5 w-24 bg-white/5 rounded animate-pulse mb-2" />
                     <div className="h-8 md:h-10 rounded-xl bg-white/5 animate-pulse" />
@@ -540,7 +540,7 @@ function PersonalProfileTab({ onProfileUpdate }: { onProfileUpdate?: (p: UserPro
             <div className="flex flex-col md:flex-row gap-5 md:gap-8">
             {/* Левая колонка - аватар */}
             <div className="flex flex-row md:flex-col items-center md:items-stretch gap-4 md:gap-0 w-full md:w-56 shrink-0">
-              <div className="relative w-28 h-28 md:w-full md:aspect-square shrink-0">
+              <div className="relative w-28 h-28 shrink-0 md:w-full md:h-auto md:aspect-square">
                 <div className="absolute -inset-1 rounded-2xl bg-gradient-to-r from-[#3347ff]/50 via-[#5b6bff]/30 to-[#3347ff]/50 blur-sm opacity-60" />
                 <div className="relative w-full h-full rounded-2xl overflow-hidden ring-2 ring-white/20 ring-offset-2 ring-offset-[#030E28] shadow-lg">
                   {profile?.avatarUrl ? (

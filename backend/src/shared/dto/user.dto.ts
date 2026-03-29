@@ -14,6 +14,7 @@ export interface UserPublicDTO {
   currency: string;
   kycStatus: "PENDING" | "VERIFIED" | "REJECTED" | null;
   twoFactorEnabled: boolean;
+  hasPassword: boolean;
   role: "USER" | "ADMIN";
   createdAt: string;
 }
@@ -33,6 +34,7 @@ export function toUserPublicDTO(user: User): UserPublicDTO {
     currency: user.currency,
     kycStatus: user.kycStatus,
     twoFactorEnabled: user.twoFactorEnabled,
+    hasPassword: user.password != null,
     role: user.role,
     createdAt: user.createdAt.toISOString(),
   };

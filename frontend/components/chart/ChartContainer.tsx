@@ -30,6 +30,8 @@ interface ChartContainerProps {
   /** Inset expiration/trade verticals from chart top (mobile toolbar overlay). */
   extraTopPadding?: number;
   showMinMaxLabels?: boolean;
+  /** User/account currency for trade overlays and chart toasts */
+  accountCurrency?: string;
   /** Callback refs for feeding WS data into LineChart from parent */
   linePriceUpdateRef?: React.MutableRefObject<((price: number, timestamp: number) => void) | null>;
   lineServerTimeRef?: React.MutableRefObject<((timestamp: number) => void) | null>;
@@ -55,6 +57,7 @@ export function ChartContainer({
   extraBottomPadding = 0,
   extraTopPadding = 0,
   showMinMaxLabels = true,
+  accountCurrency,
   linePriceUpdateRef,
   lineServerTimeRef,
   lineTradeCloseRef,
@@ -93,6 +96,7 @@ export function ChartContainer({
               onPriceUpdateRef={linePriceUpdateRef}
               onServerTimeRef={lineServerTimeRef}
               onTradeCloseRef={lineTradeCloseRef}
+              accountCurrency={accountCurrency}
             />
           ) : (
             <CandleChart
@@ -112,6 +116,7 @@ export function ChartContainer({
               extraBottomPadding={extraBottomPadding}
               extraTopPadding={extraTopPadding}
               showMinMaxLabels={showMinMaxLabels}
+              accountCurrency={accountCurrency}
             />
           )}
         </div>

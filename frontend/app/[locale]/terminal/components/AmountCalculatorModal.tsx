@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { CaretUp, CaretDown } from '@phosphor-icons/react';
+import { formatCurrencySymbol } from '@/lib/formatCurrency';
 
 export function AmountCalculatorModal({
   currentAmount,
@@ -76,6 +77,7 @@ export function AmountCalculatorModal({
 
   const numValue = Number.parseFloat(display) || 0;
   const profit = ((numValue * payoutPercent) / 100).toFixed(2);
+  const currencyLabel = formatCurrencySymbol(currency);
 
   const btnBase = compact
     ? 'h-8 rounded-md flex items-center justify-center text-xs font-medium transition-colors duration-100 select-none active:scale-95'
@@ -107,10 +109,10 @@ export function AmountCalculatorModal({
       <div className={dispPad}>
         <div className="flex-1 min-w-0">
           <div className={amtMain}>
-            {display} <span className={amtCur}>{currency}</span>
+            {display} <span className={amtCur}>{currencyLabel}</span>
           </div>
           <div className={profitCls}>
-            {t('amount_calc_profit', { profit, currency })}
+            {t('amount_calc_profit', { profit, currency: currencyLabel })}
           </div>
         </div>
 

@@ -530,10 +530,18 @@ export function TradeProfileTab() {
                   <tbody>
                     {filteredTrades.map((tr) => {
                       const amt = parseFloat(tr.amount);
-                      const payout = parseFloat(tr.payout);
+                      const payoutPct =
+                        tr.payoutPercent != null && Number.isFinite(tr.payoutPercent)
+                          ? tr.payoutPercent
+                          : parseFloat(tr.payout ?? '');
                       const isWin = tr.status === 'WIN';
                       const isLoss = tr.status === 'LOSS';
-                      const result = isWin ? amt * payout : isLoss ? -amt : 0;
+                      const result =
+                        isWin && Number.isFinite(amt) && Number.isFinite(payoutPct)
+                          ? (amt * payoutPct) / 100
+                          : isLoss && Number.isFinite(amt)
+                            ? -amt
+                            : 0;
                       return (
                         <tr key={tr.id} className="border-b border-white/[0.04] last:border-0">
                           <td className="py-3 px-4 text-white/80">

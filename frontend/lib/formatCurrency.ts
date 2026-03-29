@@ -38,3 +38,43 @@ export function getCurrencyIcon(code: string): string {
 export function formatBalance(value: number, currency: string): string {
   return `${value.toFixed(2)} ${formatCurrencySymbol(currency)}`;
 }
+
+/** Amount with symbol or "12.34 XXX" for unknown 3-letter codes (trade UI, chart labels). */
+export function formatTradeAmountLabel(value: string | number, currency: string): string {
+  const n = typeof value === "string" ? parseFloat(value) : value;
+  const fixed = Number.isFinite(n) ? n.toFixed(2) : String(value);
+  const sym = getCurrencyIcon(currency);
+  if (sym === currency && currency.length === 3) {
+    return `${fixed} ${currency}`;
+  }
+  return `${sym}${fixed}`;
+}
+
+/** Signed PnL for compact chart badges, e.g. +₴1.00, -12.34 UAH */
+export function formatSignedTradeAmount(pnl: number, currency: string): string {
+  const fixed = Math.abs(pnl).toFixed(2);
+  const sym = getCurrencyIcon(currency);
+  const body =
+    sym === currency && currency.length === 3 ? `${fixed} ${currency}` : `${sym}${fixed}`;
+  if (pnl > 0) return `+${body}`;
+  if (pnl < 0) return `-${body}`;
+  return body;
+}
+
+/** Compact “+amount” for overlays (open trade: pass profit only, not stake+profit). */
+export function formatPayoutTotalLabel(total: number, currency: string): string {
+  const fixed = total.toFixed(2);
+  const sym = getCurrencyIcon(currency);
+  if (sym === currency && currency.length === 3) {
+    return `+${fixed} ${currency}`;
+  }
+  return `+${sym}${fixed}`;
+}
+
+export function formatPayoutMissingLabel(currency: string): string {
+  const sym = getCurrencyIcon(currency);
+  if (sym === currency && currency.length === 3) {
+    return `- ${currency}`;
+  }
+  return `-${sym}`;
+}

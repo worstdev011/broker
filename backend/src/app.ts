@@ -1,7 +1,13 @@
-import Fastify, { type FastifyInstance, type FastifyError } from "fastify";
+import { randomBytes } from "node:crypto";
+import Fastify, {
+  type FastifyInstance,
+  type FastifyError,
+  type FastifyRequest,
+} from "fastify";
 import cors from "@fastify/cors";
 import cookie from "@fastify/cookie";
 import csrf from "@fastify/csrf-protection";
+import fastifyOauth2 from "@fastify/oauth2";
 import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
 import multipart from "@fastify/multipart";
@@ -23,11 +29,15 @@ import { lineRoutes } from "./modules/line/line.routes";
 import { wsRoutes } from "./websocket/ws.routes";
 import { partnersRoutes } from "./modules/partners/partners.routes";
 
+const OAUTH2_REDIRECT_STATE_COOKIE = "oauth2-redirect-state";
+
 const CSRF_SKIP_PATHS = [
   "/api/auth/register",
   "/api/auth/login",
   "/api/auth/logout",
   "/api/auth/2fa",
+  "/api/auth/google",
+  "/api/auth/google/callback",
   "/api/wallet/webhook",
   "/api/kyc/webhook",
   "/api/kyc/init",
@@ -67,6 +77,45 @@ export async function createApp(): Promise<FastifyInstance> {
     secret: config.SESSION_SECRET,
     parseOptions: {},
   });
+
+  if (
+    config.GOOGLE_CLIENT_ID &&
+    config.GOOGLE_CLIENT_SECRET &&
+    config.GOOGLE_CALLBACK_URL
+  ) {
+    await app.register(fastifyOauth2, {
+      name: "googleOAuth2",
+      scope: ["openid", "profile", "email"],
+      credentials: {
+        client: {
+          id: config.GOOGLE_CLIENT_ID,
+          secret: config.GOOGLE_CLIENT_SECRET,
+        },
+        auth: fastifyOauth2.GOOGLE_CONFIGURATION,
+      },
+      callbackUri: config.GOOGLE_CALLBACK_URL,
+      generateStateFunction(request: FastifyRequest) {
+        const refRaw = (request.query as { ref?: string }).ref;
+        const ref =
+          typeof refRaw === "string" ? refRaw.trim().slice(0, 20) : "";
+        const nonce = randomBytes(16).toString("base64url");
+        const payload = Buffer.from(
+          JSON.stringify({ r: ref || undefined }),
+          "utf8",
+        ).toString("base64url");
+        return `${nonce}.${payload}`;
+      },
+      checkStateFunction(request: FastifyRequest) {
+        const state = (request.query as { state?: string }).state;
+        const stateCookie = request.cookies[OAUTH2_REDIRECT_STATE_COOKIE];
+        return !!(stateCookie && state === stateCookie);
+      },
+      cookie: {
+        secure: config.NODE_ENV === "production",
+        sameSite: "lax",
+      },
+    });
+  }
 
   await app.register(csrf, {
     sessionPlugin: "@fastify/cookie",

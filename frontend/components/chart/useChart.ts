@@ -33,6 +33,8 @@ import { useWebSocket, type TradeClosePayload } from '@/lib/hooks/useWebSocket';
 import { netPnlFromTradeClose } from '@/lib/tradeClosePnl';
 import { DEFAULT_INSTRUMENT_ID } from '@/lib/instruments';
 import { dismissToastByKey, showTradeOpenToast, showTradeCloseToast, toast } from '@/stores/toast.store';
+import { useTerminalPriceStore } from '@/stores/terminalPrice.store';
+import { formatTradeAmountLabel } from '@/lib/formatCurrency';
 import { parseTimeframeToMs } from './internal/utils/timeframe';
 import { zoomViewportTime } from './internal/interactions/math';
 import { getMinVisibleCandlesForZoom } from './internal/interactions/zoomBreakpoints';
@@ -67,6 +69,8 @@ interface UseChartParams {
   extraBottomPadding?: number;
   extraTopPadding?: number;
   showMinMaxLabels?: boolean;
+  /** Balance currency for trade overlays and toasts */
+  accountCurrency?: string;
 }
 
 export type HoverAction = 'CALL' | 'PUT' | null;
@@ -149,8 +153,11 @@ const DRAWING_OVERLAY_LABEL_KEYS: Record<
   arrow: 'draw_arrow',
 };
 
-export function useChart({ canvasRef, timeframe = '5s', instrument, payoutPercent = 75, digits, activeInstrumentRef, indicatorConfigs = [], drawingMode = null, overlayRegistry, onInstrumentChange, candleMode: initialCandleMode = 'classic', onReady, extraBottomPadding = 0, extraTopPadding = 0, showMinMaxLabels = true }: UseChartParams): UseChartReturn {
+export function useChart({ canvasRef, timeframe = '5s', instrument, payoutPercent = 75, digits, activeInstrumentRef, indicatorConfigs = [], drawingMode = null, overlayRegistry, onInstrumentChange, candleMode: initialCandleMode = 'classic', onReady, extraBottomPadding = 0, extraTopPadding = 0, showMinMaxLabels = true, accountCurrency: accountCurrencyProp }: UseChartParams): UseChartReturn {
   const t = useTranslations('terminal');
+
+  const accountCurrencyRef = useRef(accountCurrencyProp ?? 'USD');
+  accountCurrencyRef.current = accountCurrencyProp ?? 'USD';
 
   const tradeToastRef = useRef<{ openMsg: string; formatTie: (amt: string) => string }>({
     openMsg: '',
@@ -158,7 +165,10 @@ export function useChart({ canvasRef, timeframe = '5s', instrument, payoutPercen
   });
   tradeToastRef.current = {
     openMsg: t('toast_trade_opened'),
-    formatTie: (amt: string) => t('toast_trade_tie', { amount: amt }),
+    formatTie: (amt: string) =>
+      t('toast_trade_tie', {
+        amount: formatTradeAmountLabel(amt, accountCurrencyRef.current),
+      }),
   };
 
   const chartCanvasCopy: ChartCanvasCopy = useMemo(
@@ -601,6 +611,7 @@ export function useChart({ canvasRef, timeframe = '5s', instrument, payoutPercen
     getTrades,
     getRecentClosedTrades,
     getPayoutPercent: () => payoutPercent,
+    getAccountCurrency: () => accountCurrencyRef.current,
     getTimeframeLabel: candleCountdown.getTimeframeLabel,
     getFormattedCountdown: candleCountdown.getFormattedTime,
     getHoverAction,
@@ -757,7 +768,11 @@ export function useChart({ canvasRef, timeframe = '5s', instrument, payoutPercen
   useWebSocket({
     activeInstrumentRef,
     activeTimeframeRef,
-    onTradeOpen: (data) => showTradeOpenToast(data, tradeToastRef.current.openMsg),
+    onTradeOpen: (data) =>
+      showTradeOpenToast(
+        { ...data, currency: accountCurrencyRef.current },
+        tradeToastRef.current.openMsg,
+      ),
     onTradeClose: (data: TradeClosePayload) => {
       // Удаляем активный оверлей сделки и добавляем краткосрочную метку результата
       removeTrade(data.id);
@@ -802,7 +817,11 @@ export function useChart({ canvasRef, timeframe = '5s', instrument, payoutPercen
       }
 
       dismissToastByKey(data.id);
-      showTradeCloseToast(data, tradeToastRef.current.formatTie);
+      showTradeCloseToast(
+        data,
+        tradeToastRef.current.formatTie,
+        accountCurrencyRef.current,
+      );
     },
     onServerTime: (timestamp) => {
       if (serverTimeRef.current) serverTimeRef.current.timestamp = timestamp;
@@ -810,6 +829,7 @@ export function useChart({ canvasRef, timeframe = '5s', instrument, payoutPercen
     },
     onChartInit: initializeChart,
     onPriceUpdate: (price, timestamp) => {
+      if (instrument) useTerminalPriceStore.getState().setInstrumentPrice(instrument, price);
       chartData.handlePriceUpdate(price, timestamp);
       viewport.setLatestCandleTime(chartData.getLiveCandle()?.endTime ?? timestamp);
       candleAnimator.onPriceUpdate(price);

@@ -59,7 +59,12 @@ import { getAllIndicators } from '@/components/chart/internal/indicators/indicat
 import { api } from '@/lib/api/api';
 import { getAvatarUrl } from '@/lib/avatarUrl';
 import { useAccountSwitch } from '@/lib/hooks/useAccountSwitch';
-import { formatCurrencySymbol, getCurrencyIcon } from '@/lib/formatCurrency';
+import {
+  formatCurrencySymbol,
+  formatPayoutTotalLabel,
+  formatTradeAmountLabel,
+  getCurrencyIcon,
+} from '@/lib/formatCurrency';
 import { logger } from '@/lib/logger';
 import {
   type TerminalLayout,
@@ -72,6 +77,7 @@ import {
 } from '@/lib/terminalLayout';
 import { debounce } from 'es-toolkit';
 import { useAccountStore } from '@/stores/account.store';
+import { useTerminalPriceStore } from '@/stores/terminalPrice.store';
 import { toast as showToast, showTradeOpenToast, showTradeCloseToast, dismissToastByKey } from '@/stores/toast.store';
 import type { AccountSnapshot } from '@/types/account';
 import { FALLBACK_SUPPORT_CHANNEL_URL } from '@/lib/constants';
@@ -226,6 +232,7 @@ export function TerminalPageContent({ defaultAccount = 'real' }: TerminalPagePro
   const [followMode, setFollowMode] = useState<boolean>(true);
   const candleChartRef = useRef<CandleChartRef | null>(null);
   const lineChartRef = useRef<LineChartRef | null>(null);
+  const displayCurrencyRef = useRef('USD');
 
   // ── WS refs for feeding data into LineChart from a single WS connection ──
   const linePriceUpdateRef = useRef<((price: number, timestamp: number) => void) | null>(null);
@@ -240,7 +247,10 @@ export function TerminalPageContent({ defaultAccount = 'real' }: TerminalPagePro
   });
   lineWsTradeToastRef.current = {
     openMsg: tTerminal('toast_trade_opened'),
-    formatTie: (amt: string) => tTerminal('toast_trade_tie', { amount: amt }),
+    formatTie: (amt: string) =>
+      tTerminal('toast_trade_tie', {
+        amount: formatTradeAmountLabel(amt, displayCurrencyRef.current),
+      }),
   };
 
   useWebSocket({
@@ -248,15 +258,25 @@ export function TerminalPageContent({ defaultAccount = 'real' }: TerminalPagePro
     activeTimeframeRef,
     onPriceUpdate: (price, timestamp) => {
       linePriceUpdateRef.current?.(price, timestamp);
+      const sym = activeInstrumentRef.current;
+      if (sym) useTerminalPriceStore.getState().setInstrumentPrice(sym, price);
     },
     onServerTime: (timestamp) => {
       lineServerTimeRef.current?.(timestamp);
     },
-    onTradeOpen: (data) => showTradeOpenToast(data, lineWsTradeToastRef.current.openMsg),
+    onTradeOpen: (data) =>
+      showTradeOpenToast(
+        { ...data, currency: displayCurrencyRef.current },
+        lineWsTradeToastRef.current.openMsg,
+      ),
     onTradeClose: (data) => {
       lineTradeCloseRef.current?.(data);
       dismissToastByKey(data.id);
-      showTradeCloseToast(data, lineWsTradeToastRef.current.formatTie);
+      showTradeCloseToast(
+        data,
+        lineWsTradeToastRef.current.formatTie,
+        displayCurrencyRef.current,
+      );
     },
     enabled: chartType === 'line' && !!instrument,
   });
@@ -622,6 +642,7 @@ export function TerminalPageContent({ defaultAccount = 'real' }: TerminalPagePro
   };
 
   const displayCurrency = snapshot?.currency ?? userCurrency ?? 'USD';
+  displayCurrencyRef.current = displayCurrency;
 
   const countryCode = (() => {
     const c = userCountry;
@@ -1090,6 +1111,7 @@ export function TerminalPageContent({ defaultAccount = 'real' }: TerminalPagePro
           {/* Account Switch Modal */}
           {showAccountModal && (
             <AccountSwitchModal
+              mobileLayout
               accountType={accountType}
               hideBalance={hideBalance}
               onHideBalanceToggle={() => setHideBalance(!hideBalance)}
@@ -1142,6 +1164,7 @@ export function TerminalPageContent({ defaultAccount = 'real' }: TerminalPagePro
                   linePriceUpdateRef={linePriceUpdateRef}
                   lineServerTimeRef={lineServerTimeRef}
                   lineTradeCloseRef={lineTradeCloseRef}
+                  accountCurrency={displayCurrency}
                 />
               </div>
 
@@ -1710,6 +1733,7 @@ export function TerminalPageContent({ defaultAccount = 'real' }: TerminalPagePro
                 linePriceUpdateRef={linePriceUpdateRef}
                 lineServerTimeRef={lineServerTimeRef}
                 lineTradeCloseRef={lineTradeCloseRef}
+                accountCurrency={displayCurrency}
               />
 
               {/* Zoom controls */}
@@ -1876,7 +1900,10 @@ export function TerminalPageContent({ defaultAccount = 'real' }: TerminalPagePro
               +{payoutPercent}%
             </div>
             <div className="text-base text-gray-400">
-              +{((Number.parseFloat(amount || '100') * payoutPercent) / 100).toFixed(2)} {displayCurrency}
+              {formatPayoutTotalLabel(
+                (Number.parseFloat(amount || '100') * payoutPercent) / 100,
+                displayCurrency,
+              )}
             </div>
           </div>
 

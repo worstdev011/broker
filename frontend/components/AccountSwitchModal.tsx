@@ -1,5 +1,6 @@
 'use client';
 
+import { createPortal } from 'react-dom';
 import { Link } from '@/components/navigation';
 import { useTranslations } from 'next-intl';
 import { PlusCircle } from '@phosphor-icons/react';
@@ -21,6 +22,12 @@ interface AccountSwitchModalProps {
   realLabel?: string;
   topupLabel?: string;
   hideBalanceLabel?: string;
+  /**
+   * Mobile terminal: balance control lives in the header without a `relative` wrapper, so
+   * `absolute top-full` would anchor to the viewport (100% height = below the fold).
+   * Use fixed positioning under the safe-area header instead.
+   */
+  mobileLayout?: boolean;
 }
 
 export function AccountSwitchModal({
@@ -36,6 +43,7 @@ export function AccountSwitchModal({
   realLabel: realLabelProp,
   topupLabel: topupLabelProp,
   hideBalanceLabel: hideBalanceLabelProp,
+  mobileLayout = false,
 }: AccountSwitchModalProps) {
   const tc = useTranslations('common');
   const demoLabel = demoLabelProp ?? tc('demo_account');
@@ -58,10 +66,17 @@ export function AccountSwitchModal({
         ? `${currentBalance.balance} ${formatCurrencySymbol(currentBalance.currency)}`
         : '...';
 
-  return (
+  const overlayClass = mobileLayout
+    ? 'fixed inset-0 z-[200] bg-transparent'
+    : 'fixed inset-0 z-[140]';
+  const panelClass = mobileLayout
+    ? 'fixed left-1/2 -translate-x-1/2 top-[calc(env(safe-area-inset-top,0px)+68px)] w-[min(calc(100vw-1.5rem),20rem)] max-h-[min(70vh,28rem)] overflow-y-auto bg-[#0d1e3a] border border-white/[0.08] rounded-xl shadow-2xl z-[210]'
+    : 'absolute top-full right-0 left-auto mt-2 w-72 bg-[#0d1e3a] border border-white/[0.08] rounded-xl shadow-2xl z-[150] md:left-1/2 md:right-auto md:-translate-x-1/2';
+
+  const content = (
     <>
-      <div className="fixed inset-0 z-[140]" onClick={onClose} />
-      <div className="absolute top-full right-0 left-auto mt-2 w-72 bg-[#0d1e3a] border border-white/[0.08] rounded-xl shadow-2xl z-[150] md:left-1/2 md:right-auto md:-translate-x-1/2" data-account-modal>
+      <div className={overlayClass} onClick={onClose} aria-hidden />
+      <div className={panelClass} data-account-modal>
         <div className="p-3 space-y-2.5">
           <div
             className={`flex items-start gap-2.5 p-2.5 rounded-lg cursor-pointer transition-colors ${accountType === 'real' ? 'bg-white/[0.12]' : 'md:hover:bg-white/[0.08]'}`}
@@ -111,4 +126,10 @@ export function AccountSwitchModal({
       </div>
     </>
   );
+
+  // Modal opens only after client interaction — safe to portal without hydration mismatch.
+  if (mobileLayout && typeof document !== 'undefined') {
+    return createPortal(content, document.body);
+  }
+  return content;
 }

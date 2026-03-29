@@ -8,9 +8,9 @@ import {
 import { AppError } from "../../shared/errors/AppError.js";
 import { env } from "../../shared/types/env.js";
 
-const SESSION_COOKIE_NAME = "session_token";
+export const SESSION_COOKIE_NAME = "session_token";
 
-function setSessionCookie(reply: FastifyReply, rawToken: string): void {
+export function setSessionCookie(reply: FastifyReply, rawToken: string): void {
   const config = env();
   reply.setCookie(SESSION_COOKIE_NAME, rawToken, {
     httpOnly: true,

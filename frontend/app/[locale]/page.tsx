@@ -11,6 +11,7 @@ import Footer from '@/components/Footer'
 import { SiteHeader } from '@/components/SiteHeader'
 import { INSTRUMENTS } from '@/lib/instruments'
 import { toast } from '@/stores/toast.store'
+import { getRefCodeCookie } from '@/lib/api/api'
 
 /** Filled (solid) field icons for auth panel - not outline/stroke */
 function IconMailFilled({ className }: { className?: string }) {
@@ -230,6 +231,8 @@ function HomeContent() {
         google_no_email: ta('google_error_no_email'),
         google_not_configured: ta('google_error_not_configured'),
         google_login_failed: ta('google_error_login_failed'),
+        google_email_unverified: ta('google_error_email_unverified'),
+        google_account_conflict: ta('google_error_account_conflict'),
       }
       toast(messages[err] ?? ta('google_error_generic'), 'error')
       router.replace(pathname || '/')
@@ -289,7 +292,12 @@ function HomeContent() {
 
   const handleGoogleLogin = () => {
     const prefix = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '')
-    window.location.href = prefix ? `${prefix}/api/auth/google` : '/api/auth/google'
+    const ref = getRefCodeCookie()
+    const qs =
+      ref && /^[A-Z0-9]{1,20}$/.test(ref) ? `?ref=${encodeURIComponent(ref)}` : ''
+    window.location.href = prefix
+      ? `${prefix}/api/auth/google${qs}`
+      : `/api/auth/google${qs}`
   }
 
   const handleFormSubmit = async (e: FormEvent) => {
