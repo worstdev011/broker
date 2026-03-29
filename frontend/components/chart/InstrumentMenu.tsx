@@ -224,31 +224,21 @@ export function InstrumentMenu({ instrument, onInstrumentChange }: InstrumentMen
             return (
               <>
                 {country1 && (
-                  <div className="w-4 h-4 rounded-full overflow-hidden border-2 border-white/70 flex-shrink-0 flex items-center justify-center relative z-0">
+                  <div className="w-5 h-5 rounded-full overflow-hidden border-2 border-white/70 flex-shrink-0 relative z-0">
                     <ReactCountryFlag
                       countryCode={country1}
                       svg
-                      style={{
-                        width: '16px',
-                        height: '16px',
-                        objectFit: 'cover',
-                        display: 'block',
-                      }}
+                      className="!block !h-full !w-full !min-h-full !min-w-full rounded-full object-cover object-center scale-[1.2]"
                       title={country1}
                     />
                   </div>
                 )}
                 {country2 && (
-                  <div className="w-4 h-4 rounded-full overflow-hidden border-2 border-white/70 flex-shrink-0 flex items-center justify-center relative z-10 -ml-2">
+                  <div className="w-5 h-5 rounded-full overflow-hidden border-2 border-white/70 flex-shrink-0 relative z-10 -ml-2">
                     <ReactCountryFlag
                       countryCode={country2}
                       svg
-                      style={{
-                        width: '16px',
-                        height: '16px',
-                        objectFit: 'cover',
-                        display: 'block',
-                      }}
+                      className="!block !h-full !w-full !min-h-full !min-w-full rounded-full object-cover object-center scale-[1.2]"
                       title={country2}
                     />
                   </div>
@@ -265,14 +255,14 @@ export function InstrumentMenu({ instrument, onInstrumentChange }: InstrumentMen
       </button>
 
       {isOpen && (
-        <div className="absolute top-full left-0 mt-2 rounded-lg shadow-xl w-[380px] max-h-[500px] flex flex-col z-50 overflow-hidden bg-[#1e2a40] border border-white/5">
+        <div className="absolute top-full left-0 mt-1.5 md:mt-2 rounded-lg shadow-xl w-[min(calc(100vw-1rem),300px)] max-h-[min(42vh,340px)] md:w-[380px] md:max-h-[500px] flex flex-col z-50 overflow-hidden bg-[#1e2a40] border border-white/5">
           {/* Фильтры по категориям */}
-          <div className="px-4 flex items-center gap-3" style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+          <div className="px-2 md:px-4 flex items-center gap-1.5 md:gap-3" style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
             {/* Звезда - избранное */}
             <button
               type="button"
               onClick={() => setSelectedCategory('favorites')}
-              className="flex items-center py-2.5 shrink-0"
+              className="flex items-center py-2 md:py-2.5 shrink-0"
               style={{ color: selectedCategory === 'favorites' ? '#fbbf24' : 'rgba(255,255,255,0.4)', transition: 'color 150ms ease' }}
               title={t('instr_favorites_star')}
             >
@@ -280,17 +270,17 @@ export function InstrumentMenu({ instrument, onInstrumentChange }: InstrumentMen
             </button>
 
             {/* Разделитель */}
-            <div className="w-px h-4 shrink-0" style={{ background: 'rgba(255,255,255,0.1)' }} />
+            <div className="w-px h-3.5 md:h-4 shrink-0" style={{ background: 'rgba(255,255,255,0.1)' }} />
 
             {/* Текстовые табы с скользящим индикатором */}
-            <div ref={tabContainerRef} className="relative flex items-center">
+            <div ref={tabContainerRef} className="relative flex items-center min-w-0 flex-1 overflow-x-auto scrollbar-hide-on-idle">
               {TEXT_TABS.map((tab, idx) => (
                 <button
                   key={tab.key}
                   ref={el => { tabButtonRefs.current[idx] = el; }}
                   type="button"
                   onClick={() => setSelectedCategory(tab.key)}
-                  className="px-3 py-2.5 text-sm bg-transparent border-0 outline-none cursor-pointer whitespace-nowrap"
+                  className="px-2 py-2 md:px-3 md:py-2.5 text-xs md:text-sm bg-transparent border-0 outline-none cursor-pointer whitespace-nowrap shrink-0"
                   style={{
                     color: selectedCategory === tab.key ? '#fff' : 'rgba(255,255,255,0.4)',
                     fontWeight: selectedCategory === tab.key ? 600 : 400,
@@ -319,22 +309,22 @@ export function InstrumentMenu({ instrument, onInstrumentChange }: InstrumentMen
             </div>
           </div>
           {/* Поле поиска */}
-          <div className="border-b border-white/10 px-4 py-3">
+          <div className="border-b border-white/10 px-2 py-2 md:px-4 md:py-3">
             <div className="relative">
-              <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <MagnifyingGlass className="absolute left-2.5 md:left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 md:w-4 md:h-4 text-gray-400" />
               <input
                 ref={searchInputRef}
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder={t('instr_search')}
-                className="w-full pl-10 pr-4 py-1.5 text-sm bg-white/10 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-0 focus:border-white/10 md:hover:border-white/15 transition-colors duration-300 ease-in-out"
+                className="w-full pl-9 md:pl-10 pr-3 md:pr-4 py-1 md:py-1.5 text-xs md:text-sm bg-white/10 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-0 focus:border-white/10 md:hover:border-white/15 transition-colors duration-300 ease-in-out"
               />
             </div>
           </div>
           {/* Заголовок модалки */}
-          <div className="border-b border-white/10 px-4 py-2 flex items-center justify-between">
-            <span className="text-gray-300 font-semibold text-sm">{t('instr_column_asset')}</span>
+          <div className="border-b border-white/10 px-2 py-1.5 md:px-4 md:py-2 flex items-center justify-between">
+            <span className="text-gray-300 font-semibold text-xs md:text-sm">{t('instr_column_asset')}</span>
             <button
               type="button"
               onClick={() => {
@@ -348,7 +338,7 @@ export function InstrumentMenu({ instrument, onInstrumentChange }: InstrumentMen
               }}
               className="flex items-center gap-1 md:hover:opacity-80 transition-opacity duration-200 ease-in-out"
             >
-              <span className="text-gray-300 font-semibold text-sm">{t('instr_column_payout')}</span>
+              <span className="text-gray-300 font-semibold text-xs md:text-sm">{t('instr_column_payout')}</span>
               {sortOrder === 'desc' ? (
                 <CaretDown className="w-3.5 h-3.5 text-gray-300" weight="bold" />
               ) : sortOrder === 'asc' ? (
@@ -361,7 +351,7 @@ export function InstrumentMenu({ instrument, onInstrumentChange }: InstrumentMen
           {/* Список инструментов */}
           <div 
             ref={scrollContainerRef}
-            className="p-2.5 overflow-y-auto flex-1 scrollbar-hide-on-idle"
+            className="p-1.5 md:p-2.5 overflow-y-auto flex-1 min-h-0 scrollbar-hide-on-idle"
           >
             {filteredInstruments.length === 0 ? (
               <div className="text-center text-gray-400 text-xs py-4">
@@ -385,7 +375,7 @@ export function InstrumentMenu({ instrument, onInstrumentChange }: InstrumentMen
                     onInstrumentChange(inst.id);
                     setIsOpen(false);
                   }}
-                  className={`w-full flex items-center justify-between gap-2 py-2 rounded-lg text-left text-sm transition-colors duration-300 ease-in-out ${
+                  className={`w-full flex items-center justify-between gap-1.5 md:gap-2 py-1.5 md:py-2 rounded-lg text-left text-xs md:text-sm transition-colors duration-300 ease-in-out ${
                     isDisabled
                       ? 'opacity-50 cursor-not-allowed text-gray-500'
                       : isActive
@@ -400,7 +390,7 @@ export function InstrumentMenu({ instrument, onInstrumentChange }: InstrumentMen
                   } : { paddingLeft: '12px', paddingRight: '12px' }}
                   title={isDisabled ? t('instr_closed_weekend', { label: inst.label }) : inst.label}
                 >
-                  <div className="flex items-center gap-2.5">
+                  <div className="flex items-center gap-1.5 md:gap-2.5 min-w-0">
                     {/* Иконка избранного */}
                     <span
                       role="button"
@@ -420,7 +410,7 @@ export function InstrumentMenu({ instrument, onInstrumentChange }: InstrumentMen
                       title={favorites.has(inst.id) ? t('fav_remove') : t('fav_add')}
                     >
                       <Star
-                        className={`w-3.5 h-3.5 transition-colors duration-300 ease-in-out ${
+                        className={`w-3.5 h-3.5 max-md:w-3 max-md:h-3 transition-colors duration-300 ease-in-out ${
                           favorites.has(inst.id)
                             ? 'fill-yellow-400 text-yellow-400'
                             : 'text-gray-500 hover:text-yellow-400'
@@ -434,31 +424,21 @@ export function InstrumentMenu({ instrument, onInstrumentChange }: InstrumentMen
                         return (
                           <>
                             {country1 && (
-                              <div className="w-6 h-6 rounded-full overflow-hidden border-2 border-white/70 flex-shrink-0 flex items-center justify-center relative z-0">
+                              <div className="w-7 h-7 max-md:w-6 max-md:h-6 rounded-full overflow-hidden border border-white/70 md:border-2 flex-shrink-0 relative z-0">
                                 <ReactCountryFlag
                                   countryCode={country1}
                                   svg
-                                  style={{
-                                    width: '24px',
-                                    height: '24px',
-                                    objectFit: 'cover',
-                                    display: 'block',
-                                  }}
+                                  className="!block !h-full !w-full !min-h-full !min-w-full rounded-full object-cover object-center scale-[1.18]"
                                   title={country1}
                                 />
                               </div>
                             )}
                             {country2 && (
-                              <div className="w-6 h-6 rounded-full overflow-hidden border-2 border-white/70 flex-shrink-0 flex items-center justify-center relative z-10 -ml-2.5">
+                              <div className="w-7 h-7 max-md:w-6 max-md:h-6 rounded-full overflow-hidden border border-white/70 md:border-2 flex-shrink-0 relative z-10 -ml-2.5 md:-ml-3">
                                 <ReactCountryFlag
                                   countryCode={country2}
                                   svg
-                                  style={{
-                                    width: '24px',
-                                    height: '24px',
-                                    objectFit: 'cover',
-                                    display: 'block',
-                                  }}
+                                  className="!block !h-full !w-full !min-h-full !min-w-full rounded-full object-cover object-center scale-[1.18]"
                                   title={country2}
                                 />
                               </div>
@@ -467,11 +447,11 @@ export function InstrumentMenu({ instrument, onInstrumentChange }: InstrumentMen
                         );
                       })()}
                     </div>
-                    <span className="font-medium">{displayName}</span>
+                    <span className="font-medium truncate">{displayName}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span
-                      className="text-xs font-medium text-right"
+                      className="text-[11px] md:text-xs font-medium text-right shrink-0"
                       style={{ color: isDisabled ? 'rgba(255,255,255,0.3)' : '#00d084' }}
                     >
                       {isDisabled ? 'N/A' : `+${payout}%`}

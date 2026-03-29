@@ -32,7 +32,7 @@ export function ToastContainer() {
           ? 'fixed left-3 z-[9999] flex flex-col gap-1.5 pointer-events-none w-[220px]'
           : 'fixed bottom-14 left-[6.5rem] z-[9999] flex flex-col gap-2 pointer-events-none w-full max-w-[260px]'
       }
-      style={isMobile ? { bottom: 'calc(var(--mobile-trade-bar-h, 220px) + 36px + 20px)' } : undefined}
+      style={isMobile ? { bottom: 'calc(var(--mobile-trade-bar-h, 220px) + 36px + 32px)' } : undefined}
       aria-live="polite"
       aria-label={tc('notifications')}
     >

@@ -90,7 +90,7 @@ export function ChartSettingsMenu({
 
       {isOpen && (
         <div
-          className="absolute top-full left-1/2 -translate-x-[calc(50%+10px)] md:-translate-x-1/2 mt-2 rounded-xl shadow-2xl z-50 bg-[#1e2a40] border border-white/[0.07] w-[min(100vw-1.75rem,384px)] md:w-[min(100vw-1.5rem,404px)] shrink-0"
+          className="absolute top-full left-1/2 -translate-x-[calc(50%+10px)] md:-translate-x-1/2 mt-2 rounded-xl shadow-2xl z-50 bg-[#1e2a40] border border-white/[0.07] w-[min(100vw-2rem,360px)] md:w-[min(100vw-1.5rem,404px)] shrink-0"
           onClick={(e) => e.stopPropagation()}
         >
           {/* ── Chart type row (без заголовка) ── */}

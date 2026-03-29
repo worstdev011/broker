@@ -331,6 +331,20 @@ export function TerminalPageContent({ defaultAccount = 'real' }: TerminalPagePro
   const [mobileTab, setMobileTab] = useState<'chart' | 'history' | 'news' | 'trade' | 'wallet' | 'profile'>('chart');
   const [mobileDrawer, setMobileDrawer] = useState<'time' | 'amount' | null>(null);
   const [tradeBarHeight, setTradeBarHeight] = useState(0);
+  const mobileBottomNavWrapRef = useRef<HTMLDivElement>(null);
+  const [mobileBottomNavHeight, setMobileBottomNavHeight] = useState(0);
+
+  useEffect(() => {
+    if (!isMobile) return;
+    const el = mobileBottomNavWrapRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => {
+      setMobileBottomNavHeight(el.offsetHeight);
+    });
+    ro.observe(el);
+    setMobileBottomNavHeight(el.offsetHeight);
+    return () => ro.disconnect();
+  }, [isMobile]);
 
   // Expose trade bar height as CSS variable so ToastContainer can position above it
   useEffect(() => {
@@ -1244,20 +1258,23 @@ export function TerminalPageContent({ defaultAccount = 'real' }: TerminalPagePro
             </main>
 
             {/* Mobile Bottom Nav — always at bottom of screen, below chart */}
-            <MobileBottomNav
-              activeTab={mobileTab}
-              onTabChange={(tab) => {
-                if (tab === 'history') { setMobileTab((prev) => prev === 'history' ? 'chart' : 'history'); return; }
-                if (tab === 'news') { setMobileTab((prev) => prev === 'news' ? 'chart' : 'news'); return; }
-                setMobileTab(tab);
-              }}
-            />
+            <div ref={mobileBottomNavWrapRef} className="shrink-0">
+              <MobileBottomNav
+                activeTab={mobileTab}
+                onTabChange={(tab) => {
+                  if (tab === 'history') { setMobileTab((prev) => prev === 'history' ? 'chart' : 'history'); return; }
+                  if (tab === 'news') { setMobileTab((prev) => prev === 'news' ? 'chart' : 'news'); return; }
+                  setMobileTab(tab);
+                }}
+              />
+            </div>
           </div>
 
           {/* Mobile Trade Drawer */}
           <MobileTradeDrawer
             mode={mobileDrawer}
             onClose={() => setMobileDrawer(null)}
+            bottomNavHeightPx={mobileBottomNavHeight}
             tradeBarStackPx={Math.max(tradeBarHeight, 168)}
             timeSeconds={Number.parseInt(time || '60', 10)}
             onTimeSelect={(s) => {

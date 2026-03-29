@@ -8,8 +8,8 @@ import { AmountCalculatorModal } from './AmountCalculatorModal';
 
 type DrawerMode = 'time' | 'amount' | null;
 
-/** Примерная высота нижнего меню (ряд иконок + padding); safe-area отдельно в calc */
-const MOBILE_BOTTOM_NAV_PX = 56;
+/** Fallback до первого измерения ResizeObserver */
+const FALLBACK_BOTTOM_NAV_PX = 56;
 
 interface MobileTradeDrawerProps {
   mode: DrawerMode;
@@ -21,8 +21,12 @@ interface MobileTradeDrawerProps {
   payoutPercent: number;
   currency: string;
   /**
-   * Высота «ступени» под график из MobileTradeBar: offsetHeight панели + bottomOffset (28).
-   * Верх плавающей панели от низа вьюпорта ≈ safe-area + nav + tradeBarHeight.
+   * Реальная высота нижнего таб-бара (включая safe-area внутри него), с родителя.
+   * Фиксированные 56px + env(safe-area) давали лишний отступ на телефонах — модалка уезжала вверх.
+   */
+  bottomNavHeightPx: number;
+  /**
+   * offsetHeight панели сделок + bottomOffset (28): расстояние от низа main до верха панели.
    */
   tradeBarStackPx: number;
 }
@@ -36,6 +40,7 @@ export function MobileTradeDrawer({
   onAmountSelect,
   payoutPercent,
   currency,
+  bottomNavHeightPx,
   tradeBarStackPx,
 }: MobileTradeDrawerProps) {
   const t = useTranslations('terminal');
@@ -48,8 +53,10 @@ export function MobileTradeDrawer({
 
   const dialogLabel = mode === 'time' ? t('mobile_drawer_expiry') : t('mobile_drawer_amount');
 
-  /** Над плавающей панелью: safe-area + нижний бар + стек торговой панели + зазор */
-  const modalBottom = `calc(env(safe-area-inset-bottom, 0px) + ${MOBILE_BOTTOM_NAV_PX}px + ${tradeBarStackPx}px + 10px)`;
+  const navH = bottomNavHeightPx > 0 ? bottomNavHeightPx : FALLBACK_BOTTOM_NAV_PX;
+  /** Низ модалки = верх торговой панели + небольшой зазор (без второго safe-area — он уже в высоте nav). */
+  const modalBottomPx = navH + tradeBarStackPx + 8;
+  const modalBottom = `${modalBottomPx}px`;
 
   const widthClass =
     mode === 'amount'
